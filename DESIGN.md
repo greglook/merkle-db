@@ -1,17 +1,34 @@
 MerkleDB Design Doc
 ===================
 
-Ideas, in no particular order:
-- A database is represented by a _db root_ block, which contains db-wide
-  information and maps string table names to _table roots_.
+**TODO:** overview
+
+- A _database_ is an immutable collection of _tables_, along with some user
+  metadata.
 - Tables are collections of _records_, which are identified uniquely within the
   table by a primary key.
-- Primary keys are just bytes, allowing for pluggable key serialization formats.
-  TODO: exact algorithm for ordering keys. Should this be pluggable too?
 - Each record is an associative collection of _fields_, mapping string field
   names to values.
 - Values may have any type that the underlying serialization format supports.
-  TODO: pluggable serialization backends via MultiStream/Codec?
+  There is no guarantee that all the values for a given field have the same
+  type.
+
+
+## Goals
+
+Primary/secondary design goals...
+- Read optimized (be more specific)
+- Bulk-processing oriented, where a job processes most or all of the records in
+  the table, but possibly only needs access to a subset of the fields.
+
+
+## Storage Structure
+
+- A database is represented by a _db root_ block, which contains db-wide
+  information and maps string table names to _table roots_.
+- Primary keys are just bytes, allowing for pluggable key serialization formats.
+- **TODO:** exact algorithm for ordering keys. Should this be pluggable too?
+- **TODO:** pluggable serialization backends via MultiStream/Codec?
 - Tables may define _families_ of fields which are often accessed together, as a
   storage optimization for queries.
 - The records in a table are stored in _segments_, which are the leaves of a
@@ -28,8 +45,6 @@ Ideas, in no particular order:
   table.
 - Reads will only load data from the trees containing the fields they need.
   Multiple trees will be returned as an ordered merge.
-- Provide an explicit mechanism for storing custom metadata at the database and
-  table levels.
 - Should tables support a "patch" block linked from the table root? This would
   hold complete records sorted by pk which should be preferred to any found in the
   main table body. This is similar to Clojure's PersistentVector 'tails' and
@@ -91,3 +106,12 @@ The library should support the following interactions with a database:
 ; data tree indexes.
 (optimize db table-name) => db'
 ```
+
+
+## Other Thoughts
+
+- Should be possible to diff two databases and get a quick list of what changed
+  down to the segment level. This would allow for determining whether the change
+  was all appends to a table, enabling incremental (log-style) processing.
+- Should be a way to naturally parallelize processing based on the segment
+  boundaries, allowing each job to fetch only a single block.

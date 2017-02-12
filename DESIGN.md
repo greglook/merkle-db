@@ -1,10 +1,10 @@
 MerkleDB Design Doc
 ===================
 
-**TODO:** overview
+The high-level semantics of this library are similar to a traditional key-value
+data store:
 
-- A _database_ is an immutable collection of _tables_, along with some user
-  metadata.
+- A _database_ is a collection of _tables_, along with some user metadata.
 - Tables are collections of _records_, which are identified uniquely within the
   table by a primary key.
 - Each record is an associative collection of _fields_, mapping string field
@@ -13,13 +13,34 @@ MerkleDB Design Doc
   There is no guarantee that all the values for a given field have the same
   type.
 
+Databases are immutable data structures built as a _Merkle Tree_ of data nodes.
+Each node is a [content-adressed block](https://github.com/greglook/blocks), so
+a database ultimately resolves to the multihash id of the root block. As a
+result, "committing" an updated database version means updating a mutable
+reference to the root block's hash. Then readers need access to the underlying
+block store, and the library does the rest locally.
+
+Modifications to the database return a new root value, representing the updated
+tree. Any unchanged data shares the same blocks as the previous version,
+allowing for space usage to generally scale with modification size.
+
 
 ## Goals
 
-Primary/secondary design goals...
+The primary design goals of MerkleDB are:
+
 - Read optimized (be more specific)
 - Bulk-processing oriented, where a job processes most or all of the records in
-  the table, but possibly only needs access to a subset of the fields.
+  the table, but possibly only needs access to a subset of the fields in each
+  record.
+- Concurrent access by multiple readers, regardless of writers.
+
+Secondary goals include:
+
+- Efficient storage utilization via deduplication and structural sharing.
+- "Time travel" support by tracking database versions across time.
+
+**TODO:** Establish usage patterns more clearly
 
 
 ## Storage Structure
@@ -56,6 +77,8 @@ Primary/secondary design goals...
 
 The library should support the following interactions with a database:
 
+### Database Operations
+
 ```clojure
 ; List the tables present in the database.
 (list-tables db) => #{String ...}
@@ -65,9 +88,13 @@ The library should support the following interactions with a database:
 
 ; Set the user metadata attached to a database.
 (set-db-meta db value) => db'
+```
 
+### Table Operations
+
+```clojure
 ; Return the number of records in the given table.
-(count db table-name) => Long
+(count-table db table-name) => Long
 
 ; Retrieve the user metadata attached to a table.
 (get-table-meta db table-name) => *
@@ -75,10 +102,19 @@ The library should support the following interactions with a database:
 ; Set the user metadata attached to a table.
 (set-table-meta db table-name value) => db'
 
-; Read a single record from the database, returning data for the given set of
-; fields, or nil if the record is not found.
-(read db table-name primary-key fields) => record
+; Change the defined field family groups in a table. This requires rebuilding
+; the data blocks, and may take some time. The new families should be provided
+; as a keyword mapped to a set of field names.
+(alter-families db table-name new-families) => db'
 
+; Optimize the database table by merging any patch records and rebalancing the
+; data tree indexes.
+(optimize-table db table-name) => db'
+```
+
+### Record Operations
+
+```clojure
 ; Scan the records in a table, returning a sequence of data for the given set of
 ; fields. If start and end keys are given, only records within the bounds will
 ; be returned (inclusive). A nil start or end implies the beginning or end of
@@ -90,21 +126,16 @@ The library should support the following interactions with a database:
 ; given set of fields. Like `scan`, but uses record indices instead.
 (seek db table-name fields from-index to-index) => (record ...)
 
+; Read a single record from the database, returning data for the given set of
+; fields, or nil if the record is not found.
+(read db table-name primary-key fields) => record
+
 ; Write a batch of records to the database, represented as a map of primary key
 ; values to record data maps.
 (write db table-name records) => db'
 
 ; Remove a batch of records from the table, identified as a set of primary keys.
 (delete db table-name primary-keys) => db'
-
-; Change the defined field family groups in a table. This requires rebuilding
-; the data blocks, and may take some time. The new families should be provided
-; as a keyword mapped to a set of field names.
-(alter-families db table-name new-families) => db'
-
-; Optimize the database table by merging any patch records and rebalancing the
-; data tree indexes.
-(optimize db table-name) => db'
 ```
 
 

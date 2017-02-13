@@ -84,16 +84,35 @@ Non goals:
 
 The library should support the following interactions with a database:
 
+### Connection Operations
+
+A _connection_ is a long-lived handle to the backing data store and db root
+tracker. It can be used to open databases for reading and writing.
+
+```clojure
+; Create a new connection to a backing block store and reference manager.
+; Options may include serialization, caching, and other configuration.
+(connect block-store ref-tracker & opts) => conn
+
+; Initialize a new database. An initial `:root` value may be provided, allowing
+; for cheap database copy-on-write cloning.
+(create-db! conn db-name & [root])
+
+; Open a new database. Options may include an initial `:root`
+; value, serialization and caching configuration, and user metadata.
+(open-db conn db-name) => db
+
+; Drop a database from the tracker. Note that this will not remove the block
+; data, as it may be shared.
+(drop-db conn db-name)
+```
+
 ### Database Operations
 
 ```clojure
-; Initialize a new, empty database. Options may include an initial `:root`
-; value, serialization and caching configuration, and user metadata.
-(open-db block-store & opts) => db
-
 ; Retrieve descriptive information about a database, including any user-set
 ; metadata.
-(describe-db db) =>
+(describe db) =>
 {:root Multihash
  :tables {table-name {:count Long, :size Long}}
  :metadata *}
@@ -103,8 +122,9 @@ The library should support the following interactions with a database:
 ; arguments. The result will be used as the new metadata.
 (alter-db-meta db f & args) => db'
 
-; Ensure all data has been written to the backing block store.
-(flush! db) => db
+; Ensure all data has been written to the backing block store and update the
+; database's root in the ref tracker.
+(commit! db) => db
 ```
 
 ### Table Operations
@@ -162,7 +182,7 @@ returned.
 
 ; Read a single record from the database, returning data for the given set of
 ; fields, or nil if the record is not found.
-(get-record db table-name primary-key fields) => record
+(get-record db table-name primary-key & [fields]) => record
 
 ; Write a batch of records to the database, represented as a map of primary key
 ; values to record data maps.

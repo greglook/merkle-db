@@ -80,9 +80,9 @@ Non goals:
 - Bound leaf segments based on size, rather than record count?
 
 
-## Database API
+## Library API
 
-The library should support the following interactions with a database:
+The library should support the following interactions:
 
 ### Connection Operations
 
@@ -96,15 +96,14 @@ tracker. It can be used to open databases for reading and writing.
 
 ; Initialize a new database. An initial `:root` value may be provided, allowing
 ; for cheap database copy-on-write cloning.
-(create-db! conn db-name & [root])
+(create-db! conn db-name & [root]) => db
 
-; Open a new database. Options may include an initial `:root`
-; value, serialization and caching configuration, and user metadata.
+; Open a database for use.
 (open-db conn db-name) => db
 
 ; Drop a database from the tracker. Note that this will not remove the block
 ; data, as it may be shared.
-(drop-db conn db-name)
+(drop-db! conn db-name)
 ```
 
 ### Database Operations

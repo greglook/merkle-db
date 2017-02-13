@@ -62,6 +62,8 @@ Non goals:
   a [B+ tree](https://en.wikipedia.org/wiki/B%2B_tree).
 - The data tree blocks contain a count of the records under them, so the index is
   also an [order statistic tree](https://en.wikipedia.org/wiki/Order_statistic_tree).
+  A similar metric for the linked block sizes allows for quick data sizing as
+  well.
 - Tables always contain at least one _base_ data tree, which is used to store
   the data from any fields not grouped into a family. Additionally, _all_ record
   keys will be present in the base tree, even if there is no field data present.
@@ -142,16 +144,21 @@ The library should support the following interactions with a database:
 
 ### Record Operations
 
+The record lookup functions all take a set of `fields` to return information
+for. This helps reduce the amount of work done to fetch undesired data from the
+store. If the fields are `nil` or not provided, all record data will be
+returned.
+
 ```clojure
 ; Scan the records in a table, returning a sequence of data for the given set of
 ; fields. If start and end keys are given, only records within the bounds will
 ; be returned (inclusive). A nil start or end implies the beginning or end of
 ; the data, respectively.
-(scan db table-name fields & [from-pk to-pk]) => (record ...)
+(scan db table-name & [fields from-pk to-pk]) => (record ...)
 
 ; Seek through the records in a table, returning a sequence of data for the
 ; given set of fields. Like `scan`, but uses record indices instead.
-(seek db table-name fields from-index to-index) => (record ...)
+(seek db table-name & [fields from-index to-index]) => (record ...)
 
 ; Read a single record from the database, returning data for the given set of
 ; fields, or nil if the record is not found.

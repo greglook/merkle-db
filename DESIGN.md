@@ -85,13 +85,15 @@ The library should support the following interactions with a database:
 ### Database Operations
 
 ```clojure
-; Initialize a new, empty database. Options may include user metadata.
-(create-db & opts) => db
+; Initialize a new, empty database. Options may include an initial `:root`
+; value, serialization and caching configuration, and user metadata.
+(open-db block-store & opts) => db
 
 ; Retrieve descriptive information about a database, including any user-set
 ; metadata.
 (describe-db db) =>
-{:tables {table-name {:count Long, :size Long}}
+{:root Multihash
+ :tables {table-name {:count Long, :size Long}}
  :metadata *}
 
 ; Update the user metadata attached to a database. The function `f` will be
@@ -99,8 +101,8 @@ The library should support the following interactions with a database:
 ; arguments. The result will be used as the new metadata.
 (alter-db-meta db f & args) => db'
 
-; List the tables present in the database.
-(list-tables db) => #{String ...}
+; Ensure all data has been written to the backing block store.
+(flush! db) => db
 ```
 
 ### Table Operations

@@ -108,6 +108,11 @@ tracker. It can be used to open databases for reading and writing.
 
 ### Database Operations
 
+Databases provide an immutable wrapper around the dynamic connection to the
+block and ref stores. Once you are interacting with the database object, most
+operations will return a locally-updated copy but not actually change the
+backing storage until `commit!` is called.
+
 ```clojure
 ; Retrieve descriptive information about a database, including any user-set
 ; metadata.
@@ -127,6 +132,9 @@ tracker. It can be used to open databases for reading and writing.
 ```
 
 ### Table Operations
+
+Tables are collections of records, identified by a string name. Each table name
+must be unique within the database.
 
 ```clojure
 ; Add a new table to the database. Options may include pre-defined column
@@ -167,6 +175,9 @@ The record lookup functions all take a set of `fields` to return information
 for. This helps reduce the amount of work done to fetch undesired data from the
 store. If the fields are `nil` or not provided, all record data will be
 returned.
+
+Record maps are returned with both rank and the primary key attached as
+metadata.
 
 ```clojure
 ; Scan the records in a table, returning a sequence of data for the given set of
@@ -209,6 +220,3 @@ returned.
   data tree index over the updated segments. This gets slightly more complicated
   if segments need to split, and potentially even more complicated if they need
   to merge. Needs more investigation.
-- Need to figure out the database versioning story. Is this left up to the user?
-  Probably not a great experience to have to roll your own, but also nothing
-  preventing it... Should build on the Ref concept in clj-merkledag.

@@ -31,21 +31,22 @@ allowing for space usage to generally scale with modification size.
 
 The primary design goals of MerkleDB are:
 
-- Read optimized (be more specific)
-- Bulk-processing oriented, where a job processes most or all of the records in
-  the table, but possibly only needs access to a subset of the fields in each
-  record.
-- Concurrent access by multiple readers, regardless of writers.
+- Flexible schema-free key-value storage.
+- Read optimized for bulk-processing, where a job processes most or all of the
+  records in the table, but possibly only needs access to a subset of the fields
+  in each record.
+- No central server or cluster proxying access to the data and executing
+  queries.
 
 Secondary goals include:
 
 - Efficient storage utilization via deduplication and structural sharing.
-- "Time travel" support by tracking database versions across time.
+- Light-weight versioning and copy-onto support "time travel".
 
 Non goals:
 
-- User management. In this library, all authentication and authorization is
-  deferred to the storage layers backing the block store.
+- Permissions. In this library, all authentication and authorization is deferred
+  to the storage layers backing the block store.
 
 
 ## Storage Structure
@@ -94,12 +95,16 @@ tracker. It can be used to open databases for reading and writing.
 ; Options may include serialization, caching, and other configuration.
 (connect block-store ref-tracker & opts) => conn
 
+; List the names of the databases present.
+(list-dbs conn) => #{db-name ...}
+
 ; Initialize a new database. An initial `:root` value may be provided, allowing
 ; for cheap database copy-on-write cloning.
 (create-db! conn db-name & [root]) => db
 
-; Open a database for use.
-(open-db conn db-name) => db
+; Open a database for use. An optional argument may be provided, which will
+; return the last committed database version occurring before that time.
+(open-db conn db-name & [at-inst]) => db
 
 ; Drop a database from the tracker. Note that this will not remove the block
 ; data, as it may be shared.
@@ -119,6 +124,7 @@ backing storage until `commit!` is called.
 (describe db) =>
 {:root Multihash
  :tables {table-name {:count Long, :size Long}}
+ :updated-at Instant
  :metadata *}
 
 ; Update the user metadata attached to a database. The function `f` will be

@@ -27,6 +27,8 @@ allowing for space usage to generally scale with modification size.
 
 ## Goals
 
+**TODO:** Establish usage patterns more clearly
+
 The primary design goals of MerkleDB are:
 
 - Read optimized (be more specific)
@@ -40,7 +42,10 @@ Secondary goals include:
 - Efficient storage utilization via deduplication and structural sharing.
 - "Time travel" support by tracking database versions across time.
 
-**TODO:** Establish usage patterns more clearly
+Non goals:
+
+- User management. In this library, all authentication and authorization is
+  deferred to the storage layers backing the block store.
 
 
 ## Storage Structure
@@ -80,27 +85,45 @@ The library should support the following interactions with a database:
 ### Database Operations
 
 ```clojure
+; Initialize a new, empty database. Options may include
+(create-db & opts) => db
+
+; Retrieve descriptive information about a database, including any user-set
+; metadata.
+(describe-db db) =>
+{:tables #{String ...}
+ :metadata *}
+
+; Update the user metadata attached to a database. The function `f` will be
+; called with the current value of the metadata, followed by any provided
+; arguments. The result will be used as the new metadata.
+(alter-db-meta db f & args) => db'
+
 ; List the tables present in the database.
 (list-tables db) => #{String ...}
-
-; Retrieve the user metadata attached to a database.
-(get-db-meta db) => *
-
-; Set the user metadata attached to a database.
-(set-db-meta db value) => db'
 ```
 
 ### Table Operations
 
 ```clojure
-; Return the number of records in the given table.
-(count-table db table-name) => Long
+; Add a new table to the database. Options may include pre-defined column
+; families and metadata.
+(create-table db table-name & opts) => db'
 
 ; Retrieve the user metadata attached to a table.
-(get-table-meta db table-name) => *
+(describe-table db table-name) =>
+{:name String
+ :count Long  ; total number of records
+ :size Long   ; total data size in bytes
+ :base {:count Long, :size Long}
+ :patch {:count Long, :size Long}
+ :families {Keyword {:count Long, :size Long, :fields #{String}}}
+ :metadata *}
 
-; Set the user metadata attached to a table.
-(set-table-meta db table-name value) => db'
+; Update the user metadata attached to a table. The function `f` will be
+; called with the current value of the metadata, followed by any provided
+; arguments. The result will be used as the new metadata.
+(alter-table-meta db table-name f & args) => db'
 
 ; Change the defined field family groups in a table. This requires rebuilding
 ; the data blocks, and may take some time. The new families should be provided
@@ -110,6 +133,9 @@ The library should support the following interactions with a database:
 ; Optimize the database table by merging any patch records and rebalancing the
 ; data tree indexes.
 (optimize-table db table-name) => db'
+
+; Remove a table from the database.
+(drop-table db table-name) => db'
 ```
 
 ### Record Operations
@@ -119,8 +145,7 @@ The library should support the following interactions with a database:
 ; fields. If start and end keys are given, only records within the bounds will
 ; be returned (inclusive). A nil start or end implies the beginning or end of
 ; the data, respectively.
-(scan db table-name fields)
-(scan db table-name fields from-pk to-pk) => (record ...)
+(scan db table-name fields & [from-pk to-pk]) => (record ...)
 
 ; Seek through the records in a table, returning a sequence of data for the
 ; given set of fields. Like `scan`, but uses record indices instead.
@@ -128,7 +153,7 @@ The library should support the following interactions with a database:
 
 ; Read a single record from the database, returning data for the given set of
 ; fields, or nil if the record is not found.
-(read db table-name primary-key fields) => record
+(get-record db table-name primary-key fields) => record
 
 ; Write a batch of records to the database, represented as a map of primary key
 ; values to record data maps.
@@ -144,5 +169,18 @@ The library should support the following interactions with a database:
 - Should be possible to diff two databases and get a quick list of what changed
   down to the segment level. This would allow for determining whether the change
   was all appends to a table, enabling incremental (log-style) processing.
-- Should be a way to naturally parallelize processing based on the segment
+- Find a good way to naturally parallelize processing based on the segment
   boundaries, allowing each job to fetch only a single block.
+- Data trees should be 'constructable' from a sequence of segments - for
+  example, say a job needs to batch write a large number of records which will
+  result in updating most of the segments in the tree. Rather than one job doing
+  the work to update every segment, it should be possible to have something like
+  Spark split the new records up by primary key (into ranges matching the
+  existing segments where possible), distribute them to worker nodes to
+  update the original segments, then assemble them back together and build a new
+  data tree index over the updated segments. This gets slightly more complicated
+  if segments need to split, and potentially even more complicated if they need
+  to merge. Needs more investigation.
+- Need to figure out the database versioning story. Is this left up to the user?
+  Probably not a great experience to have to roll your own, but also nothing
+  preventing it... Should build on the Ref concept in clj-merkledag.

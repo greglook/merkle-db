@@ -32,11 +32,13 @@ allowing for space usage to generally scale with modification size.
 The primary design goals of MerkleDB are:
 
 - Flexible schema-free key-value storage.
+- No central server or cluster proxying access to the data and executing
+  queries.
 - Read optimized for bulk-processing, where a job processes most or all of the
   records in the table, but possibly only needs access to a subset of the fields
   in each record.
-- No central server or cluster proxying access to the data and executing
-  queries.
+- Ability to parallelize writes by breaking up tables into ranges of primary
+  keys and reassembling the updated segments.
 
 Secondary goals include:
 
@@ -211,6 +213,9 @@ metadata.
 
 ## Other Thoughts
 
+- Consider the best way to optimize for append-only (log-style) writes - measure
+  the deduplication factor for some real patterns first, as the normal tree
+  algorithms may be sufficient.
 - Should be possible to diff two databases and get a quick list of what changed
   down to the segment level. This would allow for determining whether the change
   was all appends to a table, enabling incremental (log-style) processing.

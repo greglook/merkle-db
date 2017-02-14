@@ -43,12 +43,12 @@ The primary design goals of MerkleDB are:
 Secondary goals include:
 
 - Efficient storage utilization via deduplication and structural sharing.
-- Light-weight versioning and copy-onto support "time travel".
+- Light-weight versioning and copy-on-write to support "time travel".
 
 Non goals:
 
 - Permissions. In this library, all authentication and authorization is deferred
-  to the storage layers backing the block store.
+  to the storage layers backing the block store and ref tracker.
 
 
 ## Storage Structure
@@ -149,11 +149,13 @@ must be unique within the database.
 ; families and metadata.
 (create-table db table-name & opts) => db'
 
-; Retrieve the user metadata attached to a table.
+; Retrieve descriptive information about a table in the database. The various
+; `:count` and `:size` metrics represent the number of records and data size in
+; bytes, respectively.
 (describe-table db table-name) =>
 {:name String
- :count Long  ; total number of records
- :size Long   ; total data size in bytes
+ :count Long
+ :size Long
  :base {:count Long, :size Long}
  :patch {:count Long, :size Long}
  :families {Keyword {:count Long, :size Long, :fields #{String}}}

@@ -244,6 +244,10 @@ client.
  :merkle-db/metadata {...}}
 ```
 
+**IDEA:** Should table roots also contain the data-tree configuration? For
+example, branching factor, segment size limits, etc. This would allow advanced
+users to tune tables for specific use-cases.
+
 ### Data Trees
 
 Data trees are modeled after a [B+ tree](https://en.wikipedia.org/wiki/B%2B_tree)
@@ -268,9 +272,7 @@ A similar metric for the linked block sizes allows for quick data sizing as well
   ...]}
 ```
 
-**TODO:**
-- Define the exact algorithm for ordering keys.
-- Should data tree roots also contain the tree configuration? (for example, branching factor, segment size limits, etc)
+**TODO:** Define the exact algorithm for ordering keys.
 
 ### Record Segments
 

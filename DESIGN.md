@@ -51,38 +51,6 @@ Non goals:
   to the storage layers backing the block store and ref tracker.
 
 
-## Storage Structure
-
-- A database is represented by a _db root_ block, which contains db-wide
-  information and maps string table names to _table roots_.
-- Primary keys are just bytes, allowing for pluggable key serialization formats.
-- **TODO:** exact algorithm for ordering keys. Should this be pluggable too?
-- **TODO:** pluggable serialization backends via MultiStream/Codec?
-- Tables may define _families_ of fields which are often accessed together, as a
-  storage optimization for queries.
-- The records in a table are stored in _segments_, which are the leaves of a
-  _data tree_ of index blocks, sorted by primary key. The index is a variant of
-  a [B+ tree](https://en.wikipedia.org/wiki/B%2B_tree).
-- The data tree blocks contain a count of the records under them, so the index is
-  also an [order statistic tree](https://en.wikipedia.org/wiki/Order_statistic_tree).
-  A similar metric for the linked block sizes allows for quick data sizing as
-  well.
-- Tables always contain at least one _base_ data tree, which is used to store
-  the data from any fields not grouped into a family. Additionally, _all_ record
-  keys will be present in the base tree, even if there is no field data present.
-  This makes sure that the full sequence of keys can be enumerated with only the
-  base tree.
-- Each family of fields will be written as additional separate data trees in the
-  table.
-- Reads will only load data from the trees containing the fields they need.
-  Multiple trees will be returned as an ordered merge.
-- Should tables support a "patch" block linked from the table root? This would
-  hold complete records sorted by pk which should be preferred to any found in the
-  main table body. This is similar to Clojure's PersistentVector 'tails' and
-  allow for amortizing table updates across a few versions.
-- Bound leaf segments based on size, rather than record count?
-
-
 ## Library API
 
 The library should support the following interactions:
@@ -156,9 +124,8 @@ must be unique within the database.
 {:name String
  :count Long
  :size Long
- :base {:count Long, :size Long}
+ :data {Keyword {:count Long, :size Long, :fields #{String}}}
  :patch {:count Long, :size Long}
- :families {Keyword {:count Long, :size Long, :fields #{String}}}
  :metadata *}
 
 ; Update the user metadata attached to a table. The function `f` will be
@@ -210,6 +177,113 @@ metadata.
 
 ; Remove a batch of records from the table, identified as a set of primary keys.
 (delete db table-name primary-keys) => db'
+```
+
+
+## Storage Structure
+
+A database is ultimately represented by a _merkle tree_. Each node in the tree
+is an immutable content-addressed block of data. The data in each block is
+serialized with a _codec_ and wrapped in [multicodec headers](https://github.com/multiformats/clj-multicodec)
+to support format versioning and future evolution. Initial versions will
+likely use [CBOR](https://github.com/greglook/clj-cbor), but later on it may
+prove worthwhile to use custom formats for some node types.
+
+Within a node, links to other nodes are represented with
+[multihash ids](https://github.com/multiformats/clj-multihash). Because these
+links are themselves part of the hashed content of the node, a change to any
+part of the tree must propagate up to the root node. The entire set of data at
+a specific version is therefore representable by the multihash of the root
+node.
+
+### Database Root Node
+
+The root of a database is a block which contains database-wide settings and
+maps table names to _table root nodes_.
+
+```clojure
+{:merkle-db.db/tables {"foo" #data/hash "Qm..."}
+ :merkle-db/updated-at #inst "2017-02-19T18:04:27Z"
+ :merkle-db/metadata {...}}
+```
+
+### Table Root Node
+
+A table root is a block which contains table-specific information and links to
+the collections of record data. The records in a table are stored in
+_segments_, which are the leaves of a _data tree_ of index blocks, sorted by
+primary key.
+
+Tables may define _families_ of fields which are often accessed together, as a
+storage optimization for queries. Each family of fields will be written as
+additional separate data trees in the table.
+
+Tables always contain at least one _base_ data tree, which is used to store the
+data from any fields not grouped into a family. _All_ record keys will be
+present in the base tree, even if there is no field data present. This makes
+sure that the full sequence of keys can be enumerated with only the base tree.
+
+In addition to the data trees, tables contain a _patch segment_ linked directly
+from the root node. This segment holds complete records (and tombstones) sorted
+by pk which should be preferred to any found in the main table body. This is
+similar to Clojure's PersistentVector 'tails' and allow for amortizing table
+updates across multiple operations.
+
+To perform a read from the tree, first the patch segment is consulted, then the
+data trees corresponding to the requested fields are used to look up record
+data. The results are merged into a single sequence of records to return to the
+client.
+
+```clojure
+{:merkle-db.table/data
+ {:base {:data #data/hash "Qm..."}
+  :foo {:fields #{"abc" "def"}
+        :data #data/hash "Qm..."}}
+ :merkle-db.table/patch #data/hash "Qm..."
+ :merkle-db/updated-at #inst "2017-02-19T18:04:27Z"
+ :merkle-db/metadata {...}}
+```
+
+### Data Trees
+
+Data trees are modeled after a [B+ tree](https://en.wikipedia.org/wiki/B%2B_tree)
+and contain both internal index nodes and leaf segments. Records in a data tree
+are sorted by their _primary key_, which uniquely identifies each record within
+the table. Primary keys are just bytes, allowing for pluggable key serialization
+formats.
+
+The data tree blocks contain a count of the records under them, so the index is
+also an [order statistic tree](https://en.wikipedia.org/wiki/Order_statistic_tree).
+A similar metric for the linked block sizes allows for quick data sizing as well.
+
+```clojure
+{:merkle-db.data/count 239502
+ :merkle-db.data/size 5802580602
+ :merkle-db.data/index
+ [#data/hash "Qm..."     ; link to subtree containing pk < A
+  #data/bin key-bytes-A  ; encoded key A
+  #data/hash "Qm..."     ; link to subtree containing A <= pk < B
+  #data/bin key-bytes-B  ; encoded key B
+  #data/hash "Qm..."     ; link to subtree containing B <= pk < ...
+  ...]}
+```
+
+**TODO:**
+- Define the exact algorithm for ordering keys.
+- Should data tree roots also contain the tree configuration? (for example, branching factor, segment size limits, etc)
+
+### Record Segments
+
+The leaves of a data tree are _record segments_. Unlike the internal nodes,
+these may have significantly more entries than the tree's branching factor.
+Instead, leaf segments are bounded based on a combination of size and record
+count.
+
+```clojure
+{:merkle-db.data/records
+ {#data/bin key-bytes-a {"abc" 123, "xyz" true, ...}
+  #data/bin key-bytes-b {"abc" 456, "xyz" false, ...}
+  ...}}
 ```
 
 

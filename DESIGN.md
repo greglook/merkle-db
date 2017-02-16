@@ -288,6 +288,12 @@ count.
   ...}}
 ```
 
+Segments should not link to any further nodes, and are probably the best
+candidate for a custom encoding format. In particular, caching field names at
+the beginning of the data and referencing them by number in the actual record
+bodies would probably save a lot of space. This may not be a huge win compared
+to simply applying compression to the entire segment block, however.
+
 
 ## Other Thoughts
 

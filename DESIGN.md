@@ -13,17 +13,6 @@ data store:
   There is no guarantee that all the values for a given field have the same
   type.
 
-Databases are immutable data structures built as a _Merkle Tree_ of data nodes.
-Each node is a [content-adressed block](https://github.com/greglook/blocks), so
-a database ultimately resolves to the multihash id of the root block. As a
-result, "committing" an updated database version means updating a mutable
-reference to the root block's hash. Then readers need access to the underlying
-block store, and the library does the rest locally.
-
-Modifications to the database return a new root value, representing the updated
-tree. Any unchanged data shares the same blocks as the previous version,
-allowing for space usage to generally scale with modification size.
-
 
 ## Goals
 
@@ -32,13 +21,9 @@ allowing for space usage to generally scale with modification size.
 The primary design goals of MerkleDB are:
 
 - Flexible schema-free key-value storage.
-- No central server or cluster proxying access to the data and executing
-  queries.
-- Read optimized for bulk-processing, where a job processes most or all of the
-  records in the table, but possibly only needs access to a subset of the fields
-  in each record.
-- Ability to parallelize writes by breaking up tables into ranges of primary
-  keys and reassembling the updated segments.
+- Highl-parallelism reads and writes to optimize for bulk-processing, where a
+  job computes over most or all of the records in the table, but possibly only
+  needs access to a subset of the fields in each record.
 
 Secondary goals include:
 
@@ -47,8 +32,9 @@ Secondary goals include:
 
 Non goals:
 
-- Permissions. In this library, all authentication and authorization is deferred
-  to the storage layers backing the block store and ref tracker.
+- High-frequency, highly concurrent writes.
+- Access control. In this library, all authentication and authorization is
+  deferred to the storage layers backing the block store and ref tracker.
 
 
 ## Library API
@@ -92,7 +78,7 @@ backing storage until `commit!` is called.
 ; Retrieve descriptive information about a database, including any user-set
 ; metadata.
 (describe db) =>
-{:root Multihash
+{:id Multihash
  :tables {table-name {:count Long, :size Long}}
  :updated-at Instant
  :metadata *}
@@ -121,11 +107,13 @@ must be unique within the database.
 ; `:count` and `:size` metrics represent the number of records and data size in
 ; bytes, respectively.
 (describe-table db table-name) =>
-{:name String
+{:id Multihash
+ :name String
+ :tablets Long
  :count Long
  :size Long
- :data {Keyword {:count Long, :size Long, :fields #{String}}}
  :patch {:count Long, :size Long}
+ :families {Keyword #{String}}
  :metadata *}
 
 ; Update the user metadata attached to a table. The function `f` will be
@@ -137,6 +125,18 @@ must be unique within the database.
 ; the data blocks, and may take some time. The new families should be provided
 ; as a keyword mapped to a set of field names.
 (alter-families db table-name new-families) => db'
+
+; List the tablets which compose the blocks of primary key ranges for the
+; records in the table.
+(list-tablets db table-name) =>
+({:id Multihash
+  :count Long
+  :start key-bytes
+  :end key-bytes}
+ ...)
+
+; Rebuild a table from a sequence of new tablets.
+(rebuild-table db table-name tablet-ids) => db'
 
 ; Optimize the database table by merging any patch records and rebalancing the
 ; data tree indexes.
@@ -157,6 +157,10 @@ Record maps are returned with both rank and the primary key attached as
 metadata.
 
 ```clojure
+; Read all the records in the given tablet, returning a sequence of data for
+; the given set of records.
+(read-tablet db tablet-id & [fields]) => (record ...)
+
 ; Scan the records in a table, returning a sequence of data for the given set of
 ; fields. If start and end keys are given, only records within the bounds will
 ; be returned (inclusive). A nil start or end implies the beginning or end of
@@ -182,19 +186,20 @@ metadata.
 
 ## Storage Structure
 
-A database is ultimately represented by a _merkle tree_. Each node in the tree
-is an immutable content-addressed block of data. The data in each block is
-serialized with a _codec_ and wrapped in [multicodec headers](https://github.com/multiformats/clj-multicodec)
-to support format versioning and future evolution. Initial versions will
-likely use [CBOR](https://github.com/greglook/clj-cbor), but later on it may
-prove worthwhile to use custom formats for some node types.
+A merkle database is stored as a _merkle tree_, where each node in the tree is
+an immutable [content-addressed block](https://github.com/greglook/blocks)
+identified by a [multihash](https://github.com/multiformats/clj-multihash) of
+its byte content. The data in each block is serialized with a _codec_ and
+wrapped in [multicodec headers](https://github.com/multiformats/clj-multicodec)
+to support format versioning and future evolution. Initial versions will likely
+use [CBOR](https://github.com/greglook/clj-cbor).
 
-Within a node, links to other nodes are represented with
-[multihash ids](https://github.com/multiformats/clj-multihash). Because these
-links are themselves part of the hashed content of the node, a change to any
-part of the tree must propagate up to the root node. The entire set of data at
-a specific version is therefore representable by the multihash of the root
-node.
+Within a node, references to other nodes are represented with _merkle links_,
+which combine a multihash target with an optional name and the recursive size
+of the referenced block. Because these links are themselves part of the hashed
+content of the node, a change to any part of the tree must propagate up to the
+root node. The entire immutable tree of data at a specific version is therefore
+identified by the multihash of the root node.
 
 ### Database Root Node
 
@@ -202,56 +207,49 @@ The root of a database is a block which contains database-wide settings and
 maps table names to _table root nodes_.
 
 ```clojure
-{:merkle-db.db/tables {"foo" #data/hash "Qm..."}
+{:data/type :merkle-db/db-root
+ :merkle-db.db/tables {"foo" #data/hash "Qm..."}
  :merkle-db/updated-at #inst "2017-02-19T18:04:27Z"
- :merkle-db/metadata {...}}
+ :merkle-db/metadata #data/hash "Qm..."}
 ```
 
 ### Table Root Node
 
 A table root is a block which contains table-specific information and links to
-the collections of record data. The records in a table are stored in
-_segments_, which are the leaves of a _data tree_ of index blocks, sorted by
-primary key.
+the collections of record data. The records in a table are grouped into
+_tablets_, which contain a contiguous range of record primary keys.
 
-Tables may define _families_ of fields which are often accessed together, as a
-storage optimization for queries. Each family of fields will be written as
-additional separate data trees in the table.
+Tablets are the leaves of a _data tree_ of index blocks, sorted by primary key.
+The data fields for each record are stored in _segments_, which are linked from
+each tablet.
 
-Tables always contain at least one _base_ data tree, which is used to store the
-data from any fields not grouped into a family. _All_ record keys will be
-present in the base tree, even if there is no field data present. This makes
-sure that the full sequence of keys can be enumerated with only the base tree.
-
-In addition to the data trees, tables contain a _patch segment_ linked directly
+In addition to the tablets, tables contain a _patch segment_ linked directly
 from the root node. This segment holds complete records (and tombstones) sorted
 by pk which should be preferred to any found in the main table body. This is
-similar to Clojure's PersistentVector 'tails' and allow for amortizing table
+similar to Clojure's `PersistentVector` 'tails' and allow for amortizing table
 updates across multiple operations.
 
 To perform a read from the tree, first the patch segment is consulted, then the
-data trees corresponding to the requested fields are used to look up record
-data. The results are merged into a single sequence of records to return to the
-client.
+segments from each tablet corresponding to the requested fields are used to look
+up record data. The results are merged into a single sequence of records to
+return to the client.
 
 ```clojure
-{:merkle-db.table/data
- {:base {:data #data/hash "Qm..."}
-  :foo {:fields #{"abc" "def"}
-        :data #data/hash "Qm..."}}
+{:data/type :merkle-db/table-root
+ :merkle-db.table/data #data/hash "Qm..."
  :merkle-db.table/patch #data/hash "Qm..."
+ :merkle-db.table/count 802580
+ :merkle-db.table/families {:foo #{"bar" "baz"}}
+ :merkle-db.table/branching-factor 256
+ :merkle-db.table/tablet-size-limit 100000
  :merkle-db/updated-at #inst "2017-02-19T18:04:27Z"
- :merkle-db/metadata {...}}
+ :merkle-db/metadata #data/hash "Qm..."}
 ```
-
-**IDEA:** Should table roots also contain the data-tree configuration? For
-example, branching factor, segment size limits, etc. This would allow advanced
-users to tune tables for specific use-cases.
 
 ### Data Trees
 
 Data trees are modeled after a [B+ tree](https://en.wikipedia.org/wiki/B%2B_tree)
-and contain both internal index nodes and leaf segments. Records in a data tree
+and contain both internal index nodes and leaf tablets. Records in a data tree
 are sorted by their _primary key_, which uniquely identifies each record within
 the table. Primary keys are just bytes, allowing for pluggable key serialization
 formats.
@@ -261,31 +259,64 @@ also an [order statistic tree](https://en.wikipedia.org/wiki/Order_statistic_tre
 A similar metric for the linked block sizes allows for quick data sizing as well.
 
 ```clojure
-{:merkle-db.data/count 239502
- :merkle-db.data/size 5802580602
- :merkle-db.data/index
+{:data/type :merkle-db/index
+ :merkle-db.data/height 2
+ :merkle-db.data/count 239502
+ :merkle-db.data/keys
+ [key-bytes-A  ; encoded key A
+  key-bytes-B  ; encoded key B
+  ...
+  key-bytes-Z] ; encoded key Z
+ :merkle-db.data/children
  [#data/hash "Qm..."     ; link to subtree containing pk < A
-  #data/bin key-bytes-A  ; encoded key A
   #data/hash "Qm..."     ; link to subtree containing A <= pk < B
-  #data/bin key-bytes-B  ; encoded key B
   #data/hash "Qm..."     ; link to subtree containing B <= pk < ...
-  ...]}
+  ...
+  #data/hash "Qm..."]}   ; link to subtree containing Z <= pk
 ```
 
 **TODO:** Define the exact algorithm for ordering keys.
 
-### Record Segments
+### Tablets
 
-The leaves of a data tree are _record segments_. Unlike the internal nodes,
-these may have significantly more entries than the tree's branching factor.
-Instead, leaf segments are bounded based on a combination of size and record
-count.
+Tablets represent contiguous ranges of records, sorted by primary key. The data
+for records are stored in _segments_, which are linked from each tablet.
+
+Unlike the internal nodes, tablets may represent significantly more entries than
+the tree's branching factor. When tablets grow above a configurable limit, they
+are split into two smaller tablets to enable more parallelism when processing
+the table.
+
+Tables may define _families_ of fields which are often accessed together, as a
+storage optimization for queries. Each family of fields will be written in
+separate segment in each tablet, allowing queries to read from only the families
+whose data they require.
+
+Tablets always contain at least one _base_ segment, which is used to store the
+data from any fields not grouped into a family. _All_ record keys will be
+present in the base segment, even if there is no field data present. This makes
+sure that the full sequence of keys can be enumerated with only the base.
 
 ```clojure
-{:merkle-db.data/records
- {#data/bin key-bytes-a {"abc" 123, "xyz" true, ...}
-  #data/bin key-bytes-b {"abc" 456, "xyz" false, ...}
-  ...}}
+{:data/type :merkle-db/tablet
+ :merkle-db.data/count 83029
+ :merkle-db.tablet/start-key key-bytes
+ :merkle-db.tablet/end-key key-bytes
+ :merkle-db.tablet/segments
+ {:base #data/hash "Qm..."
+  :foo #data/hash "Qm..."}}
+```
+
+### Data Segments
+
+The actual record data is stored in the leaf _segments_.
+
+```clojure
+{:data/type :merkle-db/segment
+ :merkle-db.segment/records
+ [[key-bytes-a {"abc" 123, "xyz" true, ...}]
+  [key-bytes-b {"abc" 456, "xyz" false, ...}]
+  ...]}
 ```
 
 Segments should not link to any further nodes, and are probably the best
@@ -315,3 +346,12 @@ to simply applying compression to the entire segment block, however.
   data tree index over the updated segments. This gets slightly more complicated
   if segments need to split, and potentially even more complicated if they need
   to merge. Needs more investigation.
+- Reified transactions can be implemented client-side by adding custom record
+  fields on write and utilizing the database-level user metadata feature. Might
+  make sense to formalize this with some kind of configurable middleware.
+- Similarly, logical versions can be implemented with custom record fields and
+  read/rebuild data loading logic. Consider the requirements for middleware
+  for this use-case as well - probably not necessary to build into the core
+  library, though.
+- Multicodec headers are simpler if combined into one compound header, e.g.
+  `/merkle-db/v1/cbor/gzip`.

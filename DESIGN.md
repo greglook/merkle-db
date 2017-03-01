@@ -122,10 +122,21 @@ must be unique within the database.
 (alter-table-meta db table-name f & args) => db'
 
 ; Change the defined field family groups in a table. This requires rebuilding
-; the data blocks, and may take some time. The new families should be provided
-; as a keyword mapped to a set of field names.
+; the record segments, and may take some time. The new families should be
+; provided as a keyword mapped to a set of field names.
 (alter-families db table-name new-families) => db'
 
+; Remove a table from the database.
+(drop-table db table-name) => db'
+```
+
+### Tablet Operations
+
+Tablets divide up the record keys into ranges and are the basic unit of
+parallelism. These operations are lower-level, but intended for use by
+high-performance applications.
+
+```clojure
 ; List the tablets which compose the blocks of primary key ranges for the
 ; records in the table.
 (list-tablets db table-name) =>
@@ -135,15 +146,13 @@ must be unique within the database.
   :end key-bytes}
  ...)
 
-; Rebuild a table from a sequence of new tablets.
-(rebuild-table db table-name tablet-ids) => db'
+; Read all the records in the given tablet, returning a sequence of data for
+; the given set of fields.
+(read-tablet db tablet-id & [fields]) => (record ...)
 
-; Optimize the database table by merging any patch records and rebalancing the
-; data tree indexes.
-(optimize-table db table-name) => db'
-
-; Remove a table from the database.
-(drop-table db table-name) => db'
+; Rebuild a table from a sequence of new or updated tablets. Existing table
+; settings and metadata are left unchanged.
+(build-table db table-name tablet-ids) => db'
 ```
 
 ### Record Operations
@@ -157,10 +166,6 @@ Record maps are returned with both rank and the primary key attached as
 metadata.
 
 ```clojure
-; Read all the records in the given tablet, returning a sequence of data for
-; the given set of records.
-(read-tablet db tablet-id & [fields]) => (record ...)
-
 ; Scan the records in a table, returning a sequence of data for the given set of
 ; fields. If start and end keys are given, only records within the bounds will
 ; be returned (inclusive). A nil start or end implies the beginning or end of

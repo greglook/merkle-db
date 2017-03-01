@@ -199,12 +199,14 @@ wrapped in [multicodec headers](https://github.com/multiformats/clj-multicodec)
 to support format versioning and future evolution. Initial versions will likely
 use [CBOR](https://github.com/greglook/clj-cbor).
 
+![MerkleDB database structure](doc/images/db-data-structure.jpg)
+
 Within a node, references to other nodes are represented with _merkle links_,
 which combine a multihash target with an optional name and the recursive size
 of the referenced block. Because these links are themselves part of the hashed
 content of the node, a change to any part of the tree must propagate up to the
 root node. The entire immutable tree of data at a specific version is therefore
-identified by the multihash of the root node.
+identified by the multihash of the database root node.
 
 ### Database Root Node
 

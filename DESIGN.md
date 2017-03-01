@@ -214,8 +214,8 @@ maps table names to _table root nodes_.
 ```clojure
 {:data/type :merkle-db/db-root
  :merkle-db.db/tables {"foo" #data/hash "Qm..."}
- :merkle-db/updated-at #inst "2017-02-19T18:04:27Z"
- :merkle-db/metadata #data/hash "Qm..."}
+ :merkle-db/metadata #data/hash "Qm..."
+ :time/updated-at #inst "2017-02-19T18:04:27Z"}
 ```
 
 ### Table Root Node
@@ -241,14 +241,14 @@ return to the client.
 
 ```clojure
 {:data/type :merkle-db/table-root
+ :merkle-db/metadata #data/hash "Qm..."
  :merkle-db.table/data #data/hash "Qm..."
  :merkle-db.table/patch #data/hash "Qm..."
  :merkle-db.table/count 802580
- :merkle-db.table/families {:foo #{"bar" "baz"}}
+ :merkle-db.table/families {:foo #{:bar "baz"}}
  :merkle-db.table/branching-factor 256
  :merkle-db.table/tablet-size-limit 100000
- :merkle-db/updated-at #inst "2017-02-19T18:04:27Z"
- :merkle-db/metadata #data/hash "Qm..."}
+ :time/updated-at #inst "2017-02-19T18:04:27Z"}
 ```
 
 ### Data Trees

@@ -21,7 +21,7 @@ data store:
 The primary design goals of MerkleDB are:
 
 - Flexible schema-free key-value storage.
-- Highl-parallelism reads and writes to optimize for bulk-processing, where a
+- High-parallelism reads and writes to optimize for bulk-processing, where a
   job computes over most or all of the records in the table, but possibly only
   needs access to a subset of the fields in each record.
 
@@ -90,7 +90,7 @@ backing storage until `commit!` is called.
 
 ; Ensure all data has been written to the backing block store and update the
 ; database's root in the ref tracker.
-(commit! db) => db
+(commit! db) => db'
 ```
 
 ### Table Operations
@@ -113,7 +113,7 @@ must be unique within the database.
  :count Long
  :size Long
  :patch {:count Long, :size Long}
- :families {Keyword #{String}}
+ :families {Keyword #{field-names}}
  :metadata *}
 
 ; Update the user metadata attached to a table. The function `f` will be

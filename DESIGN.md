@@ -64,9 +64,9 @@ maps table names to _table root nodes_.
 
 ```clojure
 {:data/type :merkle-db/db-root
- :merkle-db/metadata #data/hash "Qm..."
- :merkle-db.db/tables {"foo" #data/hash "Qm..."}
- :time/updated-at #inst "2017-02-19T18:04:27Z"}
+ :merkle-db/metadata MerkleLink
+ :merkle-db.db/tables {table-name MerkleLink}
+ :time/updated-at Instant}
 ```
 
 ### Table Root Node
@@ -92,14 +92,14 @@ return to the client.
 
 ```clojure
 {:data/type :merkle-db/table-root
- :merkle-db/metadata #data/hash "Qm..."
- :merkle-db.table/data #data/hash "Qm..."
- :merkle-db.table/patch #data/hash "Qm..."
- :merkle-db.table/count 802580
- :merkle-db.table/families {:foo #{:bar "baz"}}
- :merkle-db.table/branching-factor 256
- :merkle-db.table/tablet-size-limit 100000
- :time/updated-at #inst "2017-02-19T18:04:27Z"}
+ :merkle-db/metadata MerkleLink
+ :merkle-db.table/data MerkleLink
+ :merkle-db.table/patch MerkleLink
+ :merkle-db.table/count Long
+ :merkle-db.table/families {Keyword #{field-name}}
+ :merkle-db.table/branching-factor Long    ;     256
+ :merkle-db.table/tablet-size-limit Long   ; 100,000
+ :time/updated-at Instant}
 ```
 
 ### Data Trees
@@ -116,19 +116,19 @@ A similar metric for the linked block sizes allows for quick data sizing as well
 
 ```clojure
 {:data/type :merkle-db/index
- :merkle-db.data/height 2
- :merkle-db.data/count 239502
+ :merkle-db.data/height Long
+ :merkle-db.data/count Long
  :merkle-db.data/keys
  [key-bytes-A  ; encoded key A
   key-bytes-B  ; encoded key B
   ...
   key-bytes-Z] ; encoded key Z
  :merkle-db.data/children
- [#data/hash "Qm..."     ; link to subtree containing pk < A
-  #data/hash "Qm..."     ; link to subtree containing A <= pk < B
-  #data/hash "Qm..."     ; link to subtree containing B <= pk < ...
+ [link-0       ; link to subtree containing pk < A
+  link-1       ; link to subtree containing A <= pk < B
+  link-2       ; link to subtree containing B <= pk < ...
   ...
-  #data/hash "Qm..."]}   ; link to subtree containing Z <= pk
+  link-26]}    ; link to subtree containing Z <= pk
 ```
 
 **TODO:** Define the exact algorithm for ordering keys.
@@ -155,12 +155,12 @@ sure that the full sequence of keys can be enumerated with only the base.
 
 ```clojure
 {:data/type :merkle-db/tablet
- :merkle-db.data/count 83029
+ :merkle-db.data/count Long
  :merkle-db.tablet/start-key key-bytes
  :merkle-db.tablet/end-key key-bytes
  :merkle-db.tablet/segments
- {:base #data/hash "Qm..."
-  :foo #data/hash "Qm..."}}
+ {:base MerkleLink
+  family-name MerkleLink}}
 ```
 
 ### Data Segments
@@ -170,8 +170,8 @@ The actual record data is stored in the _data segments_.
 ```clojure
 {:data/type :merkle-db/segment
  :merkle-db.segment/records
- [[key-bytes-a {"abc" 123, "xyz" true, ...}]
-  [key-bytes-b {"abc" 456, "xyz" false, ...}]
+ [[key-bytes-a {:abc 123, "xyz" true, ...}]
+  [key-bytes-b {:abc 456, "xyz" false, ...}]
   ...]}
 ```
 

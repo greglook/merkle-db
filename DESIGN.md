@@ -37,158 +37,6 @@ Non goals:
   deferred to the storage layers backing the block store and ref tracker.
 
 
-## Library API
-
-The library should support the following interactions:
-
-### Connection Operations
-
-A _connection_ is a long-lived handle to the backing data store and db root
-tracker. It can be used to open databases for reading and writing.
-
-```clojure
-; Create a new connection to a backing block store and reference manager.
-; Options may include serialization, caching, and other configuration.
-(connect block-store ref-tracker & opts) => conn
-
-; List the names of the databases present.
-(list-dbs conn) => #{db-name ...}
-
-; Initialize a new database. An initial `:root` value may be provided, allowing
-; for cheap database copy-on-write cloning.
-(create-db! conn db-name & [root]) => db
-
-; Open a database for use. An optional argument may be provided, which will
-; return the last committed database version occurring before that time.
-(open-db conn db-name & [at-inst]) => db
-
-; Drop a database from the tracker. Note that this will not remove the block
-; data, as it may be shared.
-(drop-db! conn db-name)
-```
-
-### Database Operations
-
-Databases provide an immutable wrapper around the dynamic connection to the
-block and ref stores. Once you are interacting with the database object, most
-operations will return a locally-updated copy but not actually change the
-backing storage until `commit!` is called.
-
-```clojure
-; Retrieve descriptive information about a database, including any user-set
-; metadata.
-(describe db) =>
-{:id Multihash
- :tables {table-name {:count Long, :size Long}}
- :updated-at Instant
- :metadata *}
-
-; Update the user metadata attached to a database. The function `f` will be
-; called with the current value of the metadata, followed by any provided
-; arguments. The result will be used as the new metadata.
-(alter-db-meta db f & args) => db'
-
-; Ensure all data has been written to the backing block store and update the
-; database's root in the ref tracker.
-(commit! db) => db'
-```
-
-### Table Operations
-
-Tables are collections of records, identified by a string name. Each table name
-must be unique within the database.
-
-```clojure
-; Add a new table to the database. Options may include pre-defined column
-; families and metadata.
-(create-table db table-name & opts) => db'
-
-; Retrieve descriptive information about a table in the database. The various
-; `:count` and `:size` metrics represent the number of records and data size in
-; bytes, respectively.
-(describe-table db table-name) =>
-{:id Multihash
- :name String
- :tablets Long
- :count Long
- :size Long
- :patch {:count Long, :size Long}
- :families {Keyword #{field-names}}
- :metadata *}
-
-; Update the user metadata attached to a table. The function `f` will be
-; called with the current value of the metadata, followed by any provided
-; arguments. The result will be used as the new metadata.
-(alter-table-meta db table-name f & args) => db'
-
-; Change the defined field family groups in a table. This requires rebuilding
-; the record segments, and may take some time. The new families should be
-; provided as a keyword mapped to a set of field names.
-(alter-families db table-name new-families) => db'
-
-; Remove a table from the database.
-(drop-table db table-name) => db'
-```
-
-### Tablet Operations
-
-Tablets divide up the record keys into ranges and are the basic unit of
-parallelism. These operations are lower-level, but intended for use by
-high-performance applications.
-
-```clojure
-; List the tablets which compose the blocks of primary key ranges for the
-; records in the table.
-(list-tablets db table-name) =>
-({:id Multihash
-  :count Long
-  :start key-bytes
-  :end key-bytes}
- ...)
-
-; Read all the records in the given tablet, returning a sequence of data for
-; the given set of fields.
-(read-tablet db tablet-id & [fields]) => (record ...)
-
-; Rebuild a table from a sequence of new or updated tablets. Existing table
-; settings and metadata are left unchanged.
-(build-table db table-name tablet-ids) => db'
-```
-
-### Record Operations
-
-The record lookup functions all take a set of `fields` to return information
-for. This helps reduce the amount of work done to fetch undesired data from the
-store. If the fields are `nil` or not provided, all record data will be
-returned.
-
-Record maps are returned with both rank and the primary key attached as
-metadata.
-
-```clojure
-; Scan the records in a table, returning a sequence of data for the given set of
-; fields. If start and end keys are given, only records within the bounds will
-; be returned (inclusive). A nil start or end implies the beginning or end of
-; the data, respectively.
-(scan db table-name & [fields from-pk to-pk]) => (record ...)
-
-; Seek through the records in a table, returning a sequence of data for the
-; given set of fields. Like `scan`, but uses record indices instead.
-(seek db table-name & [fields from-index to-index]) => (record ...)
-
-; Read a single record from the database, returning data for the given set of
-; fields, or nil if the record is not found.
-(get-record db table-name primary-key & [fields]) => record
-
-; Write a batch of records to the database, represented as a map of primary key
-; values to record data maps.
-(write db table-name records) => db'
-
-; Remove a batch of records from the table, identified as a set of primary keys.
-(delete db table-name primary-keys) => db'
-```
-
-
 ## Storage Structure
 
 A merkle database is stored as a _merkle tree_, where each node in the tree is
@@ -196,8 +44,9 @@ an immutable [content-addressed block](https://github.com/greglook/blocks)
 identified by a [multihash](https://github.com/multiformats/clj-multihash) of
 its byte content. The data in each block is serialized with a _codec_ and
 wrapped in [multicodec headers](https://github.com/multiformats/clj-multicodec)
-to support format versioning and future evolution. Initial versions will likely
-use [CBOR](https://github.com/greglook/clj-cbor).
+to support format versioning and feature evolution. Initial versions will likely
+use [CBOR](https://github.com/greglook/clj-cbor) and a header like
+`/merkle-db/v1/cbor/gzip`.
 
 ![MerkleDB database structure](doc/images/db-data-structure.jpg)
 
@@ -333,32 +182,239 @@ bodies would probably save a lot of space. This may not be a huge win compared
 to simply applying compression to the entire segment block, however.
 
 
-## Other Thoughts
+## Client API
 
-- Consider the best way to optimize for append-only (log-style) writes - measure
-  the deduplication factor for some real patterns first, as the normal tree
-  algorithms may be sufficient.
-- Should be possible to diff two databases and get a quick list of what changed
-  down to the segment level. This would allow for determining whether the change
-  was all appends to a table, enabling incremental (log-style) processing.
-- Find a good way to naturally parallelize processing based on the segment
-  boundaries, allowing each job to fetch only a single block.
-- Data trees should be 'constructable' from a sequence of segments - for
-  example, say a job needs to batch write a large number of records which will
-  result in updating most of the segments in the tree. Rather than one job doing
-  the work to update every segment, it should be possible to have something like
-  Spark split the new records up by primary key (into ranges matching the
-  existing segments where possible), distribute them to worker nodes to
-  update the original segments, then assemble them back together and build a new
-  data tree index over the updated segments. This gets slightly more complicated
-  if segments need to split, and potentially even more complicated if they need
-  to merge. Needs more investigation.
-- Reified transactions can be implemented client-side by adding custom record
-  fields on write and utilizing the database-level user metadata feature. Might
-  make sense to formalize this with some kind of configurable middleware.
-- Similarly, logical versions can be implemented with custom record fields and
-  read/rebuild data loading logic. Consider the requirements for middleware
-  for this use-case as well - probably not necessary to build into the core
-  library, though.
-- Multicodec headers are simpler if combined into one compound header, e.g.
-  `/merkle-db/v1/cbor/gzip`.
+The library should support the following client interface:
+
+### Connection Operations
+
+A _connection_ is a long-lived handle to the backing data store and db root
+tracker. It can be used to open databases for reading and writing.
+
+```clojure
+; Create a new connection to a backing block store and reference manager.
+; Options may include serialization, caching, and other configuration.
+(connect block-store ref-tracker & opts) => conn
+
+; List the names of the databases present.
+(list-dbs conn) => #{db-name ...}
+
+; Initialize a new database. An initial `:root` value may be provided, allowing
+; for cheap database copy-on-write cloning.
+(create-db! conn db-name & [root]) => db
+
+; Open a database for use. An optional argument may be provided, which will
+; return the last committed database version occurring before that time.
+(open-db conn db-name & [at-inst]) => db
+
+; Drop a database from the tracker. Note that this will not remove the block
+; data, as it may be shared.
+(drop-db! conn db-name)
+```
+
+### Database Operations
+
+Databases provide an immutable wrapper around the dynamic connection to the
+block and ref stores. Once you are interacting with the database object, most
+operations will return a locally-updated copy but not actually change the
+backing storage until `commit!` is called.
+
+```clojure
+; Retrieve descriptive information about a database, including any user-set
+; metadata.
+(describe db) =>
+{:id Multihash
+ :tables {table-name {:count Long, :size Long}}
+ :updated-at Instant
+ :metadata *}
+
+; Update the user metadata attached to a database. The function `f` will be
+; called with the current value of the metadata, followed by any provided
+; arguments. The result will be used as the new metadata.
+(alter-db-meta db f & args) => db'
+
+; Ensure all data has been written to the backing block store and update the
+; database's root in the ref tracker.
+(commit! db) => db'
+```
+
+### Table Operations
+
+Tables are collections of records, identified by a string name. Each table name
+must be unique within the database.
+
+```clojure
+; Add a new table to the database. Options may include pre-defined column
+; families and metadata.
+(create-table db table-name & opts) => db'
+
+; Retrieve descriptive information about a table in the database. The various
+; `:count` and `:size` metrics represent the number of records and data size in
+; bytes, respectively.
+(describe-table db table-name) =>
+{:id Multihash
+ :name String
+ :tablets Long
+ :count Long
+ :size Long
+ :patch {:count Long, :size Long}
+ :families {Keyword #{field-names}}
+ :metadata *}
+
+; Update the user metadata attached to a table. The function `f` will be
+; called with the current value of the metadata, followed by any provided
+; arguments. The result will be used as the new metadata.
+(alter-table-meta db table-name f & args) => db'
+
+; Change the defined field family groups in a table. This requires rebuilding
+; the record segments, and may take some time. The new families should be
+; provided as a keyword mapped to a set of field names.
+(alter-families db table-name new-families) => db'
+
+; Remove a table from the database.
+(drop-table db table-name) => db'
+```
+
+### Record Operations
+
+These operations provide a high-level interface for accessing and manipulating
+record data. Record maps are returned with both rank and the primary key
+attached as metadata.
+
+The lookup functions all take a set of `fields` to return
+information for. This helps reduce the amount of work done to fetch undesired
+data from the store. If the fields are `nil` or not provided, all record data
+will be returned.
+
+```clojure
+; Scan the records in a table, returning a sequence of data for the given set of
+; fields. If start and end keys are given, only records within the bounds will
+; be returned (inclusive). A nil start or end implies the beginning or end of
+; the data, respectively.
+(scan db table-name & [fields from-pk to-pk]) => (record ...)
+
+; Seek through the records in a table, returning a sequence of data for the
+; given set of fields. Like `scan`, but uses record indices instead.
+(seek db table-name & [fields from-index to-index]) => (record ...)
+
+; Read a set of records from the database, returning data for the given set of
+; fields for each located record.
+(get-records db table-name primary-keys & [fields]) => record
+
+; Write a collection of records to the database, represented as a map of primary
+; key values to record data maps.
+(write db table-name records) => db'
+
+; Remove a set of records from the table, identified by a collection of primary
+; keys.
+(delete db table-name primary-keys) => db'
+```
+
+### Tablet Operations
+
+Tablets divide up the record keys into ranges and are the basic unit of
+parallelism. These operations are lower-level, but intended for use by
+high-performance applications.
+
+```clojure
+; List the tablets which compose the blocks of primary key ranges for the
+; records in the table.
+(list-tablets db table-name) =>
+({:id Multihash
+  :count Long
+  :size Long
+  :start key-bytes
+  :end key-bytes}
+ ...)
+
+; Read all the records in the given tablet, returning a sequence of data for
+; the given set of fields.
+(read-tablet db tablet-id & [fields]) => (record ...)
+
+; Rebuild a table from a sequence of new or updated tablets. Existing table
+; settings and metadata are left unchanged.
+(build-table db table-name tablet-ids) => db'
+```
+
+
+## Use Cases
+
+This section details how to use MerkleDB to satisfy various usage patterns.
+
+### Random Access
+
+For basic usage, the database records can be accessed directly using the
+high-level record operations. This will generally not be as performant, but is
+sufficient for simple use-cases.
+
+### Bulk Read
+
+Tablets provide a natural grain to parallelize reads over. Either the whole
+table or the tablets covering a specific range of keys can be selected for
+querying and read in parallel. Each tablet and the correspondig segments only
+need to be read by a single job.
+
+Choosing column families which align with the types of queries done over the
+data will improve IO efficiency, because only the required segments will be
+loaded for each tablet.
+
+### Bulk Update
+
+Doing large bulk writes with non-sorted primary keys will generally update a
+large number of tablets within a table. In this case, using the high-level write
+operation will generally not be very efficient. Instead, updates may be done in
+parallel by applying the following method to each table:
+
+1. List the tablets in the table to be updated.
+2. Divide up the record keyspace into ranges matching the tablets.
+3. Group the new records into batches based on which tablet's range they fall
+   into.
+4. In parallel, process each batch of records and existing tablet to produce a
+   sequence of output tablets (for example, there may be more than one if the
+   tablet exceeds the size limit and splits).
+5. Write the updated segments and new tablets to the backing block store.
+6. Build a new index tree over the new set of tablets and update the table.
+7. Commit the updated database root.
+
+Choosing column families which align with the types of writes to the table will
+storage efficiency, because the existing segments can be re-used from the
+existing version.
+
+### Time-Series Data
+
+This is also known as "append-only" or "log-style" data. Writes only ever add
+new data to the table, and deletions are generally rare and occur on large
+blocks of old data (aging).
+
+In order to support this pattern, the record keys must be monotonically
+increasing. This way, new batches of data can be written as a new tablet, whose
+record keys are all greater than any keys already in the table. The new tablet
+is appended to the sequence of tablets and a new data tree is built to
+incorporate it.
+
+For reads from time-series data, it is desirable to find out only "new"
+information to enable incremental processing. Because tablets are immutable and
+shared broadly, a simple id comparison can be used to detect tablets added or
+changed between two versions. The fact that tablets don't overlap makes it safe
+for consumers to assume all new tablets are new data.
+
+### Logical Record Versions
+
+Logical versions make it possible to write a record with version _v_, then later
+try to write version _v-1_ and wind up with the database still reflecting
+version _v_. This makes writes idempotent, guaranteeing the database always
+reflects the latest version of a record.
+
+Logical versions can be implemented with custom record fields and read/rebuild
+data loading logic.
+
+TODO: Reads/writes need to accept a "confict resolution" function which takes
+the existing data and the new data and returns the data to use.
+
+### Transaction Metadata
+
+Reified transactions can be implemented by adding custom record fields on write
+and utilizing the database-level user metadata feature.
+
+TODO: It might make sense to formalize this with some kind of configurable
+middleware.

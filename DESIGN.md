@@ -16,8 +16,6 @@ data store:
 
 ## Goals
 
-**TODO:** Establish usage patterns more clearly
-
 The primary design goals of MerkleDB are:
 
 - Flexible schema-free key-value storage.
@@ -32,9 +30,10 @@ Secondary goals include:
 
 Non goals:
 
-- High-frequency, highly concurrent writes.
+- High-frequency, highly concurrent writes. Initial versions will have simple
+  database-wide locking for updates.
 - Access control. In this library, all authentication and authorization is
-  deferred to the storage layers backing the block store and ref tracker.
+  deferred to the storage layers backing the block store and ref manager.
 
 
 ## Storage Structure
@@ -188,13 +187,13 @@ The library should support the following client interface:
 
 ### Connection Operations
 
-A _connection_ is a long-lived handle to the backing data store and db root
-tracker. It can be used to open databases for reading and writing.
+A _connection_ is a long-lived handle to the backing data store and db ref
+manager. It can be used to open databases for reading and writing.
 
 ```clojure
 ; Create a new connection to a backing block store and reference manager.
 ; Options may include serialization, caching, and other configuration.
-(connect block-store ref-tracker & opts) => conn
+(connect block-store ref-manager & opts) => conn
 
 ; List the names of the databases present.
 (list-dbs conn) => #{db-name ...}
@@ -207,8 +206,8 @@ tracker. It can be used to open databases for reading and writing.
 ; return the last committed database version occurring before that time.
 (open-db conn db-name & [at-inst]) => db
 
-; Drop a database from the tracker. Note that this will not remove the block
-; data, as it may be shared.
+; Drop a database ref. Note that this will not remove the block data, as it
+may be shared.
 (drop-db! conn db-name)
 ```
 
@@ -234,7 +233,7 @@ backing storage until `commit!` is called.
 (alter-db-meta db f & args) => db'
 
 ; Ensure all data has been written to the backing block store and update the
-; database's root in the ref tracker.
+; database's root in the ref manager.
 (commit! db) => db'
 ```
 

@@ -7,8 +7,8 @@ data store:
 - A _database_ is a collection of _tables_, along with some user metadata.
 - Tables are collections of _records_, which are identified uniquely within the
   table by a primary key.
-- Each record is an associative collection of _fields_, mapping string field
-  names to values.
+- Each record is an associative collection of _fields_, mapping field names to
+  values.
 - Values may have any type that the underlying serialization format supports.
   There is no guarantee that all the values for a given field have the same
   type.
@@ -64,8 +64,8 @@ maps table names to _table root nodes_.
 
 ```clojure
 {:data/type :merkle-db/db-root
- :merkle-db.db/tables {"foo" #data/hash "Qm..."}
  :merkle-db/metadata #data/hash "Qm..."
+ :merkle-db.db/tables {"foo" #data/hash "Qm..."}
  :time/updated-at #inst "2017-02-19T18:04:27Z"}
 ```
 
@@ -165,7 +165,7 @@ sure that the full sequence of keys can be enumerated with only the base.
 
 ### Data Segments
 
-The actual record data is stored in the leaf _segments_.
+The actual record data is stored in the _data segments_.
 
 ```clojure
 {:data/type :merkle-db/segment
@@ -244,7 +244,7 @@ Tables are collections of records, identified by a string name. Each table name
 must be unique within the database.
 
 ```clojure
-; Add a new table to the database. Options may include pre-defined column
+; Add a new table to the database. Options may include pre-defined field
 ; families and metadata.
 (create-table db table-name & opts) => db'
 
@@ -314,7 +314,7 @@ will be returned.
 ### Tablet Operations
 
 Tablets divide up the record keys into ranges and are the basic unit of
-parallelism. These operations are lower-level, but intended for use by
+parallelism. These operations are lower-level and intended for use by
 high-performance applications.
 
 ```clojure
@@ -352,34 +352,33 @@ sufficient for simple use-cases.
 
 Tablets provide a natural grain to parallelize reads over. Either the whole
 table or the tablets covering a specific range of keys can be selected for
-querying and read in parallel. Each tablet and the correspondig segments only
+querying and read in parallel. Each tablet and the corresponding segments only
 need to be read by a single job.
 
-Choosing column families which align with the types of queries done over the
+Choosing field families which align with the types of queries done over the
 data will improve IO efficiency, because only the required segments will be
 loaded for each tablet.
 
 ### Bulk Update
 
-Doing large bulk writes with non-sorted primary keys will generally update a
-large number of tablets within a table. In this case, using the high-level write
+Doing large bulk writes with non-sorted primary keys will generally update most
+of the tablets within a table. In this case, using the high-level write
 operation will generally not be very efficient. Instead, updates may be done in
 parallel by applying the following method to each table:
 
 1. List the tablets in the table to be updated.
 2. Divide up the record keyspace into ranges matching the tablets.
-3. Group the new records into batches based on which tablet's range they fall
+3. Group the record updates into batches based on which tablet's range they fall
    into.
-4. In parallel, process each batch of records and existing tablet to produce a
+4. In parallel, process each batch of updates and existing tablet to produce a
    sequence of output tablets (for example, there may be more than one if the
-   tablet exceeds the size limit and splits).
-5. Write the updated segments and new tablets to the backing block store.
+   tablet exceeds the size limit and splits). Write the updated segments and new
+   tablets to the backing block store.
 6. Build a new index tree over the new set of tablets and update the table.
-7. Commit the updated database root.
 
-Choosing column families which align with the types of writes to the table will
-storage efficiency, because the existing segments can be re-used from the
-existing version.
+Choosing field families which align with the types of writes to the table will
+reduce IO and improve storage efficiency, because the existing segments can be
+re-used from the current version.
 
 ### Time-Series Data
 
@@ -395,9 +394,9 @@ incorporate it.
 
 For reads from time-series data, it is desirable to find out only "new"
 information to enable incremental processing. Because tablets are immutable and
-shared broadly, a simple id comparison can be used to detect tablets added or
-changed between two versions. The fact that tablets don't overlap makes it safe
-for consumers to assume all new tablets are new data.
+shared broadly, a simple hash id comparison can be used to detect tablets added
+or changed between two versions. The fact that tablets don't overlap makes it
+safe for consumers to assume all new tablets are new data.
 
 ### Logical Record Versions
 
@@ -409,13 +408,14 @@ reflects the latest version of a record.
 Logical versions can be implemented with custom record fields and read/rebuild
 data loading logic.
 
-TODO: Reads/writes need to accept a "confict resolution" function which takes
-the existing data and the new data and returns the data to use.
+**TODO:** Reads/writes need to accept a "merge" function which takes the
+existing data and the new data and returns the data to use.
 
 ### Transaction Metadata
 
 Reified transactions can be implemented by adding custom record fields on write
-and utilizing the database-level user metadata feature.
+and utilizing the database-level user metadata to store information about the
+transactions. Such metadata might include the timestamp, author, commit message,
+etc.
 
-TODO: It might make sense to formalize this with some kind of configurable
-middleware.
+**TODO:** It might be good to formalize this with some kind of middleware.

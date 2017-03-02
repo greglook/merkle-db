@@ -266,9 +266,10 @@ must be unique within the database.
 ; arguments. The result will be used as the new metadata.
 (alter-table-meta db table-name f & args) => db'
 
-; Change the defined field family groups in a table. This requires rebuilding
-; the record segments, and may take some time. The new families should be
-; provided as a keyword mapped to a set of field names.
+; Change the defined field family groups in a table. The new families should be
+; provided as a keyword mapped to a set of field names. This requires rebuilding
+; the record segments, and may take some time. It can sort of be done "online"
+; though, by committing after each tablet is rebuilt.
 (alter-families db table-name new-families) => db'
 
 ; Remove a table from the database.

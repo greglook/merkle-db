@@ -162,6 +162,8 @@ sure that the full sequence of keys can be enumerated with only the base.
   family-name MerkleLink}}
 ```
 
+**TODO:** Should families allow duplicate fields?
+
 ### Data Segments
 
 The actual record data is stored in the _data segments_.
@@ -207,7 +209,7 @@ manager. It can be used to open databases for reading and writing.
 (open-db conn db-name & [at-inst]) => db
 
 ; Drop a database ref. Note that this will not remove the block data, as it
-may be shared.
+; may be shared.
 (drop-db! conn db-name)
 ```
 
@@ -288,14 +290,10 @@ will be returned.
 
 ```clojure
 ; Scan the records in a table, returning a sequence of data for the given set of
-; fields. If start and end keys are given, only records within the bounds will
-; be returned (inclusive). A nil start or end implies the beginning or end of
-; the data, respectively.
-(scan db table-name & [fields from-pk to-pk]) => (record ...)
-
-; Seek through the records in a table, returning a sequence of data for the
-; given set of fields. Like `scan`, but uses record indices instead.
-(seek db table-name & [fields from-index to-index]) => (record ...)
+; fields. If start and end keys or indices are given, only records within the
+; bounds will be returned (inclusive). A nil start or end implies the beginning
+; or end of the data, respectively.
+(scan db table-name & {:keys [fields from-pk to-pk from-index to-index offset limit]) => (record ...)
 
 ; Read a set of records from the database, returning data for the given set of
 ; fields for each located record.

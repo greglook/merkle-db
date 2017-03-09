@@ -38,23 +38,23 @@ Non goals:
 
 ## Storage Structure
 
-A merkle database is stored as a _merkle tree_, where each node in the tree is
-an immutable [content-addressed block](https://github.com/greglook/blocks)
-identified by a [multihash](https://github.com/multiformats/clj-multihash) of
-its byte content. The data in each block is serialized with a _codec_ and
+A database is stored as a _merkle tree_, where each node in the tree is an
+immutable [content-addressed block](https://github.com/greglook/blocks)
+identified by a [cryptographic hash](https://github.com/multiformats/clj-multihash)
+of its byte content. The data in each block is serialized with a _codec_ and
 wrapped in [multicodec headers](https://github.com/multiformats/clj-multicodec)
 to support format versioning and feature evolution. Initial versions will likely
 use [CBOR](https://github.com/greglook/clj-cbor) and a header like
-`/merkle-db/v1/cbor/gzip`.
+`/merkle-db/v1/cbor+snappy`.
 
 ![MerkleDB database structure](doc/images/db-data-structure.jpg)
 
 Within a node, references to other nodes are represented with _merkle links_,
 which combine a multihash target with an optional name and the recursive size
-of the referenced block. Because these links are themselves part of the hashed
-content of the node, a change to any part of the tree must propagate up to the
-root node. The entire immutable tree of data at a specific version is therefore
-identified by the multihash of the database root node.
+of the referenced block. These links are themselves part of the hashed
+content of the node, so a change to any part of the tree must propagate up to
+the root node. The entire immutable tree of data at a specific version can
+therefore be identified by the hash of the database root node.
 
 ### Database Root Node
 
@@ -72,21 +72,21 @@ maps table names to _table root nodes_.
 
 A table root is a block which contains table-specific information and links to
 the collections of record data. The records in a table are grouped into
-_tablets_, which contain a contiguous range of record primary keys.
+_partitions_, which contain a contiguous range of record primary keys.
 
-Tablets are the leaves of a _data tree_ of index blocks, sorted by primary key.
-The data fields for each record are stored in _segments_, which are linked from
-each tablet.
+Partitions are the leaves of a _data tree_ of index nodes, sorted by primary key.
+The data fields for each record are stored in _tablets_, which are linked from
+each partition.
 
-In addition to the tablets, tables contain a _patch segment_ linked directly
-from the root node. This segment holds complete records (and tombstones) sorted
+In addition to the partitions, tables contain a _patch tablet_ linked directly
+from the root node. This tablet holds complete records (and tombstones) sorted
 by pk which should be preferred to any found in the main table body. This is
 similar to Clojure's `PersistentVector` 'tails' and allow for amortizing table
 updates across multiple operations.
 
-To perform a read from the tree, first the patch segment is consulted, then the
-segments from each tablet corresponding to the requested fields are used to look
-up record data. The results are merged into a single sequence of records to
+To perform a read from the tree, first the patch tablet is consulted, then the
+tablets from each partition corresponding to the requested fields are used to
+look up record data. The results are merged into a single sequence of records to
 return to the client.
 
 ```clojure
@@ -96,18 +96,18 @@ return to the client.
  :merkle-db.table/patch MerkleLink
  :merkle-db.table/count Long
  :merkle-db.table/families {Keyword #{field-name}}
- :merkle-db.table/branching-factor Long    ;     256
- :merkle-db.table/tablet-size-limit Long   ; 100,000
+ :merkle-db.table/branching-factor Long  ; e.g. 256 children
+ :merkle-db.table/partition-limit Long   ; e.g. 100,000 records
  :time/updated-at Instant}
 ```
 
 ### Data Trees
 
 Data trees are modeled after a [B+ tree](https://en.wikipedia.org/wiki/B%2B_tree)
-and contain both internal index nodes and leaf tablets. Records in a data tree
-are sorted by their _primary key_, which uniquely identifies each record within
-the table. Primary keys are just bytes, allowing for pluggable key serialization
-formats.
+and contain both internal index nodes and leaf partitions. Records in a data
+tree are sorted by their _primary key_, which uniquely identifies each record
+within the table. Primary keys are just bytes, allowing for pluggable key
+serialization formats.
 
 The data tree blocks contain a count of the records under them, so the index is
 also an [order statistic tree](https://en.wikipedia.org/wiki/Order_statistic_tree).
@@ -132,55 +132,55 @@ A similar metric for the linked block sizes allows for quick data sizing as well
 
 **TODO:** Define the exact algorithm for ordering keys.
 
-### Tablets
+### Partitions
 
-Tablets represent contiguous ranges of records, sorted by primary key. The data
-for records are stored in _segments_, which are linked from each tablet.
+Partitions represent contiguous ranges of records, sorted by primary key. The
+data for records are stored in _tablets_, which are linked from each partition.
 
-Unlike the internal nodes, tablets may represent significantly more entries than
-the tree's branching factor. When tablets grow above a configurable limit, they
-are split into two smaller tablets to enable more parallelism when processing
-the table.
+Unlike the internal nodes, partitions may represent significantly more entries
+than the tree's branching factor. When partitions grow above a configurable
+limit, they are split into two smaller partitions to enable more parallelism
+when processing the table.
 
 Tables may define _families_ of fields which are often accessed together, as a
 storage optimization for queries. Each family of fields will be written in
-separate segment in each tablet, allowing queries to read from only the families
-whose data they require.
+separate tablet in each partition, allowing queries to read from only the
+families whose data they require.
 
-Tablets always contain at least one _base_ segment, which is used to store the
-data from any fields not grouped into a family. _All_ record keys will be
-present in the base segment, even if there is no field data present. This makes
+Partitions always contain at least one _base_ tablet, which is used to store
+the data from any fields not grouped into a family. _All_ record keys will be
+present in the base tablet, even if there is no field data present. This makes
 sure that the full sequence of keys can be enumerated with only the base.
 
 ```clojure
-{:data/type :merkle-db/tablet
+{:data/type :merkle-db/partition
  :merkle-db.data/count Long
- :merkle-db.tablet/start-key key-bytes
- :merkle-db.tablet/end-key key-bytes
- :merkle-db.tablet/segments
+ :merkle-db.partition/start-key key-bytes
+ :merkle-db.partition/end-key key-bytes
+ :merkle-db.partition/tablets
  {:base MerkleLink
   family-name MerkleLink}}
 ```
 
 **TODO:** Should families allow duplicate fields?
 
-### Data Segments
+### Data Tablets
 
-The actual record data is stored in the _data segments_.
+The actual record data is stored in the _tablets_.
 
 ```clojure
-{:data/type :merkle-db/segment
- :merkle-db.segment/records
+{:data/type :merkle-db/tablet
+ :merkle-db.tablet/records
  [[key-bytes-a {:abc 123, "xyz" true, ...}]
   [key-bytes-b {:abc 456, "xyz" false, ...}]
   ...]}
 ```
 
-Segments should not link to any further nodes, and are probably the best
+Tablets should not link to any further nodes, and are probably the best
 candidate for a custom encoding format. In particular, caching field names at
 the beginning of the data and referencing them by number in the actual record
 bodies would probably save a lot of space. This may not be a huge win compared
-to simply applying compression to the entire segment block, however.
+to simply applying compression to the entire tablet block, however.
 
 
 ## Client API
@@ -255,7 +255,7 @@ must be unique within the database.
 (describe-table db table-name) =>
 {:id Multihash
  :name String
- :tablets Long
+ :partitions Long
  :count Long
  :size Long
  :patch {:count Long, :size Long}
@@ -269,8 +269,8 @@ must be unique within the database.
 
 ; Change the defined field family groups in a table. The new families should be
 ; provided as a keyword mapped to a set of field names. This requires rebuilding
-; the record segments, and may take some time. It can sort of be done "online"
-; though, by committing after each tablet is rebuilt.
+; the record tablets, and may take some time. It can sort of be done "online"
+; though, by committing after each partition is rebuilt.
 (alter-families db table-name new-families) => db'
 
 ; Remove a table from the database.
@@ -308,16 +308,16 @@ will be returned.
 (delete db table-name primary-keys) => db'
 ```
 
-### Tablet Operations
+### Partition Operations
 
-Tablets divide up the record keys into ranges and are the basic unit of
+Partitions divide up the record keys into ranges and are the basic unit of
 parallelism. These operations are lower-level and intended for use by
 high-performance applications.
 
 ```clojure
-; List the tablets which compose the blocks of primary key ranges for the
+; List the partitions which compose the blocks of primary key ranges for the
 ; records in the table.
-(list-tablets db table-name) =>
+(list-partitions db table-name) =>
 ({:id Multihash
   :count Long
   :size Long
@@ -325,13 +325,13 @@ high-performance applications.
   :end key-bytes}
  ...)
 
-; Read all the records in the given tablet, returning a sequence of data for
+; Read all the records in the given partition, returning a sequence of data for
 ; the given set of fields.
-(read-tablet db tablet-id & [fields]) => (record ...)
+(read-partition db partition-id & [fields]) => (record ...)
 
-; Rebuild a table from a sequence of new or updated tablets. Existing table
+; Rebuild a table from a sequence of new or updated partitions. Existing table
 ; settings and metadata are left unchanged.
-(build-table db table-name tablet-ids) => db'
+(build-table db table-name partition-ids) => db'
 ```
 
 
@@ -347,34 +347,34 @@ sufficient for simple use-cases.
 
 ### Bulk Read
 
-Tablets provide a natural grain to parallelize reads over. Either the whole
-table or the tablets covering a specific range of keys can be selected for
-querying and read in parallel. Each tablet and the corresponding segments only
-need to be read by a single job.
+Partitions provide a natural grain to parallelize reads over. Either the whole
+table or the partitions covering a specific range of keys can be selected for
+querying and read in parallel. Each partition and the corresponding tablets
+only need to be read by a single job.
 
 Choosing field families which align with the types of queries done over the
-data will improve IO efficiency, because only the required segments will be
-loaded for each tablet.
+data will improve IO efficiency, because only the required tablets will be
+loaded for each partition.
 
 ### Bulk Update
 
 Doing large bulk writes with non-sorted primary keys will generally update most
-of the tablets within a table. In this case, using the high-level write
+of the partitions within a table. In this case, using the high-level write
 operation will generally not be very efficient. Instead, updates may be done in
 parallel by applying the following method to each table:
 
-1. List the tablets in the table to be updated.
-2. Divide up the record keyspace into ranges matching the tablets.
-3. Group the record updates into batches based on which tablet's range they fall
-   into.
-4. In parallel, process each batch of updates and existing tablet to produce a
-   sequence of output tablets (for example, there may be more than one if the
-   tablet exceeds the size limit and splits). Write the updated segments and new
-   tablets to the backing block store.
-6. Build a new index tree over the new set of tablets and update the table.
+1. List the partitions in the table to be updated.
+2. Divide up the record keyspace into ranges matching the partitions.
+3. Group the record updates into batches based on which partition's range they
+   fall into.
+4. In parallel, process each batch of updates and existing partition to produce
+   a sequence of output partitions (for example, there may be more than one if
+   the partition exceeds the size limit and splits). Write the updated tablets
+   and new partitions to the backing block store.
+6. Build a new index tree over the new set of partitions and update the table.
 
 Choosing field families which align with the types of writes to the table will
-reduce IO and improve storage efficiency, because the existing segments can be
+reduce IO and improve storage efficiency, because the existing tablets can be
 re-used from the current version.
 
 ### Time-Series Data
@@ -384,16 +384,16 @@ new data to the table, and deletions are generally rare and occur on large
 blocks of old data (aging).
 
 In order to support this pattern, the record keys must be monotonically
-increasing. This way, new batches of data can be written as a new tablet, whose
-record keys are all greater than any keys already in the table. The new tablet
-is appended to the sequence of tablets and a new data tree is built to
-incorporate it.
+increasing. This way, new batches of data can be written as a new partition,
+whose record keys are all greater than any keys already in the table. The new
+partition is appended to the sequence of partitions and a new data tree is built
+to incorporate it.
 
 For reads from time-series data, it is desirable to find out only "new"
-information to enable incremental processing. Because tablets are immutable and
-shared broadly, a simple hash id comparison can be used to detect tablets added
-or changed between two versions. The fact that tablets don't overlap makes it
-safe for consumers to assume all new tablets are new data.
+information to enable incremental processing. Because partitions are immutable
+and shared broadly, a simple hash id comparison can be used to detect partitions
+added or changed between two versions. The fact that partitions don't overlap
+makes it safe for consumers to assume all new partitions are new data.
 
 ### Logical Record Versions
 

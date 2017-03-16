@@ -164,6 +164,9 @@ sure that the full sequence of keys can be enumerated with only the base.
 
 **TODO:** Should families allow duplicate fields?
 
+**IDEA:** Store a bloom filter in the partition node to provide a quick way to
+check whether specific records may be present.
+
 ### Data Tablets
 
 The actual record data is stored in the _tablets_.

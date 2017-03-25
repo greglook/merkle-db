@@ -1,7 +1,8 @@
 (ns merkle-db.tablet
   "Functions for working with tablet data."
   (:require
-    [clojure.spec :as s]))
+    [clojure.spec :as s]
+    [merkle-db.key :as key]))
 
 
 (s/def ::record-entry
@@ -35,9 +36,10 @@
   "Read a lazy sequence of maps which contains the field data for the records
   whose keys are in the given collection."
   [tablet record-keys]
+  ; TODO: record-keys must be a collection of PersistentByte objects
   ; OPTIMIZE: divide up the range by binary-searching for keys in the batch.
   (->> (::records tablet)
-       (filter (comp (set record-keys) first))  ; FIXME: won't work with raw byte arrays
+       (filter (comp (set record-keys) first))
        (map entry->record)))
 
 
@@ -50,9 +52,9 @@
   (->>
     (cond->> (::records tablet)
       start-key
-        (drop-while #(not (neg? (compare start-key (first %)))))  ; FIXME: use lexical byte comparator
+        (drop-while #(neg? (key/compare (first %) start-key)))
       end-key
-        (take-while #(not (pos? (compare end-key (first %))))))
+        (take-while #(not (neg? (key/compare end-key (first %))))))
     (map entry->record)))
 
 
@@ -91,7 +93,7 @@
                     (clojure.set/difference
                       (set (keys records))
                       (set (map first (::records tablet))))))
-       (sort-by first compare) ; FIXME: use lexical comparator
+       (sort-by first key/compare)
        (assoc tablet ::records)))
 
 
@@ -102,10 +104,11 @@
   "Update the tablet by removing certain record keys from it. Returns nil if
   the resulting tablet is empty."
   [tablet record-keys]
+  ; TODO: record-keys must be a collection of PersistentByte objects
   (->
     (->>
       (::records tablet)
-      (remove (comp (set record-keys) first))   ; FIXME: won't work with raw byte arrays
+      (remove (comp (set record-keys) first))
       (vec))
     (as-> records
       (when (seq records)

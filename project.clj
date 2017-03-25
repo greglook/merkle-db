@@ -8,4 +8,5 @@
   :pedantic? :abort
 
   :dependencies
-  [[org.clojure/clojure "1.9.0-alpha14"]])
+  [[org.clojure/clojure "1.9.0-alpha14"]
+   [mvxcvi/blocks "0.8.0"]])

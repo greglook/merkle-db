@@ -158,14 +158,18 @@ sure that the full sequence of keys can be enumerated with only the base.
  :merkle-db.partition/start-key key-bytes
  :merkle-db.partition/end-key key-bytes
  :merkle-db.partition/tablets
- {:base MerkleLink
-  family-name MerkleLink}}
+ {:base {:data MerkleLink}
+  family-name {:fields #{...}, :data MerkleLink}}}
 ```
 
 **TODO:** Should families allow duplicate fields?
 
 **IDEA:** Store a bloom filter in the partition node to provide a quick way to
 check whether specific records may be present.
+
+Partitions store field information locally because occasionally tables may be in
+a transitionary state where some partitions' family configuration does not match
+the desired one set in the table root.
 
 ### Data Tablets
 

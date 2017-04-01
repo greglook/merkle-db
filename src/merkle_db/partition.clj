@@ -45,24 +45,19 @@
 (defn- choose-tablets
   "Selects a list of tablet names to query over, given a mapping of tablet
   names to sets of the contained fields and the desired set of field data. If
-  selected-fields is nil, returns all tablets."
-  [tablet-fields selected-fields]
-  (if (empty? selected-fields)
-    (if (nil? selected-fields)
-      ; No selection provided, return all field data.
-      (-> tablet-fields keys set (conj :base))
-      ; Deliberately provided an empty collection; return no data.
-      nil)
+  selected-fields is empty, returns all tablets."
+  [tablet-fields selected]
+  (if (seq selected)
     ; Use field selection to filter tablets to load.
     (-> (dissoc tablet-fields :base)
-        (->> (keep #(when (some selected-fields (val %)) (key %))))
+        (->> (keep #(when (some selected (val %)) (key %))))
         (set)
         (as-> chosen
-          (if (seq (apply set/difference
-                          selected-fields
-                          (map tablet-fields chosen)))
+          (if (seq (apply disj selected (mapcat tablet-fields chosen)))
             (conj chosen :base)
-            chosen)))))
+            chosen)))
+    ; No selection provided, return all field data.
+    (-> tablet-fields keys set (conj :base))))
 
 
 (defn- record-seq
@@ -72,14 +67,14 @@
   (lazy-seq
     (when-let [next-key (some->> (seq (keep ffirst field-seqs))
                                  (apply key/min))]
-      (cons [next-key
-             (->> field-seqs
-                  (keep #(when (= next-key (ffirst %))
-                           (second (first %))))
-                  (apply merge))]
-            (record-seq
-              (keep #(if (= next-key (ffirst %)) (next %) (seq %))
-                    field-seqs))))))
+      (let [has-next? #(= next-key (ffirst %))
+            next-data (->> field-seqs
+                           (filter has-next?)
+                           (map (comp second first))
+                           (apply merge))
+            next-seqs (keep #(if (has-next? %) (next %) (seq %))
+                            field-seqs)]
+        (cons [next-key next-data] (record-seq next-seqs))))))
 
 
 (defn- tablet-fields

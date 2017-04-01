@@ -1,6 +1,15 @@
 (ns merkle-db.key
   "Functions for working with record keys."
-  (:refer-clojure :exclude [compare min max]))
+  (:refer-clojure :exclude [bytes? compare min max])
+  (:import
+    blocks.data.PersistentBytes))
+
+
+(defn bytes?
+  "Predicate which returns true if `x` is a `PersistentBytes` value."
+  [x]
+  ; TODO: generator
+  (instance? PersistentBytes x))
 
 
 (defn compare

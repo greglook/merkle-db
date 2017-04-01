@@ -1,6 +1,7 @@
 (ns merkle-db.partition
   (:refer-clojure :exclude [read])
   (:require
+    [clojure.future :refer [any? nat-int?]]
     [clojure.set :as set]
     [clojure.spec :as s]
     [merkle-db.key :as key]
@@ -11,13 +12,12 @@
 (declare merkle-link?)
 
 
-(s/def :merkle-db.data/count pos-int?)
+(s/def :merkle-db.data/count nat-int?)
 
 ; TODO: bloom filter for key membership
 
-; TODO: should be persistent-bytes?
-(s/def ::start-key bytes?)
-(s/def ::end-key bytes?)
+(s/def ::start-key key/bytes?)
+(s/def ::end-key key/bytes?)
 
 (s/def :merkle-db.data.partition.tablet/data merkle-link?)
 (s/def :merkle-db.data.partition.tablet/fields (s/coll-of any? :kind set?))
@@ -41,11 +41,6 @@
 
 
 ;; ## Read Functions
-
-; read fields for all records
-; read fields for a batch of ids
-; read fields for a range of ids
-; read fields for a slice of ids
 
 (defn- choose-tablets
   "Selects a list of tablet names to query over, given a mapping of tablet

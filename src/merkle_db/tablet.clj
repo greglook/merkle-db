@@ -7,15 +7,14 @@
 
 
 (s/def ::record-entry
-  (s/tuple bytes? map?))
+  (s/tuple key/bytes? map?))
 
 (s/def ::records
-  ; TODO: should also be sorted
+  ; TODO: should also be sorted, but that may be better to test separately.
   (s/coll-of ::record-entry :kind vector?))
 
 (s/def :merkle-db/tablet
   (s/keys :req [::records]))
-
 
 
 

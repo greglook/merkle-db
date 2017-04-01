@@ -21,6 +21,14 @@
   (PersistentBytes/wrap (byte-array data)))
 
 
+(deftest key-predicate
+  (is (false? (key/bytes? nil)))
+  (is (false? (key/bytes? :foo)))
+  (is (false? (key/bytes? (byte-array [0 1 2]))))
+  (is (true? (key/bytes? (->key 0))))
+  (is (true? (key/bytes? (->key 0 1 2 3 4)))))
+
+
 (deftest lexicographic-ordering
   (testing "equal arrays"
     (is (zero? (key/compare (byte-array 0) (byte-array 0))))

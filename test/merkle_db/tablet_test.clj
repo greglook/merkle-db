@@ -41,6 +41,7 @@
           (tablet/read-range tablet (->key 2) (->key 3))))))
 
 
+#_
 (deftest slice-reads
   (let [k1 (->key 1 2 3)
         r1 {:foo 123}

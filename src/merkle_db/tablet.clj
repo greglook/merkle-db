@@ -64,6 +64,12 @@
       (take-while #(not (neg? (key/compare end-key (first %)))))))
 
 
+;; NOTE: slice reads work at the tablet level, but are problematic when extended
+;; to partitions. Not every tablet will have the full (or the same) set of
+;; record entries, so without knowing the set of keys that fall into the
+;; canonical slice in the base tablet, pulling data out of family tablets turns
+;; into a much more complicated batch-get.
+#_
 (defn read-slice
   "Read a lazy sequence of key/map tuples which contain the field data for the
   records whose indices lie in the given range, inclusive. A nil boundary
@@ -83,7 +89,7 @@
 
 (defn merge-fields
   "Merge updated fields from the `right` map into the `left` map, dropping any
-  fields which are nil-valued."
+  fields which are nil-valued. This always returns a map, even if it is empty."
   [record-key left right]
   (->> (merge left right)
        (remove (comp nil? val))
@@ -91,10 +97,12 @@
 
 
 (defn update-batch
-  "Update the tablet by adding certain record data to it. For each record in
-  the `records` map, the function `f` will be called with the record key, the
-  old data (or nil, if the key is absent), and the new data. The result will be
-  used as the new data for that record."
+  "Update a tablet by adding record data to it.
+
+  For each record in the `records` map, the function `f` will be called with
+  the record key, the old data (or nil, if the key is absent), and the new
+  data. The result will be used as the new data for that record. A `nil` result
+  will remove the record from the tablet."
   [tablet f records]
   ; OPTIMIZE: do this in one pass instead of sorting
   (->> (::records tablet)
@@ -106,7 +114,9 @@
                     (clojure.set/difference
                       (set (keys records))
                       (set (map first (::records tablet))))))
+       (remove (comp nil? second))
        (sort-by first key/compare)
+       (vec)
        (assoc tablet ::records)))
 
 

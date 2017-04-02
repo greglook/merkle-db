@@ -35,11 +35,17 @@
 
 ;; ## Read Functions
 
-(defn read
-  "Read a lazy sequence of key/map tuples which contain the field data for all
-  the records in the tablet."
+(defn fields-present
+  "Scans the records in a tablet to determine the full set of fields present."
   [tablet]
-  (seq (::records tablet)))
+  (set (mapcat (comp keys second) (::records tablet))))
+
+
+(defn read
+  "Read a sequence of key/map tuples which contain the field data for all the
+  records in the tablet."
+  [tablet]
+  (::records tablet))
 
 
 (defn read-batch
@@ -89,14 +95,15 @@
 
 (defn merge-fields
   "Merge updated fields from the `right` map into the `left` map, dropping any
-  fields which are nil-valued. This always returns a map, even if it is empty."
+  fields which are nil-valued. Returns nil if the resulting map is empty."
   [record-key left right]
   (->> (merge left right)
        (remove (comp nil? val))
-       (into {})))
+       (into {})
+       (not-empty)))
 
 
-(defn update-batch
+(defn add-records
   "Update a tablet by adding record data to it.
 
   For each record in the `records` map, the function `f` will be called with
@@ -114,7 +121,7 @@
                     (clojure.set/difference
                       (set (keys records))
                       (set (map first (::records tablet))))))
-       (remove (comp nil? second))
+       (filter second)
        (sort-by first key/compare)
        (vec)
        (assoc tablet ::records)))
@@ -123,11 +130,11 @@
 
 ;; ## Deletion Functions
 
-(defn remove-batch
+(defn remove-records
   "Update the tablet by removing certain record keys from it. Returns nil if
   the resulting tablet is empty."
   [tablet record-keys]
-  ; TODO: record-keys must be a collection of PersistentByte objects
+  {:pre [(every? key/bytes? record-keys)]}
   (->
     (->>
       (::records tablet)

@@ -65,7 +65,7 @@
           (tablet/read-slice tablet 3 nil)))))
 
 
-(deftest batch-updates
+(deftest record-addition
   (let [k1 (->key 1 2 3)
         r1 {:foo 123}
         k2 (->key 4 5 6)
@@ -73,38 +73,38 @@
         tablet (tablet/from-records {k1 r1})]
     (is (= [[k1 {:foo 124}]]
            (tablet/read
-             (tablet/update-batch
+             (tablet/add-records
                tablet
                tablet/merge-fields
                {k1 {:foo 124}}))))
     (is (= [[k1 {:foo 123, :bar true}]]
            (tablet/read
-             (tablet/update-batch
+             (tablet/add-records
                tablet
                tablet/merge-fields
                {k1 {:bar true}}))))
     (is (= [[k1 r1] [k2 r2]]
            (tablet/read
-             (tablet/update-batch
+             (tablet/add-records
                tablet
                tablet/merge-fields
                {k2 r2}))))))
 
 
-(deftest batch-deletes
+(deftest record-removal
   (let [k1 (->key 1 2 3)
         r1 {:foo 123}
         k2 (->key 4 5 6)
         r2 {:foo 456}
         tablet (tablet/from-records {k1 r1, k2 r2})]
-    (is (nil? (tablet/remove-batch tablet/empty-tablet #{})))
+    (is (nil? (tablet/remove-records tablet/empty-tablet #{})))
     (is (= [[k1 r1] [k2 r2]]
            (tablet/read
-             (tablet/remove-batch tablet nil))))
+             (tablet/remove-records tablet nil))))
     (is (= [[k2 r2]]
            (tablet/read
-             (tablet/remove-batch tablet #{k1}))))
+             (tablet/remove-records tablet #{k1}))))
     (is (= [[k1 r1]]
            (tablet/read
-             (tablet/remove-batch tablet #{k2}))))
-    (is (nil? (tablet/remove-batch tablet #{k1 k2})))))
+             (tablet/remove-records tablet #{k2}))))
+    (is (nil? (tablet/remove-records tablet #{k1 k2})))))

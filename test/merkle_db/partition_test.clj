@@ -3,7 +3,9 @@
     [clojure.test :refer :all]
     [merkle-db.key :as key]
     [merkle-db.key-test :refer [->key]]
-    [merkle-db.partition :as part]))
+    [merkle-db.node :as node]
+    [merkle-db.partition :as part]
+    [merkle-db.tablet :as tablet]))
 
 
 (deftest tablet-selection
@@ -43,3 +45,58 @@
             [k5 {:b 5}]
             [k7 {:a 7, :b 7, :c 7}]]
            (record-seq [seq-a seq-b seq-c])))))
+
+
+(deftest partition-logic
+  (let [store (node/memory-node-store)
+        k0 (->key 0 1 2)
+        k1 (->key 1 2 3)
+        k2 (->key 2 3 4)
+        k3 (->key 3 4 5)
+        k4 (->key 4 5 6)
+        base (->>
+               {k0 {:x 0, :y 0}
+                k1 {:x 1}
+                k2 {}
+                k3 {:x 3, :y 3}
+                k4 {:z 4}}
+               (tablet/from-records)
+               (node/put! store))
+        ab-tab (->>
+                 {k0 {:a 0}
+                  k2 {:b 2}
+                  k3 {:a 3, :b 3}}
+                 (tablet/from-records)
+                 (node/put! store))
+        cd-tab (->>
+                 {k0 {:c 0}
+                  k1 {:c 1, :d 1}
+                  k2 {:c 2}
+                  k4 {:d 4}}
+                 (tablet/from-records)
+                 (node/put! store))
+        part (->>
+               {:base (node/meta-id base)
+                :ab (node/meta-id ab-tab)
+                :cd (node/meta-id cd-tab)}
+               (part/from-tablets store)
+               (node/put! store))]
+    (testing "partition construction"
+      (is (= 5 (:merkle-db.data/count part)))
+      (is (= k0 (:merkle-db.partition/first-key part)))
+      (is (= k4 (:merkle-db.partition/last-key part)))
+      (is (= (node/meta-id base) (get-in part [:merkle-db.partition/tablets :base :id])))
+      (is (= #{:a :b} (get-in part [:merkle-db.partition/tablets :ab :fields])))
+      (is (= #{:c :d} (get-in part [:merkle-db.partition/tablets :cd :fields]))))
+    (testing "record reading"
+      (is (= [[k0 {:x 0, :a 0}]
+              [k1 {:x 1, :d 1}]
+              [k2 {}]
+              [k3 {:x 3, :a 3}]
+              [k4 {:d 4}]]
+             (part/read-tablets
+               store
+               part
+               #{:x :a :d}
+               tablet/read)))
+      )))

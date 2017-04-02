@@ -14,4 +14,8 @@
    [mvxcvi/merkledag "0.2.0-SNAPSHOT"]]
 
   :whidbey
-  {:tag-types {'blocks.data.PersistentBytes {'blocks/bytes #(apply str (map (partial format "%02x") (seq %)))}}})
+  {:tag-types {'blocks.data.PersistentBytes {'blocks/bytes #(apply str (map (partial format "%02x") (seq %)))}}}
+
+  :profiles
+  {:repl
+   {:source-paths ["dev"]}})

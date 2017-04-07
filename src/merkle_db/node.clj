@@ -16,6 +16,26 @@
   (:merkledag.node/links (meta data)))
 
 
+(defprotocol Identifiable
+  "Protocol for values which can be resolved to a multihash id."
+
+  (identify
+    [value]
+    "Return the multihash identifying this value."))
+
+
+(extend-protocol Identifiable
+
+  multihash.core.Multihash
+  (identify [x] x)
+
+  blocks.data.Block
+  (identify [x] (:id x))
+
+  merkledag.link.MerkleLink
+  (identify [x] (:target x)))
+
+
 (defprotocol NodeStore
   "..."
 
@@ -43,17 +63,19 @@
   NodeStore
 
   (get-links
-    [this id]
-    (some->
-      (get-in @memory [id :links])
-      (vary-meta assoc :merkledag.node/id id)))
+    [this target]
+    (let [id (identify target)]
+      (some->
+        (get-in @memory [id :links])
+        (vary-meta assoc :merkledag.node/id id))))
 
   (get-data
-    [this id]
-    (when-let [node (get @memory id)]
-      (vary-meta (:data node) assoc
-                 :merkledag.node/id id
-                 :merkledag.node/links (:links node))))
+    [this target]
+    (let [id (identify target)]
+      (when-let [node (get @memory id)]
+        (vary-meta (:data node) assoc
+                   :merkledag.node/id id
+                   :merkledag.node/links (:links node)))))
 
   (put!
     [this data]
@@ -61,13 +83,13 @@
 
   (put!
     [this links data]
-    (let [id (digest/sha2-256 (pr-str [links data]))
-          links (->> (link/find-links data)
+    (let [links (->> (link/find-links data)
                      (concat links)
                      (link/compact-links)
                      (remove (set links))
                      (concat links)
-                     (vec))]
+                     (vec))
+          id (digest/sha2-256 (pr-str [links data]))]
       (swap! memory assoc id {:links links, :data data})
       (get-data this id)))
 

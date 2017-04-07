@@ -39,7 +39,7 @@
   "Builds a field family map from a map of tablet keys to link values."
   [store tablet-ids]
   (-> {}
-      (into (map (juxt key #(tablet/fields-present (node/get-data store %))))
+      (into (map (juxt key #(tablet/fields-present (node/get-data store (val %)))))
             tablet-ids)
       (dissoc :base)))
 
@@ -118,62 +118,74 @@
 
 ;; ## Update Functions
 
+(defn- group-families
+  "Build a map from family keys to maps which contain the field data for the
+  corresponding family. Fields not grouped in a family will be added to
+  `:base`."
+  [field->family data]
+  (reduce-kv
+    (fn split-data
+      [groups field value]
+      (update groups (field->family field :base) assoc field value))
+    {} data))
+
+
 (defn- append-record-updates
+  "Add record data to a map of `updates` from family keys to vectors of pairs
+  of record keys and family-specific data. The function _always_ appends a pair
+  to the `:base` family vector, to ensure the key is represented there."
   [field->family updates [record-key data]]
   (->
-    data
-    (->>
-      (reduce
-        (fn split-data
-          [acc [fk v]]
-          (update acc (field->family fk :base) assoc fk v))
-        {}))
+    (group-families field->family data)
     (update :base #(or % {}))
     (->>
-      (reduce
+      (reduce-kv
         (fn assign-updates
-          [updates [family fdata]]
+          [updates family fdata]
           (update updates family (fnil conj []) [record-key fdata]))
         updates))))
 
 
 (defn- update-tablets!
+  "Apply an updating function to the data contained in the given tablets."
   [store f tablets [family-key tablet-updates]]
-  (let [tablet (or (node/get-data store (get-in tablets [family-key :id]))
+  (let [tablet-link (get tablets family-key)
+        tablet (or (node/get-data store tablet-link)
                    (throw (ex-info (format "Couldn't find tablet %s in backing store"
                                            family-key)
-                                   {:family family-key})))]
-    (->> (tablet/add-records
-           tablet
-           (if (= :base family-key)
-             (fn [k p n]
-               (or (f k p n) {}))
-             f)
-           tablet-updates)
-         (node/put! store)
-         (node/meta-id)
-         (assoc-in tablets [family-key :id]))))
+                                   {:family family-key
+                                    :link tablet-link})))]
+    (->>
+      tablet-updates
+      (tablet/merge-records tablet f)
+      (node/put! store)
+      (node/meta-id)
+      (assoc-in tablets [family-key :id]))))
 
 
 (defn add-records!
   "Performs an update across the tablets in the partition to merge in the given
   record data."
   [store part f records]
-  (let [families (tablet-families part)
-        field->family (reduce (fn [ff [family fields]]
-                                (reduce #(assoc %1 %2 family) ff fields))
-                              {} families)
+  (let [field->family (reduce (fn [ftf [family fields]]
+                                (reduce #(assoc %1 %2 family) ftf fields))
+                              {} (:merkle-db.data/families part))
         ; Update partition tablet map.
         tablets (->> records
                      (reduce (partial append-record-updates field->family) {})
                      (reduce (partial update-tablets! store f) (::tablets part)))
+        record-count (count (tablet/read (node/get-data store (:base tablets))))
         part' (assoc part
-                     :merkle-db.data/count (count (tablet/read (node/get-data store (get-in tablets [:base :id]))))
+                     :merkle-db.data/count record-count
                      ::tablets tablets
                      ;::membership (reduce bloom/add (::membership part) (keys records))
                      ::first-key (apply key/min (::first-key part) (keys records))
                      ::last-key (apply key/max (::last-key part) (keys records)))]
     (node/put! store part')))
+
+
+; TODO: split
+; TODO: merge
 
 
 

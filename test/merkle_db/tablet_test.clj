@@ -73,19 +73,19 @@
         tablet (tablet/from-records {k1 r1})]
     (is (= [[k1 {:foo 124}]]
            (tablet/read
-             (tablet/add-records
+             (tablet/merge-records
                tablet
                tablet/merge-fields
                {k1 {:foo 124}}))))
     (is (= [[k1 {:foo 123, :bar true}]]
            (tablet/read
-             (tablet/add-records
+             (tablet/merge-records
                tablet
                tablet/merge-fields
                {k1 {:bar true}}))))
     (is (= [[k1 r1] [k2 r2]]
            (tablet/read
-             (tablet/add-records
+             (tablet/merge-records
                tablet
                tablet/merge-fields
                {k2 r2}))))))

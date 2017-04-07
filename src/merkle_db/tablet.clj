@@ -95,29 +95,29 @@
 
 (defn merge-fields
   "Merge updated fields from the `right` map into the `left` map, dropping any
-  fields which are nil-valued. Returns nil if the resulting map is empty."
-  [record-key left right]
+  fields which are nil-valued."
+  [_ left right]
   (->> (merge left right)
        (remove (comp nil? val))
        (into {})
        (not-empty)))
 
 
-(defn add-records
-  "Update a tablet by adding record data to it.
+(defn merge-records
+  "Update a tablet by merging record data into it.
 
   For each record in the `records` map, the function `f` will be called with
   the record key, the old data (or nil, if the key is absent), and the new
-  data. The result will be used as the new data for that record. A `nil` result
-  will remove the record from the tablet."
+  data. The result will be used as the new data for that record. Nil results
+  are promoted to empty record maps."
   [tablet f records]
   ; OPTIMIZE: do this in one pass instead of sorting
   (->> (::records tablet)
        (map (fn [[k v]]
               [k (if-let [updates (get records k)]
-                   (f k v updates)
+                   (or (f k v updates) {})
                    v)]))
-       (concat (map #(vector % (f % nil (get records %)))
+       (concat (map #(vector % (or (f % nil (get records %)) {}))
                     (clojure.set/difference
                       (set (keys records))
                       (set (map first (::records tablet))))))
@@ -143,3 +143,9 @@
     (as-> records
       (when (seq records)
         (assoc tablet ::records records)))))
+
+
+(defn prune-records
+  "Update a tablet by removing empty records from the data."
+  [tablet]
+  (update tablet ::records #(vec (remove (comp empty? second) %))))

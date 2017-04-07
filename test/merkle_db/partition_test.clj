@@ -85,9 +85,9 @@
       (is (= 5 (:merkle-db.data/count part)))
       (is (= k0 (:merkle-db.partition/first-key part)))
       (is (= k4 (:merkle-db.partition/last-key part)))
-      (is (= (node/meta-id base) (get-in part [:merkle-db.partition/tablets :base :id])))
-      (is (= #{:a :b} (get-in part [:merkle-db.partition/tablets :ab :fields])))
-      (is (= #{:c :d} (get-in part [:merkle-db.partition/tablets :cd :fields]))))
+      (is (= (node/meta-id base) (get-in part [:merkle-db.partition/tablets :base])))
+      (is (= #{:a :b} (get-in part [:merkle-db.data/families :ab])))
+      (is (= #{:c :d} (get-in part [:merkle-db.data/families :cd]))))
     (testing "record reading"
       (is (= [[k0 {:x 0, :a 0}]
               [k1 {:x 1, :d 1}]
@@ -100,3 +100,10 @@
                #{:x :a :d}
                tablet/read)))
       )))
+
+
+; TODO: property tests
+; - base tablet contains every record key
+; - base tablet does not contain any fields in families
+; - family tablets only contain field data for that family
+; - family tablets contain no empty values

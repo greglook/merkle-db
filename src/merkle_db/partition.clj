@@ -15,27 +15,34 @@
 
 (s/def :merkle-db.data/count nat-int?)
 
+(s/def :merkle-db.data/families
+  (s/map-of keyword? (s/coll-of any? :kind set?)))
+
 ; TODO: bloom filter for key membership
 
 (s/def ::first-key key/bytes?)
 (s/def ::last-key key/bytes?)
-
-(s/def :merkle-db.data.partition.tablet/data merkle-link?)
-(s/def :merkle-db.data.partition.tablet/fields (s/coll-of any? :kind set?))
-
-(s/def ::tablets
-  (s/map-of keyword? (s/keys :req-un [:merkle-db.data.partition.tablet/id]
-                             :opt-un [:merkle-db.data.partition.tablet/fields])))
+(s/def ::tablets (s/map-of keyword? merkle-link?))
 
 (s/def :merkle-db/partition
   (s/keys :req [:merkle-db.data/count
                 ::start-key
                 ::end-key
-                ::tablets]))
+                ::tablets]
+          :opt [:merkle-db.data/families]))
 
 
 
 ;; ## Constructors
+
+(defn- partition-families
+  "Builds a field family map from a map of tablet keys to link values."
+  [store tablet-ids]
+  (-> {}
+      (into (map (juxt key #(tablet/fields-present (node/get-data store %))))
+            tablet-ids)
+      (dissoc :base)))
+
 
 (defn from-tablets
   "Constructs a new partition from the given map of tablets. The argument should
@@ -45,19 +52,13 @@
     (throw (ex-info "Cannot construct a partition without a base tablet"
                     {:tablets tablet-ids})))
   (let [base (node/get-data store (:base tablet-ids))
-        records (vec (tablet/read base))]
+        base-records (vec (tablet/read base))]
     {:data/type :merkle-db/partition
-     :merkle-db.data/count (count records)
-     ::first-key (first (first (tablet/read base)))
-     ::last-key (first (last (tablet/read base)))
-     ::tablets (-> tablet-ids
-                   (->>
-                     (map (fn [[k id]]
-                            [k {:id id
-                                :fields (tablet/fields-present
-                                          (node/get-data store id))}]))
-                     (into {}))
-                   (update :base dissoc :fields))}))
+     :merkle-db.data/count (count base-records)
+     :merkle-db.data/families (partition-families store tablet-ids)
+     ::first-key (first (first base-records))
+     ::last-key (first (last base-records))
+     ::tablets tablet-ids}))
 
 
 
@@ -98,23 +99,16 @@
         (cons [next-key next-data] (record-seq next-seqs))))))
 
 
-(defn- tablet-families
-  "Returns a map of tablet keys to sets of fields contained in those tablets."
-  [part]
-  (into {}
-        (map (juxt key (comp :fields val)))
-        (dissoc (::tablets part) :base)))
-
-
 (defn read-tablets
   "Performs a read across the tablets in the partition by selecting based on
   the desired fields. The reader function is called on each selected tablet
   along with any extra args, producing a collection of lazy record sequences
   which are combined into a single sequence of key/record pairs."
   [store part fields read-fn & args]
+  ; OPTIMIZE: use transducer instead of intermediate sequences.
   (->> (set fields)
-       (choose-tablets (tablet-families part))
-       (map (comp :id (::tablets part)))
+       (choose-tablets (:merkle-db.data/families part))
+       (map (::tablets part))
        (map (partial node/get-data store))
        (map #(apply read-fn % args))
        (record-seq)
@@ -143,7 +137,7 @@
         updates))))
 
 
-(defn- update-tablets
+(defn- update-tablets!
   [store f tablets [family-key tablet-updates]]
   (let [tablet (or (node/get-data store (get-in tablets [family-key :id]))
                    (throw (ex-info (format "Couldn't find tablet %s in backing store"
@@ -161,7 +155,7 @@
          (assoc-in tablets [family-key :id]))))
 
 
-(defn add-records
+(defn add-records!
   "Performs an update across the tablets in the partition to merge in the given
   record data."
   [store part f records]
@@ -172,7 +166,7 @@
         ; Update partition tablet map.
         tablets (->> records
                      (reduce (partial append-record-updates field->family) {})
-                     (reduce (partial update-tablets store f) (::tablets part)))
+                     (reduce (partial update-tablets! store f) (::tablets part)))
         part' (assoc part
                      :merkle-db.data/count (count (tablet/read (node/get-data store (get-in tablets [:base :id]))))
                      ::tablets tablets

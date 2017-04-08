@@ -29,7 +29,7 @@
   ([expected-size]
    (create expected-size 0.01))
   ([expected-size error-rate]
-   (create expected-size error-rate)))
+   (bloom/create expected-size error-rate)))
 
 
 (defn filter?

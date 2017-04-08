@@ -4,14 +4,11 @@
     [clojure.future :refer [any? nat-int?]]
     [clojure.set :as set]
     [clojure.spec :as s]
+    [merkledag.link :as link]
     [merkle-db.bloom :as bloom]
     [merkle-db.key :as key]
     [merkle-db.node :as node]
     [merkle-db.tablet :as tablet]))
-
-
-; TODO: pull in merkle-dag
-(declare merkle-link?)
 
 
 (s/def :merkle-db.data/count nat-int?)
@@ -22,7 +19,7 @@
 (s/def ::membership bloom/filter?)
 (s/def ::first-key key/bytes?)
 (s/def ::last-key key/bytes?)
-(s/def ::tablets (s/map-of keyword? merkle-link?))
+(s/def ::tablets (s/map-of keyword? link/merkle-link?))
 
 (s/def :merkle-db/partition
   (s/keys :req [:merkle-db.data/count

@@ -1,6 +1,6 @@
 (ns merkle-db.tablet
   "Functions for working with tablet data."
-  (:refer-clojure :exclude [read])
+  (:refer-clojure :exclude [read merge])
   (:require
     [clojure.spec :as s]
     [merkle-db.key :as key]))
@@ -10,7 +10,6 @@
   (s/tuple key/bytes? map?))
 
 (s/def ::records
-  ; TODO: should also be sorted, but that may be better to test separately.
   (s/coll-of ::record-entry :kind vector?))
 
 (s/def :merkle-db/tablet
@@ -99,7 +98,7 @@
   "Merge updated fields from the `right` map into the `left` map, dropping any
   fields which are nil-valued."
   [_ left right]
-  (->> (merge left right)
+  (->> (clojure.core/merge left right)
        (remove (comp nil? val))
        (into {})
        (not-empty)))
@@ -150,3 +149,53 @@
   "Update a tablet by removing empty records from the data."
   [tablet]
   (update tablet ::records #(vec (remove (comp empty? second) %))))
+
+
+
+;; ## Other
+
+(defn first-key
+  "Return the first record key present in the tablet."
+  [tablet]
+  (first (first (::records tablet))))
+
+
+(defn last-key
+  "Return the last record key present in the tablet."
+  [tablet]
+  (first (peek (::records tablet))))
+
+
+(defn split
+  "Split the tablet into two tablets at the given key. All records less than the
+  split key will be contained in the first tablet, all others in the second. "
+  [tablet split-key]
+  (let [fkey (first-key tablet)
+        lkey (last-key tablet)]
+    (when-not (and (key/after? split-key fkey)
+                   (key/before? split-key lkey))
+      (throw (ex-info (format "Cannot split tablet with key %s which falls outside the record range [%s, %s]"
+                              split-key fkey lkey)
+                      {:split-key split-key
+                       :first-key fkey
+                       :last-key lkey}))))
+  (let [before-split? #(neg? (key/compare % split-key))]
+    [(->>
+       (::records tablet)
+       (take-while before-split?)
+       (vec)
+       (assoc empty-tablet ::records))
+     (->>
+       (::records tablet)
+       (drop-while before-split?)
+       (vec)
+       (assoc empty-tablet ::records))]))
+
+
+(defn merge
+  "Merge the two tablets into a single tablet. The tablets key ranges must not
+  overlap."
+  [left right]
+  ; TODO: validate that left and right don't overlap
+  ; TODO: implement
+  (throw (UnsupportedOperationException. "NYI")))

@@ -37,6 +37,18 @@
         (- (count a) (count b))))))
 
 
+(defn before?
+  "Returns true if `k` is ranked before `x`."
+  [k x]
+  (neg? (compare k x)))
+
+
+(defn after?
+  "Returns true if `k` is ranked after `x`."
+  [k x]
+  (pos? (compare k x)))
+
+
 (defn min
   "Returns the least of the given keys."
   ([x]

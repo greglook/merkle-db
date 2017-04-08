@@ -39,22 +39,49 @@
 (defprotocol NodeStore
   "..."
 
-  (get-links
+  (-get-node
     [store id]
     "...")
 
-  (get-data
-    [store id]
-    "...")
-
-  (put!
-    [store data]
+  (-store-node!
     [store links data]
     "...")
 
-  (delete!
+  (-delete-node!
     [store id]
     "..."))
+
+
+(defn get-links
+  [store id]
+  (let [id (identify id)]
+    (some->
+      (-get-node store id)
+      (:links)
+      (vary-meta assoc :merkledag.node/id id))))
+
+
+(defn get-data
+  [store id]
+  (let [id (identify id)
+        node (-get-node store id)]
+    (some->
+      (:data node)
+      (vary-meta assoc
+        :merkledag.node/id id
+        :merkledag.node/links (:links node)))))
+
+
+(defn store-node!
+  ([store data]
+   (store-node! store nil data))
+  ([store links data]
+   (-store-node! store links data)))
+
+
+(defn delete-node!
+  [store id]
+  (-delete-node! store (identify id)))
 
 
 (defrecord MemoryNodeStore
@@ -62,38 +89,19 @@
 
   NodeStore
 
-  (get-links
-    [this target]
-    (let [id (identify target)]
-      (some->
-        (get-in @memory [id :links])
-        (vary-meta assoc :merkledag.node/id id))))
+  (-get-node
+    [this id]
+    (get @memory id))
 
-  (get-data
-    [this target]
-    (let [id (identify target)]
-      (when-let [node (get @memory id)]
-        (vary-meta (:data node) assoc
-                   :merkledag.node/id id
-                   :merkledag.node/links (:links node)))))
-
-  (put!
-    [this data]
-    (put! this nil data))
-
-  (put!
+  (-store-node!
     [this links data]
-    (let [links (->> (link/find-links data)
-                     (concat links)
-                     (link/compact-links)
-                     (remove (set links))
-                     (concat links)
-                     (vec))
-          id (digest/sha2-256 (pr-str [links data]))]
-      (swap! memory assoc id {:links links, :data data})
-      (get-data this id)))
+    (let [links (link/collect-table links data)
+          id (digest/sha2-256 (pr-str [links data]))
+          node {:id id, :links links, :data data}]
+      (swap! memory assoc id node)
+      node))
 
-  (delete!
+  (-delete-node!
     [this id]
     (let [existed? (contains? @memory id)]
       (swap! memory dissoc id)

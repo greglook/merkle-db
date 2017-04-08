@@ -14,6 +14,12 @@
    [mvxcvi/blocks "0.9.0"]
    [mvxcvi/merkledag "0.2.0-SNAPSHOT"]]
 
+  :hiera
+  {:cluster-depth 2
+   :vertical false
+   :show-external true
+   :ignore-ns #{clojure bigml}}
+
   :whidbey
   {:tag-types {'blocks.data.Block {'blocks.data.Block (partial into {})}
                'blocks.data.PersistentBytes {'data/bytes #(apply str (map (partial format "%02x") (seq %)))}

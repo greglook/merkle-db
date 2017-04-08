@@ -1,6 +1,7 @@
 (ns merkle-db.partition
   (:refer-clojure :exclude [read])
   (:require
+    [bigml.sketchy.bloom :as bloom]
     [clojure.future :refer [any? nat-int?]]
     [clojure.set :as set]
     [clojure.spec :as s]
@@ -13,13 +14,17 @@
 (declare merkle-link?)
 
 
+; Wrap the bigml bloom filter so we can encode it better and control printing.
+(defrecord MembershipFilter
+  [bins bits k])
+
+
 (s/def :merkle-db.data/count nat-int?)
 
 (s/def :merkle-db.data/families
   (s/map-of keyword? (s/coll-of any? :kind set?)))
 
-; TODO: bloom filter for key membership
-
+(s/def ::membership (partial instance? MembershipFilter))
 (s/def ::first-key key/bytes?)
 (s/def ::last-key key/bytes?)
 (s/def ::tablets (s/map-of keyword? merkle-link?))
@@ -52,13 +57,25 @@
     (throw (ex-info "Cannot construct a partition without a base tablet"
                     {:tablets tablet-ids})))
   (let [base (node/get-data store (:base tablet-ids))
-        base-records (vec (tablet/read base))]
-    {:data/type :merkle-db/partition
-     :merkle-db.data/count (count base-records)
-     :merkle-db.data/families (partition-families store tablet-ids)
-     ::first-key (first (first base-records))
-     ::last-key (first (last base-records))
-     ::tablets tablet-ids}))
+        base-records (vec (tablet/read base))
+        families (partition-families store tablet-ids)]
+    (cond->
+      {:data/type :merkle-db/partition
+       :merkle-db.data/count (count base-records)
+       ::membership (map->MembershipFilter (bloom/create (count base-records) 0.01))
+       ::first-key (first (first base-records))
+       ::last-key (first (last base-records))
+       ::tablets tablet-ids}
+      (seq families)
+        (assoc :merkle-db.data/families families))))
+
+
+(defn from-records
+  "Constructs a new partition from the given map of record data. The records
+  will be split into tablets matching the given families, if provided."
+  [store families records]
+  ; TODO: implement
+  ,,,)
 
 
 
@@ -174,14 +191,13 @@
         tablets (->> records
                      (reduce (partial append-record-updates field->family) {})
                      (reduce (partial update-tablets! store f) (::tablets part)))
-        record-count (count (tablet/read (node/get-data store (:base tablets))))
-        part' (assoc part
-                     :merkle-db.data/count record-count
-                     ::tablets tablets
-                     ;::membership (reduce bloom/add (::membership part) (keys records))
-                     ::first-key (apply key/min (::first-key part) (keys records))
-                     ::last-key (apply key/max (::last-key part) (keys records)))]
-    (node/put! store part')))
+        record-count (count (tablet/read (node/get-data store (:base tablets))))]
+    (assoc part
+           :merkle-db.data/count record-count
+           ::tablets tablets
+           ::membership (reduce bloom/insert (::membership part) (keys records))
+           ::first-key (apply key/min (::first-key part) (keys records))
+           ::last-key (apply key/max (::last-key part) (keys records)))))
 
 
 ; TODO: split

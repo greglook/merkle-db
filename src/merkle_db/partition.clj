@@ -49,6 +49,7 @@
       (dissoc :base)))
 
 
+; TODO: how useful is this outside of testing?
 (defn from-tablets
   "Constructs a new partition from the given map of tablets. The argument should
   be a map from tablet keys (including `:base`) to tablet node ids."
@@ -116,6 +117,8 @@
         (cons [next-key next-data] (record-seq next-seqs))))))
 
 
+; TODO: need more tightly scoped read functions to take advantage of membership
+; filter for batch-get and handle slice indexes.
 (defn read-tablets
   "Performs a read across the tablets in the partition by selecting based on
   the desired fields. The reader function is called on each selected tablet
@@ -175,9 +178,9 @@
     (->>
       tablet-updates
       (tablet/merge-records tablet f)
-      (node/put! store)
-      (node/meta-id)
-      (assoc-in tablets [family-key :id]))))
+      (node/store-node! store)
+      (:id)
+      (assoc-in tablets family-key))))
 
 
 (defn add-records!

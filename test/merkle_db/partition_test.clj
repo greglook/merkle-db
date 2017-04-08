@@ -61,31 +61,30 @@
                 k3 {:x 3, :y 3}
                 k4 {:z 4}}
                (tablet/from-records)
-               (node/put! store))
+               (node/store-node! store))
         ab-tab (->>
                  {k0 {:a 0}
                   k2 {:b 2}
                   k3 {:a 3, :b 3}}
                  (tablet/from-records)
-                 (node/put! store))
+                 (node/store-node! store))
         cd-tab (->>
                  {k0 {:c 0}
                   k1 {:c 1, :d 1}
                   k2 {:c 2}
                   k4 {:d 4}}
                  (tablet/from-records)
-                 (node/put! store))
+                 (node/store-node! store))
         part (->>
-               {:base (node/meta-id base)
-                :ab (node/meta-id ab-tab)
-                :cd (node/meta-id cd-tab)}
-               (part/from-tablets store)
-               (node/put! store))]
+               {:base (:id base)
+                :ab (:id ab-tab)
+                :cd (:id cd-tab)}
+               (part/from-tablets store))]
     (testing "partition construction"
       (is (= 5 (:merkle-db.data/count part)))
       (is (= k0 (:merkle-db.partition/first-key part)))
       (is (= k4 (:merkle-db.partition/last-key part)))
-      (is (= (node/meta-id base) (get-in part [:merkle-db.partition/tablets :base])))
+      (is (= (:id base) (get-in part [:merkle-db.partition/tablets :base])))
       (is (= #{:a :b} (get-in part [:merkle-db.data/families :ab])))
       (is (= #{:c :d} (get-in part [:merkle-db.data/families :cd]))))
     (testing "record reading"
@@ -103,7 +102,14 @@
 
 
 ; TODO: property tests
+; - partition data matches schema
 ; - base tablet contains every record key
 ; - base tablet does not contain any fields in families
 ; - family tablets only contain field data for that family
 ; - family tablets contain no empty values
+; - ::count attribute is accurate
+; - ::first-key is contained in the base tablet
+; - no record key is less than ::first-key
+; - ::last-key is contained in the base tablet
+; - no record key is greater than ::last-key
+; - every record key tests true against the ::membership filter

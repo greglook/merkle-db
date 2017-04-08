@@ -73,8 +73,10 @@
 ;; NOTE: slice reads work at the tablet level, but are problematic when extended
 ;; to partitions. Not every tablet will have the full (or the same) set of
 ;; record entries, so without knowing the set of keys that fall into the
-;; canonical slice in the base tablet, pulling data out of family tablets turns
-;; into a much more complicated batch-get.
+;; canonical slice in the base tablet, pulling data out of family tablets
+;; becomes more complicated. Effectively, the code would need to read the base
+;; tablet to discover the start and end keys for the slice, then do a
+;; read-range on the family tablets for those keys.
 #_
 (defn read-slice
   "Read a lazy sequence of key/map tuples which contain the field data for the
@@ -121,7 +123,6 @@
                     (clojure.set/difference
                       (set (keys records))
                       (set (map first (::records tablet))))))
-       (filter second)
        (sort-by first key/compare)
        (vec)
        (assoc tablet ::records)))

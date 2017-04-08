@@ -108,3 +108,8 @@
            (tablet/read
              (tablet/remove-records tablet #{k2}))))
     (is (nil? (tablet/remove-records tablet #{k1 k2})))))
+
+
+; TODO: property tests
+; - tablet data matches schema
+; - tablet records are sorted by key

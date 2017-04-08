@@ -15,7 +15,10 @@
    [mvxcvi/merkledag "0.2.0-SNAPSHOT"]]
 
   :whidbey
-  {:tag-types {'blocks.data.PersistentBytes {'blocks/bytes #(apply str (map (partial format "%02x") (seq %)))}}}
+  {:tag-types {'blocks.data.Block {'blocks.data.Block (partial into {})}
+               'blocks.data.PersistentBytes {'data/bytes #(apply str (map (partial format "%02x") (seq %)))}
+               'merkle-db.bloom.BloomFilter {'merkle-db.bloom.BloomFilter #(select-keys % [:bits :k])}
+               'multihash.core.Multihash {'data/hash 'multihash.core/base58}}}
 
   :profiles
   {:repl

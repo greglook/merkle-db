@@ -10,7 +10,7 @@
   [x w]
   (print-method
     (tagged-literal
-      'bytes
+      'data/bytes
       (apply str (map (partial format "%02x") (seq x))))
     w))
 

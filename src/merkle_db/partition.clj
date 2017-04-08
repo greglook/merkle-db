@@ -1,10 +1,10 @@
 (ns merkle-db.partition
   (:refer-clojure :exclude [read])
   (:require
-    [bigml.sketchy.bloom :as bloom]
     [clojure.future :refer [any? nat-int?]]
     [clojure.set :as set]
     [clojure.spec :as s]
+    [merkle-db.bloom :as bloom]
     [merkle-db.key :as key]
     [merkle-db.node :as node]
     [merkle-db.tablet :as tablet]))
@@ -14,17 +14,12 @@
 (declare merkle-link?)
 
 
-; Wrap the bigml bloom filter so we can encode it better and control printing.
-(defrecord MembershipFilter
-  [bins bits k])
-
-
 (s/def :merkle-db.data/count nat-int?)
 
 (s/def :merkle-db.data/families
   (s/map-of keyword? (s/coll-of any? :kind set?)))
 
-(s/def ::membership (partial instance? MembershipFilter))
+(s/def ::membership bloom/filter?)
 (s/def ::first-key key/bytes?)
 (s/def ::last-key key/bytes?)
 (s/def ::tablets (s/map-of keyword? merkle-link?))
@@ -63,7 +58,7 @@
     (cond->
       {:data/type :merkle-db/partition
        :merkle-db.data/count (count base-records)
-       ::membership (map->MembershipFilter (bloom/create (count base-records) 0.01))
+       ::membership (bloom/create (count base-records))
        ::first-key (first (first base-records))
        ::last-key (first (last base-records))
        ::tablets tablet-ids}

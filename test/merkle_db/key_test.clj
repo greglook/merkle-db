@@ -134,3 +134,14 @@
 
 (deftest instant-lexicoder
   (check-lexicoder (:instant lexicoder-generators)))
+
+
+(deftest sequence-lexicoder
+  (check-lexicoder
+    (gen/fmap
+      (fn [[[coder arg-gen] n]]
+        [(key/sequence-lexicoder coder)
+         (gen/vector arg-gen n)])
+      (gen/tuple
+        (gen/one-of (vals lexicoder-generators))
+        gen/nat))))

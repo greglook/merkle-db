@@ -131,6 +131,108 @@
 
 
 
+;; ## Lexicoder Utilities
+
+(defn ^:no-doc escape-bytes
+  "Escape the given byte sequence, replacing any 0x00 bytes with 0x0101 and any
+  0x01 bytes with 0x0102."
+  [^bytes data]
+  (let [escape-count (count (filter #(or (== 0x00 %) (== 0x01 %)) data))]
+    (if (zero? escape-count)
+      ; Nothing to escape, return data unchanged.
+      data
+      ; Generate escaped bytes.
+      (let [edata (byte-array (+ escape-count (alength data)))]
+        (loop [i 0, o 0]
+          (if (= (alength data) i)
+            edata
+            (let [b (byte (aget data i))]
+              (condp == b
+                0x00
+                (do (aset-byte edata o 0x01)
+                    (aset-byte edata (inc o) 0x01)
+                    (recur (inc i) (inc (inc o))))
+
+                0x01
+                (do (aset-byte edata o 0x01)
+                    (aset-byte edata (inc o) 0x02)
+                    (recur (inc i) (inc (inc o))))
+
+                (do (aset-byte edata o b)
+                    (recur (inc i) (inc o)))))))))))
+
+
+(defn ^:no-doc unescape-bytes
+  "Unescape the given byte sequence, replacing escaped 0x00 and 0x01 bytes with
+  their original values."
+  [^bytes edata]
+  (let [escape-count (loop [c 0
+                            [ebyte & erest] edata]
+                       (if ebyte
+                         (if (== 0x01 ebyte)
+                           (recur (inc c) (rest erest))
+                           (recur c erest))
+                         c))]
+    (if (zero? escape-count)
+      ; Nothing to unescape, return data unchanged.
+      edata
+      ; Generate unescaped bytes.
+      (let [data (byte-array (- (alength edata) escape-count))]
+        (loop [i 0, o 0]
+          (if (= (alength edata) i)
+            data
+            (let [b (byte (aget edata i))]
+              (if (== 0x01 b)
+                (do (aset-byte data o (- (aget edata (inc i)) 1))
+                    (recur (inc (inc i)) (inc o)))
+                (do (aset-byte data o b)
+                    (recur (inc i) (inc o)))))))))))
+
+
+(defn ^:no-doc join-bytes
+  "Join a sequence of byte arrays together with 0x00 bytes."
+  [byte-arrays]
+  (if (empty? byte-arrays)
+    (byte-array 0)
+    (let [data (byte-array (reduce + (dec (count byte-arrays)) (map alength byte-arrays)))]
+      (loop [[element & more] byte-arrays
+             idx 0]
+        (if element
+          (let [idx' (+ idx (alength element))]
+            (System/arraycopy element 0 data idx (alength element))
+            (recur more (if (< idx' (alength data))
+                          (do (aset-byte data idx' 0x00)
+                              (inc idx'))
+                          idx')))
+          data)))))
+
+
+(defn ^:no-doc split-bytes
+  "Split a byte array into sections separated by 0x00 bytes."
+  [data offset length]
+  (if (empty? data)
+    []
+    (loop [byte-arrays []
+           idx offset
+           i offset]
+      (if (< i (+ offset length))
+        ; Scan for next 0x00 separator.
+        (if (== 0x00 (aget data i))
+          ; Copy element into new array.
+          (let [element (byte-array (- i idx))]
+            (System/arraycopy data idx element 0 (alength element))
+            (recur (conj byte-arrays element)
+                   (inc i)
+                   (inc i)))
+          ; Keep scanning.
+          (recur byte-arrays idx (inc i)))
+        ; Hit end of data, copy last element.
+        (let [element (byte-array (- i idx))]
+          (System/arraycopy data idx element 0 (alength element))
+          (conj byte-arrays element))))))
+
+
+
 ;; ## String Lexicoder
 
 (defrecord StringLexicoder
@@ -282,3 +384,35 @@
 (def instant-lexicoder
   "Lexicoder for instants in time."
   (->InstantLexicoder))
+
+
+
+;; ## Sequence Lexicoder
+
+(defrecord SequenceLexicoder
+  [element-coder]
+
+  Lexicoder
+
+  (encode*
+    [_ value]
+    (->> value
+         (map #(escape-bytes (encode* element-coder %)))
+         (join-bytes)))
+
+  (decode*
+    [_ data offset len]
+    (->> (split-bytes data offset len)
+         (mapv #(let [udata (unescape-bytes %)]
+                  (decode* element-coder udata 0 (alength udata)))))))
+
+
+(alter-meta! #'->SequenceLexicoder assoc :private true)
+(alter-meta! #'map->SequenceLexicoder assoc :private true)
+
+
+(defn sequence-lexicoder
+  "Constructs a lexicoder for homogeneous sequences of elements which will be
+  coded with the given lexicoder."
+  [element-coder]
+  (->SequenceLexicoder element-coder))

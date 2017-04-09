@@ -12,8 +12,7 @@
     (java.nio.charset
       Charset
       StandardCharsets)
-    java.time.Instant
-    java.util.Date))
+    java.time.Instant))
 
 
 ;; ## Key Construction
@@ -256,22 +255,11 @@
 
   (encode*
     [_ value]
-    (encode*
-      long-lexicoder
-      (cond
-        (instance? Date value)
-        (.getTime ^Date value)
-
-        (instance? Instant value)
-        (.toEpochMilli ^Instant value)
-
-        (integer? value)
-        (long value)
-
-        :else
-        (throw (IllegalArgumentException.
-                 (str "Input to instant lexicoder must be a Date, Instant, or long; got: "
-                      (pr-str value)))))))
+    (when-not (instance? Instant value)
+      (throw (IllegalArgumentException.
+               (str "Input to instant lexicoder must be an Instant, got: "
+                    (pr-str value)))))
+    (encode* long-lexicoder (.toEpochMilli ^Instant value)))
 
   (decode*
     [_ data offset len]

@@ -74,13 +74,15 @@
 
 
 (defn- check-lexicoder
-  [coder generator]
+  [generator]
   (checking "reflexive coding" 100
-    [x generator]
+    [[coder arg-gen] generator
+     x arg-gen]
     (is (= x (key/decode coder (key/encode coder x)))))
   (checking "sort order" 200
-    [a generator
-     b generator]
+    [[coder arg-gen] generator
+     a arg-gen
+     b arg-gen]
     (let [ka (key/encode coder a)
           kb (key/encode coder b)]
       (cond
@@ -92,27 +94,43 @@
           (is (neg? (key/compare ka kb)))))))
 
 
+(def lexicoder-generators
+  "Map of lexicoder types to generators that return a lexicoder instance and
+  a generator for values matching that lexicoder."
+  {:string
+   (gen/return
+     [key/string-lexicoder
+      (gen/such-that not-empty gen/string)])
+
+   :long
+   (gen/return
+     [key/long-lexicoder
+      gen/large-integer])
+
+   :double
+   (gen/return
+     [key/double-lexicoder
+      (gen/double* {:NaN? false})])
+
+   :instant
+   (gen/return
+     [key/instant-lexicoder
+      (gen/fmap #(java.time.Instant/ofEpochMilli %) gen/large-integer)])})
+
+
 (deftest string-lexicoder
-  (check-lexicoder
-    key/string-lexicoder
-    gen/string))
+  (check-lexicoder (:string lexicoder-generators)))
 
 
 (deftest long-lexicoder
   (is (thrown? Exception (key/decode key/long-lexicoder (byte-array 7)))
       "should require 8 bytes")
-  (check-lexicoder
-    key/long-lexicoder
-    gen/large-integer))
+  (check-lexicoder (:long lexicoder-generators)))
 
 
 (deftest double-lexicoder
-  (check-lexicoder
-    key/double-lexicoder
-    (gen/double* {:NaN? false})))
+  (check-lexicoder (:double lexicoder-generators)))
 
 
 (deftest instant-lexicoder
-  (check-lexicoder
-    key/instant-lexicoder
-    (gen/fmap #(java.time.Instant/ofEpochMilli %) gen/large-integer)))
+  (check-lexicoder (:instant lexicoder-generators)))

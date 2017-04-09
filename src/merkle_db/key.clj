@@ -98,7 +98,7 @@
 
 
 
-;; ## Lexicoders
+;; ## Lexicoder Protocol
 
 (defprotocol Lexicoder
   "Simple codec for transforming values into keys that have specific ordering
@@ -130,7 +130,8 @@
      (decode* coder byte-data offset len))))
 
 
-;; ### String Lexicoder
+
+;; ## String Lexicoder
 
 (defrecord StringLexicoder
   [^Charset charset]
@@ -139,13 +140,17 @@
 
   (encode*
     [_ value]
+    (when (empty? value)
+      (throw (IllegalArgumentException.
+               "Cannot encode empty strings")))
     (.getBytes (str value) charset))
 
   (decode*
     [_ data offset len]
-    (if (empty? data)
-      ""
-      (String. data offset len charset))))
+    (when (empty? data)
+      (throw (IllegalArgumentException.
+               "Cannot decode empty byte arrays")))
+    (String. data offset len charset)))
 
 
 (alter-meta! #'->StringLexicoder assoc :private true)
@@ -159,11 +164,12 @@
 
 
 (def string-lexicoder
-  "Standard UTF-8 string lexicoder."
+  "Lexicoder for UTF-8 character strings."
   (string-lexicoder* StandardCharsets/UTF_8))
 
 
-;; ### Long Lexicoder
+
+;; ## Long Lexicoder
 
 (defrecord LongLexicoder
   []
@@ -208,11 +214,12 @@
 
 
 (def long-lexicoder
-  "Lexicoder which orders long integer values."
+  "Lexicoder for long integer values."
   (->LongLexicoder))
 
 
-;; ### Double Lexicoder
+
+;; ## Double Lexicoder
 
 (defrecord DoubleLexicoder
   []
@@ -223,7 +230,8 @@
     [_ value]
     (encode*
       long-lexicoder
-      (let [bits (Double/doubleToRawLongBits (double value))]
+      (let [bits (Double/doubleToRawLongBits
+                   (if (zero? value) 0.0 (double value)))]
         (if (neg? bits)
           (bit-xor (bit-not bits) Long/MIN_VALUE)
           bits))))
@@ -242,11 +250,12 @@
 
 
 (def double-lexicoder
-  "Lexicoder which orders double-precision floating point values."
+  "Lexicoder for double-precision floating point values."
   (->DoubleLexicoder))
 
 
-;; ### Instant Lexicoder
+
+;; ## Instant Lexicoder
 
 (defrecord InstantLexicoder
   []
@@ -271,4 +280,5 @@
 
 
 (def instant-lexicoder
+  "Lexicoder for instants in time."
   (->InstantLexicoder))

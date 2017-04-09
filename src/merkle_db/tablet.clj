@@ -196,6 +196,11 @@
   "Merge the two tablets into a single tablet. The tablets key ranges must not
   overlap."
   [left right]
-  ; TODO: validate that left and right don't overlap
-  ; TODO: implement
-  (throw (UnsupportedOperationException. "NYI")))
+  (let [left-bound (last-key left)
+        right-bound (first-key right)]
+    (when (key/before? right-bound left-bound)
+      (throw (ex-info (format "Cannot merge tablets with overlapping key ranges: %s > %s"
+                              left-bound right-bound)
+                      {:left-bound left-bound
+                       :right-bound right-bound}))))
+  (update left ::records (comp vec concat) (::records right)))

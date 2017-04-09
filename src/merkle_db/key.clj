@@ -416,3 +416,42 @@
   coded with the given lexicoder."
   [element-coder]
   (->SequenceLexicoder element-coder))
+
+
+
+;; ## Tuple Lexicoder
+
+(defrecord TupleLexicoder
+  [coders]
+
+  Lexicoder
+
+  (encode*
+    [_ value]
+    (when (not= (count value) (count coders))
+      (throw (IllegalArgumentException.
+               (format "Cannot encode tuple which does not match lexicoder count %d: %s"
+                       (count coders) (pr-str value)))))
+    (join-bytes (mapv #(escape-bytes (encode* %1 %2)) coders value)))
+
+  (decode*
+    [_ data offset len]
+    (let [elements (split-bytes data offset len)]
+      (when (not= (count coders) (count elements))
+        (throw (IllegalArgumentException.
+                 (format "Cannot decode tuple which does not match lexicoder count %d: %s"
+                         (count coders) (pr-str elements)))))
+      (mapv #(let [udata (unescape-bytes %2)]
+               (decode* %1 udata 0 (alength udata)))
+            coders elements))))
+
+
+(alter-meta! #'->TupleLexicoder assoc :private true)
+(alter-meta! #'map->TupleLexicoder assoc :private true)
+
+
+(defn tuple-lexicoder
+  "Constructs a lexicoder for a fixed-size tuple of values which will be coded
+  with the given lexicoders, in order."
+  [& coders]
+  (->TupleLexicoder (vec coders)))

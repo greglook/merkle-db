@@ -75,11 +75,11 @@
 
 (defn- check-lexicoder
   [generator]
-  (checking "reflexive coding" 100
+  (checking "reflexive coding" 50
     [[coder arg-gen] generator
      x arg-gen]
     (is (= x (key/decode coder (key/encode coder x)))))
-  (checking "sort order" 200
+  (checking "sort order" 100
     [[coder arg-gen] generator
      a arg-gen
      b arg-gen]
@@ -145,3 +145,12 @@
       (gen/tuple
         (gen/one-of (vals lexicoder-generators))
         gen/nat))))
+
+
+(deftest tuple-lexicoder
+  (check-lexicoder
+    (gen/fmap
+      (fn [generators]
+        [(apply key/tuple-lexicoder (map first generators))
+         (apply gen/tuple (map second generators))])
+      (gen/not-empty (gen/vector (gen/one-of (vals lexicoder-generators)))))))

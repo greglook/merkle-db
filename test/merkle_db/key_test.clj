@@ -104,3 +104,9 @@
   (check-lexicoder
     key/long-lexicoder
     gen/large-integer))
+
+
+(deftest instant-lexicoder
+  (check-lexicoder
+    key/instant-lexicoder
+    (gen/fmap #(java.time.Instant/ofEpochMilli %) gen/large-integer)))

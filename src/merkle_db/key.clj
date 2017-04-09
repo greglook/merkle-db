@@ -11,7 +11,9 @@
     blocks.data.PersistentBytes
     (java.nio.charset
       Charset
-      StandardCharsets)))
+      StandardCharsets)
+    java.time.Instant
+    java.util.Date))
 
 
 ;; ## Key Construction
@@ -211,6 +213,40 @@
   (->LongLexicoder))
 
 
-; TODO: double lexicoder
-; TODO: instant lexicoder
-; TODO: uuid lexicoder
+;; ### Instant Lexicoder
+
+(defrecord InstantLexicoder
+  []
+
+  Lexicoder
+
+  (encode*
+    [_ value]
+    (encode*
+      long-lexicoder
+      (cond
+        (instance? Date value)
+        (.getTime ^Date value)
+
+        (instance? Instant value)
+        (.toEpochMilli ^Instant value)
+
+        (integer? value)
+        (long value)
+
+        :else
+        (throw (IllegalArgumentException.
+                 (str "Input to instant lexicoder must be a Date, Instant, or long; got: "
+                      (pr-str value)))))))
+
+  (decode*
+    [_ data offset len]
+    (Instant/ofEpochMilli (decode* long-lexicoder data offset len))))
+
+
+(alter-meta! #'->InstantLexicoder assoc :private true)
+(alter-meta! #'map->InstantLexicoder assoc :private true)
+
+
+(def instant-lexicoder
+  (->InstantLexicoder))

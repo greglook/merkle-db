@@ -213,6 +213,40 @@
   (->LongLexicoder))
 
 
+;; ### Double Lexicoder
+
+(defrecord DoubleLexicoder
+  []
+
+  Lexicoder
+
+  (encode*
+    [_ value]
+    (encode*
+      long-lexicoder
+      (let [bits (Double/doubleToRawLongBits (double value))]
+        (if (neg? bits)
+          (bit-xor (bit-not bits) Long/MIN_VALUE)
+          bits))))
+
+  (decode*
+    [_ data offset len]
+    (let [bits (decode* long-lexicoder data offset len)]
+      (Double/longBitsToDouble
+        (if-not (neg? bits)
+          bits
+          (bit-not (bit-xor bits Long/MIN_VALUE)))))))
+
+
+(alter-meta! #'->DoubleLexicoder assoc :private true)
+(alter-meta! #'map->DoubleLexicoder assoc :private true)
+
+
+(def double-lexicoder
+  "Lexicoder which orders double-precision floating point values."
+  (->DoubleLexicoder))
+
+
 ;; ### Instant Lexicoder
 
 (defrecord InstantLexicoder

@@ -106,6 +106,12 @@
     gen/large-integer))
 
 
+(deftest double-lexicoder
+  (check-lexicoder
+    key/double-lexicoder
+    (gen/double* {:NaN? false})))
+
+
 (deftest instant-lexicoder
   (check-lexicoder
     key/instant-lexicoder

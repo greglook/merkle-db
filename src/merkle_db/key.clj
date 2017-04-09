@@ -136,6 +136,7 @@
 (defn ^:no-doc escape-bytes
   "Escape the given byte sequence, replacing any 0x00 bytes with 0x0101 and any
   0x01 bytes with 0x0102."
+  ^bytes
   [^bytes data]
   (let [escape-count (count (filter #(or (== 0x00 %) (== 0x01 %)) data))]
     (if (zero? escape-count)
@@ -165,6 +166,7 @@
 (defn ^:no-doc unescape-bytes
   "Unescape the given byte sequence, replacing escaped 0x00 and 0x01 bytes with
   their original values."
+  ^bytes
   [^bytes edata]
   (let [escape-count (loop [c 0
                             [ebyte & erest] edata]
@@ -194,22 +196,23 @@
   [byte-arrays]
   (if (empty? byte-arrays)
     (byte-array 0)
-    (let [data (byte-array (reduce + (dec (count byte-arrays)) (map alength byte-arrays)))]
-      (loop [[element & more] byte-arrays
+    (let [data (byte-array (reduce + (dec (count byte-arrays))
+                                   (map alength byte-arrays)))]
+      (loop [elements byte-arrays
              idx 0]
-        (if element
+        (if-let [^bytes element (first elements)]
           (let [idx' (+ idx (alength element))]
             (System/arraycopy element 0 data idx (alength element))
-            (recur more (if (< idx' (alength data))
-                          (do (aset-byte data idx' 0x00)
-                              (inc idx'))
-                          idx')))
+            (if (< idx' (alength data))
+              (do (aset-byte data idx' 0x00)
+                  (recur (rest elements) (long (inc idx'))))
+              (recur (rest elements) (long idx'))))
           data)))))
 
 
 (defn ^:no-doc split-bytes
   "Split a byte array into sections separated by 0x00 bytes."
-  [data offset length]
+  [^bytes data offset length]
   (if (empty? data)
     []
     (loop [byte-arrays []
@@ -252,7 +255,7 @@
     (when (empty? data)
       (throw (IllegalArgumentException.
                "Cannot decode empty byte arrays")))
-    (String. data offset len charset)))
+    (String. ^bytes data (long offset) (long len) charset)))
 
 
 (alter-meta! #'->StringLexicoder assoc :private true)
@@ -302,7 +305,7 @@
       (if (< i 8)
         (recur (inc i)
                (->
-                 (aget data (+ offset i))
+                 (aget ^bytes data (+ offset i))
                  (long)
                  (bit-and 0xFF)
                  (as-> b (if (neg? b) (+ b 256) b))

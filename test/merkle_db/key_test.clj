@@ -119,11 +119,18 @@
 
 
 (deftest string-lexicoder
+  (is (thrown? IllegalArgumentException
+        (key/encode key/string-lexicoder ""))
+      "should not encode empty strings")
+  (is (thrown? IllegalArgumentException
+        (key/decode key/string-lexicoder (byte-array 0)))
+      "should not decode empty bytes")
   (check-lexicoder (:string lexicoder-generators)))
 
 
 (deftest long-lexicoder
-  (is (thrown? Exception (key/decode key/long-lexicoder (byte-array 7)))
+  (is (thrown? IllegalArgumentException
+        (key/decode key/long-lexicoder (byte-array 7)))
       "should require 8 bytes")
   (check-lexicoder (:long lexicoder-generators)))
 
@@ -133,6 +140,9 @@
 
 
 (deftest instant-lexicoder
+  (is (thrown? IllegalArgumentException
+        (key/encode key/instant-lexicoder ""))
+      "should not encode non-instant value")
   (check-lexicoder (:instant lexicoder-generators)))
 
 
@@ -148,6 +158,20 @@
 
 
 (deftest tuple-lexicoder
+  (is (thrown? IllegalArgumentException
+        (key/encode (key/tuple-lexicoder key/long-lexicoder) [0 0]))
+      "should not encode tuples larger than coders")
+  (is (thrown? IllegalArgumentException
+        (key/encode (key/tuple-lexicoder key/long-lexicoder
+                                         key/string-lexicoder)
+                    [0]))
+      "should not encode tuples smaller than coders")
+  (is (thrown? IllegalArgumentException
+        (key/decode (key/tuple-lexicoder key/string-lexicoder)
+                    (key/encode (key/tuple-lexicoder key/string-lexicoder
+                                                     key/long-lexicoder)
+                                ["foo" 123])))
+      "should not decode tuple longer than coders")
   (check-lexicoder
     (gen/fmap
       (fn [generators]

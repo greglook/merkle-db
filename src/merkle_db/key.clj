@@ -8,7 +8,10 @@
   matches all the bytes in the shorter key, the shorter key ranks first."
   (:refer-clojure :exclude [bytes? compare min max])
   (:import
-    blocks.data.PersistentBytes))
+    blocks.data.PersistentBytes
+    (java.nio.charset
+      Charset
+      StandardCharsets)))
 
 
 ;; ## Key Construction
@@ -96,6 +99,118 @@
 
 
 
-;; ## Lexicoder Functions
+;; ## Lexicoders
 
-; TODO: lexicoder functions
+(defprotocol Lexicoder
+  "Simple codec for transforming values into keys that have specific ordering
+  semantics."
+
+  (encode*
+    [coder value]
+    "Return the encoded value as a byte array.")
+
+  (decode*
+    [coder data offset len]
+    "Read an object from the byte array at the given offset."))
+
+
+(defn encode
+  "Encodes the given value and returns persistent key bytes."
+  [coder value]
+  (PersistentBytes/wrap (encode* coder value)))
+
+
+(defn decode
+  "Decodes the given key byte data and returns a value."
+  ([coder data]
+   (decode coder data 0 (count data)))
+  ([coder data offset len]
+   (let [byte-data (if (bytes? data)
+                     (get-bytes data)
+                     (byte-array data))]
+     (decode* coder byte-data offset len))))
+
+
+;; ### String Lexicoder
+
+(defrecord StringLexicoder
+  [^Charset charset]
+
+  Lexicoder
+
+  (encode*
+    [_ value]
+    (.getBytes (str value) charset))
+
+  (decode*
+    [_ data offset len]
+    ;(prn (list 'StringLexicoder.decode* data offset len))
+    (if (nil? data)
+      ""
+      (String. data offset len charset))))
+
+
+(alter-meta! #'->StringLexicoder assoc :private true)
+(alter-meta! #'map->StringLexicoder assoc :private true)
+
+
+(defn string-lexicoder
+  ([]
+   (string-lexicoder StandardCharsets/UTF_8))
+  ([charset]
+   (->StringLexicoder charset)))
+
+
+;; ### Long Lexicoder
+
+(defrecord LongLexicoder
+  []
+
+  Lexicoder
+
+  (encode*
+    [_ value]
+    ; Flip sign bit so that positive values sort after negative values.
+    ; 0x8000000000000001
+    (let [lexed (bit-xor (long value) Long/MIN_VALUE)
+          data (byte-array 8)]
+      (dotimes [i 8]
+        (->
+          lexed
+          (bit-shift-right (- 56 (* i 8)))
+          (bit-and 0xFF)
+          (as-> b (if (< 127 b) (- b 256) b))
+          (->> (aset-byte data i))))
+      data))
+
+  (decode*
+    [_ data offset len]
+    (when (not= len 8)
+      (throw (IllegalArgumentException.
+               (str "Can only read 8 byte long keys: " len))))
+    (loop [i 0
+           value 0]
+      (if (< i 8)
+        (recur (inc i)
+               (->
+                 (aget data (+ offset i))
+                 (long)
+                 (bit-and 0xFF)
+                 (as-> b (if (neg? b) (+ b 256) b))
+                 (bit-shift-left (- 56 (* i 8)))
+                 (+ value)))
+        (bit-xor value Long/MIN_VALUE)))))
+
+
+(alter-meta! #'->LongLexicoder assoc :private true)
+(alter-meta! #'map->LongLexicoder assoc :private true)
+
+
+(defn long-lexicoder
+  []
+  (->LongLexicoder))
+
+
+; TODO: double lexicoder
+; TODO: instant lexicoder
+; TODO: uuid lexicoder

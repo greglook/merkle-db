@@ -1,6 +1,8 @@
 (ns merkle-db.key-test
   (:require
     [clojure.test :refer :all]
+    [clojure.test.check.generators :as gen]
+    [com.gfredericks.test.chuck.clojure-test :refer [checking]]
     [merkle-db.key :as key])
   (:import
     blocks.data.PersistentBytes))
@@ -63,3 +65,29 @@
       (is (= c (key/max b c)))
       (is (= d (key/max c d b)))
       (is (= d (key/max c d a b))))))
+
+
+(defn- check-lexicoder
+  [coder generator]
+  (checking "reflexive coding" 100
+    [x generator]
+    (is (= x (key/decode coder (key/encode coder x)))))
+  (checking "sort order" 200
+    [a generator
+     b generator]
+    (let [ka (key/encode coder a)
+          kb (key/encode coder b)]
+      (cond
+        (zero? (compare a b))
+          (is (zero? (key/compare ka kb)))
+        (pos? (compare a b))
+          (is (pos? (key/compare ka kb)))
+        :else
+          (is (neg? (key/compare ka kb)))))))
+
+
+(deftest string-lexicoder
+  (check-lexicoder (key/string-lexicoder) (gen/not-empty gen/string)))
+
+(deftest long-lexicoder
+  (check-lexicoder (key/long-lexicoder) (gen/fmap #(long %) (gen/large-integer* {:min Long/MIN_VALUE, :max Long/MAX_VALUE}))))

@@ -11,7 +11,7 @@
   [[org.clojure/clojure "1.8.0"]
    [clojure-future-spec "1.9.0-alpha14"]
    [bigml/sketchy "0.4.1"]
-   [mvxcvi/blocks "0.9.0"]
+   [mvxcvi/blocks "0.10.0-SNAPSHOT"]
    [mvxcvi/merkledag "0.2.0-SNAPSHOT"]]
 
   :hiera
@@ -27,5 +27,10 @@
                'multihash.core.Multihash {'data/hash 'multihash.core/base58}}}
 
   :profiles
-  {:repl
+  {:dev
+   {:dependencies
+    [[org.clojure/test.check "0.9.0"]
+     [com.gfredericks/test.chuck "0.2.7"]]}
+
+   :repl
    {:source-paths ["dev"]}})

@@ -27,27 +27,33 @@
 
 (deftest lexicographic-ordering
   (testing "equal arrays"
-    (is (zero? (key/compare (byte-array 0) (byte-array 0))))
-    (is (zero? (key/compare (byte-array [1 2 3]) (byte-array [1 2 3])))))
+    (is (zero? (key/compare (key/create []) (key/create []))))
+    (is (zero? (key/compare (key/create [1 2 3]) (key/create [1 2 3]))))
+    (is (false? (key/before? (key/create [1]) (key/create [1]))))
+    (is (false? (key/after? (key/create [1]) (key/create [1])))))
   (testing "equal prefixes"
-    (is (neg? (key/compare (byte-array [1 2 3])
-                           (byte-array [1 2 3 4]))))
-    (is (pos? (key/compare (byte-array [1 2 3 4])
-                           (byte-array [1 2 3])))))
+    (is (neg? (key/compare (key/create [1 2 3])
+                           (key/create [1 2 3 4]))))
+    (is (pos? (key/compare (key/create [1 2 3 4])
+                           (key/create [1 2 3])))))
   (testing "order-before"
-    (is (neg? (key/compare (byte-array [1 2 3])
-                           (byte-array [1 2 4]))))
-    (is (neg? (key/compare (byte-array [1 2 3])
-                           (byte-array [1 3 2]))))
-    (is (neg? (key/compare (byte-array [0 2 3 4])
-                           (byte-array [1 3 2 1]))))
+    (is (neg? (key/compare (key/create [1 2 3])
+                           (key/create [1 2 4]))))
+    (is (neg? (key/compare (key/create [1 2 3])
+                           (key/create [1 3 2]))))
+    (is (neg? (key/compare (key/create [0 2 3 4])
+                           (key/create [1 3 2 1]))))
+    (is (true? (key/before? (key/create [0 1])
+                            (key/create [0 2])))))
   (testing "order-after"
-    (is (pos? (key/compare (byte-array [1 2 4])
-                           (byte-array [1 2 3]))))
-    (is (pos? (key/compare (byte-array [1 3 2])
-                           (byte-array [1 2 3]))))
-    (is (pos? (key/compare (byte-array [1 3 2 1])
-                           (byte-array [0 2 3 4])))))))
+    (is (pos? (key/compare (key/create [1 2 4])
+                           (key/create [1 2 3]))))
+    (is (pos? (key/compare (key/create [1 3 2])
+                           (key/create [1 2 3]))))
+    (is (pos? (key/compare (key/create [1 3 2 1])
+                           (key/create [0 2 3 4]))))
+    (is (true? (key/after? (key/create [0 1 2])
+                           (key/create [0 1 0]))))))
 
 
 (deftest min-max-util
@@ -87,7 +93,15 @@
 
 
 (deftest string-lexicoder
-  (check-lexicoder (key/string-lexicoder) (gen/not-empty gen/string)))
+  (check-lexicoder
+    (key/string-lexicoder)
+    gen/string))
+
 
 (deftest long-lexicoder
-  (check-lexicoder (key/long-lexicoder) (gen/fmap #(long %) (gen/large-integer* {:min Long/MIN_VALUE, :max Long/MAX_VALUE}))))
+  (let [coder (key/long-lexicoder)]
+    (is (thrown? Exception (key/decode coder (byte-array 7)))
+        "should require 8 bytes"))
+  (check-lexicoder
+    (key/long-lexicoder)
+    gen/large-integer))

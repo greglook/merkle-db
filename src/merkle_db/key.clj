@@ -20,9 +20,7 @@
   "Construct a new `PersistentBytes` value containing the given byte data,
   which should either be a byte array or a sequence of byte values."
   [data]
-  (if (sequential? data)
-    (PersistentBytes/wrap (byte-array data))
-    (PersistentBytes/copyFrom data)))
+  (PersistentBytes/wrap (byte-array data)))
 
 
 (defn get-bytes
@@ -144,8 +142,7 @@
 
   (decode*
     [_ data offset len]
-    ;(prn (list 'StringLexicoder.decode* data offset len))
-    (if (nil? data)
+    (if (empty? data)
       ""
       (String. data offset len charset))))
 
@@ -171,7 +168,6 @@
   (encode*
     [_ value]
     ; Flip sign bit so that positive values sort after negative values.
-    ; 0x8000000000000001
     (let [lexed (bit-xor (long value) Long/MIN_VALUE)
           data (byte-array 8)]
       (dotimes [i 8]

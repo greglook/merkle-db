@@ -1,5 +1,11 @@
 (ns merkle-db.key
-  "Functions for working with record keys."
+  "Record keys are immutable byte sequences which uniquely identify a record
+  within a table. Keys are stored in sorted order by comparing them
+  lexicographically.
+
+  The first byte that differs between two keys determines their sort order,
+  with the lower byte value ranking first. If the prefix of the longer key
+  matches all the bytes in the shorter key, the shorter key ranks first."
   (:refer-clojure :exclude [bytes? compare min max])
   (:import
     blocks.data.PersistentBytes))
@@ -8,11 +14,19 @@
 ;; ## Key Construction
 
 (defn create
-  "Construct a new `PersistentBytes` value containing the given byte data."
-  [& data]
-  (if (and (= 1 (count data)) (sequential? (first data)))
-    (PersistentBytes/wrap (byte-array (first data)))
-    (PersistentBytes/wrap (byte-array data))))
+  "Construct a new `PersistentBytes` value containing the given byte data,
+  which should either be a byte array or a sequence of byte values."
+  [data]
+  (if (sequential? data)
+    (PersistentBytes/wrap (byte-array data))
+    (PersistentBytes/copyFrom data)))
+
+
+(defn get-bytes
+  "Return a copy of the raw bytes inside a key."
+  ^bytes
+  [key]
+  (.toByteArray ^PersistentBytes key))
 
 
 (defn bytes?

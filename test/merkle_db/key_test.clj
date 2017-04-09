@@ -19,8 +19,8 @@
   (is (false? (key/bytes? nil)))
   (is (false? (key/bytes? :foo)))
   (is (false? (key/bytes? (byte-array [0 1 2]))))
-  (is (true? (key/bytes? (key/create 0))))
-  (is (true? (key/bytes? (key/create 0 1 2 3 4)))))
+  (is (true? (key/bytes? (key/create [0]))))
+  (is (true? (key/bytes? (key/create [0 1 2 3 4])))))
 
 
 (deftest lexicographic-ordering
@@ -49,10 +49,10 @@
 
 
 (deftest min-max-util
-  (let [a (key/create 0)
-        b (key/create 5)
-        c (key/create 7)
-        d (key/create 8)]
+  (let [a (key/create [0])
+        b (key/create [5])
+        c (key/create [7])
+        d (key/create [8])]
     (testing "minimum keys"
       (is (= a (key/min a)))
       (is (= b (key/min b c)))

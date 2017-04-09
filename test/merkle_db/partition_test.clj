@@ -24,14 +24,14 @@
 
 (deftest record-seqing
   (let [record-seq @#'part/record-seq
-        k0 (key/create 0 1 2)
-        k1 (key/create 1 2 3)
-        k2 (key/create 2 3 4)
-        k3 (key/create 3 4 5)
-        k4 (key/create 4 5 6)
-        k5 (key/create 5 6 7)
-        k6 (key/create 6 7 8)
-        k7 (key/create 7 8 9)
+        k0 (key/create [0 1 2])
+        k1 (key/create [1 2 3])
+        k2 (key/create [2 3 4])
+        k3 (key/create [3 4 5])
+        k4 (key/create [4 5 6])
+        k5 (key/create [5 6 7])
+        k6 (key/create [6 7 8])
+        k7 (key/create [7 8 9])
         seq-a [[k0 {:a 0}] [k1 {:a 1}] [k3 {:a 3}] [k4 {:a 4}] [k7 {:a 7}]]
         seq-b [[k0 {:b 0}] [k2 {:b 2}] [k3 {:b 3}] [k5 {:b 5}] [k7 {:b 7}]]
         seq-c [[k1 {:c 1}] [k2 {:c 2}] [k4 {:c 4}] [k7 {:c 7}]]]
@@ -49,11 +49,11 @@
 
 (deftest partition-logic
   (let [store (node/memory-node-store)
-        k0 (key/create 0 1 2)
-        k1 (key/create 1 2 3)
-        k2 (key/create 2 3 4)
-        k3 (key/create 3 4 5)
-        k4 (key/create 4 5 6)
+        k0 (key/create [0 1 2])
+        k1 (key/create [1 2 3])
+        k2 (key/create [2 3 4])
+        k3 (key/create [3 4 5])
+        k4 (key/create [4 5 6])
         base (->>
                {k0 {:x 0, :y 0}
                 k1 {:x 1}

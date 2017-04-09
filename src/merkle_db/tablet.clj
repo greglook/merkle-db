@@ -1,6 +1,5 @@
 (ns merkle-db.tablet
   "Functions for working with tablet data."
-  (:refer-clojure :exclude [merge])
   (:require
     [clojure.spec :as s]
     [merkle-db.key :as key]))
@@ -92,7 +91,7 @@
   "Merge updated fields from the `right` map into the `left` map, dropping any
   fields which are nil-valued."
   [_ left right]
-  (->> (clojure.core/merge left right)
+  (->> (merge left right)
        (remove (comp nil? val))
        (into {})
        (not-empty)))
@@ -179,7 +178,7 @@
                       {:split-key split-key
                        :first-key fkey
                        :last-key lkey}))))
-  (let [before-split? #(neg? (key/compare % split-key))]
+  (let [before-split? #(neg? (key/compare (first %) split-key))]
     [(->>
        (::records tablet)
        (take-while before-split?)
@@ -192,14 +191,14 @@
        (assoc empty-tablet ::records))]))
 
 
-(defn merge
-  "Merge the two tablets into a single tablet. The tablets key ranges must not
+(defn join
+  "Join two tablets into a single tablet. The tablets key ranges must not
   overlap."
   [left right]
   (let [left-bound (last-key left)
         right-bound (first-key right)]
     (when (key/before? right-bound left-bound)
-      (throw (ex-info (format "Cannot merge tablets with overlapping key ranges: %s > %s"
+      (throw (ex-info (format "Cannot join tablets with overlapping key ranges: %s > %s"
                               left-bound right-bound)
                       {:left-bound left-bound
                        :right-bound right-bound}))))

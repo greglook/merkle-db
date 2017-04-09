@@ -8,7 +8,7 @@
 
 (deftest constants
   (is (s/valid? :merkle-db/tablet tablet/empty-tablet))
-  (is (empty? (tablet/read tablet/empty-tablet))))
+  (is (empty? (tablet/read-all tablet/empty-tablet))))
 
 
 (deftest batch-reads
@@ -72,19 +72,19 @@
         r2 {:foo 456}
         tablet (tablet/from-records {k1 r1})]
     (is (= [[k1 {:foo 124}]]
-           (tablet/read
+           (tablet/read-all
              (tablet/merge-records
                tablet
                tablet/merge-fields
                {k1 {:foo 124}}))))
     (is (= [[k1 {:foo 123, :bar true}]]
-           (tablet/read
+           (tablet/read-all
              (tablet/merge-records
                tablet
                tablet/merge-fields
                {k1 {:bar true}}))))
     (is (= [[k1 r1] [k2 r2]]
-           (tablet/read
+           (tablet/read-all
              (tablet/merge-records
                tablet
                tablet/merge-fields
@@ -99,13 +99,13 @@
         tablet (tablet/from-records {k1 r1, k2 r2})]
     (is (nil? (tablet/remove-records tablet/empty-tablet #{})))
     (is (= [[k1 r1] [k2 r2]]
-           (tablet/read
+           (tablet/read-all
              (tablet/remove-records tablet nil))))
     (is (= [[k2 r2]]
-           (tablet/read
+           (tablet/read-all
              (tablet/remove-records tablet #{k1}))))
     (is (= [[k1 r1]]
-           (tablet/read
+           (tablet/read-all
              (tablet/remove-records tablet #{k2}))))
     (is (nil? (tablet/remove-records tablet #{k1 k2})))))
 

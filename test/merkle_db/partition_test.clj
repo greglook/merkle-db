@@ -97,7 +97,7 @@
                store
                part
                #{:x :a :d}
-               tablet/read)))
+               tablet/read-all)))
       )))
 
 

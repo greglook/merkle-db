@@ -1,6 +1,6 @@
 (ns merkle-db.tablet
   "Functions for working with tablet data."
-  (:refer-clojure :exclude [read merge])
+  (:refer-clojure :exclude [merge])
   (:require
     [clojure.spec :as s]
     [merkle-db.key :as key]))
@@ -34,13 +34,7 @@
 
 ;; ## Read Functions
 
-(defn fields-present
-  "Scans the records in a tablet to determine the full set of fields present."
-  [tablet]
-  (set (mapcat (comp keys second) (::records tablet))))
-
-
-(defn read
+(defn read-all
   "Read a sequence of key/map tuples which contain the field data for all the
   records in the tablet."
   [tablet]
@@ -152,7 +146,13 @@
 
 
 
-;; ## Other
+;; ## Utilities
+
+(defn fields-present
+  "Scans the records in a tablet to determine the full set of fields present."
+  [tablet]
+  (set (mapcat (comp keys second) (::records tablet))))
+
 
 (defn first-key
   "Return the first record key present in the tablet."

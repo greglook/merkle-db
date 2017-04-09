@@ -50,7 +50,7 @@
     (throw (ex-info "Cannot construct a partition without a base tablet"
                     {:tablets tablet-ids})))
   (let [base (node/get-data store (:base tablet-ids))
-        base-records (vec (tablet/read base))
+        base-records (vec (tablet/read-all base))
         families (partition-families store tablet-ids)]
     (cond->
       {:data/type :merkle-db/partition
@@ -186,7 +186,7 @@
         tablets (->> records
                      (reduce (partial append-record-updates field->family) {})
                      (reduce (partial update-tablets! store f) (::tablets part)))
-        record-count (count (tablet/read (node/get-data store (:base tablets))))]
+        record-count (count (tablet/read-all (node/get-data store (:base tablets))))]
     (assoc part
            :merkle-db.data/count record-count
            ::tablets tablets

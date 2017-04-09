@@ -94,14 +94,13 @@
 
 (deftest string-lexicoder
   (check-lexicoder
-    (key/string-lexicoder)
+    key/string-lexicoder
     gen/string))
 
 
 (deftest long-lexicoder
-  (let [coder (key/long-lexicoder)]
-    (is (thrown? Exception (key/decode coder (byte-array 7)))
-        "should require 8 bytes"))
+  (is (thrown? Exception (key/decode key/long-lexicoder (byte-array 7)))
+      "should require 8 bytes")
   (check-lexicoder
-    (key/long-lexicoder)
+    key/long-lexicoder
     gen/large-integer))

@@ -151,11 +151,15 @@
 (alter-meta! #'map->StringLexicoder assoc :private true)
 
 
-(defn string-lexicoder
-  ([]
-   (string-lexicoder StandardCharsets/UTF_8))
-  ([charset]
-   (->StringLexicoder charset)))
+(defn string-lexicoder*
+  "Constructs a new string lexicoder with the given charset."
+  [charset]
+  (->StringLexicoder charset))
+
+
+(def string-lexicoder
+  "Standard UTF-8 string lexicoder."
+  (string-lexicoder* StandardCharsets/UTF_8))
 
 
 ;; ### Long Lexicoder
@@ -202,8 +206,8 @@
 (alter-meta! #'map->LongLexicoder assoc :private true)
 
 
-(defn long-lexicoder
-  []
+(def long-lexicoder
+  "Lexicoder which orders long integer values."
   (->LongLexicoder))
 
 

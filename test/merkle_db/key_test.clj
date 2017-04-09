@@ -74,24 +74,43 @@
 
 
 (defn- check-lexicoder
-  [generator]
-  (checking "reflexive coding" 50
-    [[coder arg-gen] generator
-     x arg-gen]
-    (is (= x (key/decode coder (key/encode coder x)))))
-  (checking "sort order" 100
-    [[coder arg-gen] generator
-     a arg-gen
-     b arg-gen]
-    (let [ka (key/encode coder a)
-          kb (key/encode coder b)]
-      (cond
-        (zero? (compare a b))
-          (is (zero? (key/compare ka kb)))
-        (pos? (compare a b))
-          (is (pos? (key/compare ka kb)))
-        :else
-          (is (neg? (key/compare ka kb)))))))
+  ([generator]
+   (check-lexicoder generator compare))
+  ([generator cmp]
+   (checking "reflexive coding" 50
+     [[coder arg-gen] generator
+      x arg-gen]
+     (is (= x (key/decode coder (key/encode coder x)))))
+   (checking "sort order" 100
+     [[coder arg-gen] generator
+      a arg-gen
+      b arg-gen]
+     (let [rrank (cmp a b)
+           ka (key/encode coder a)
+           kb (key/encode coder b)]
+       (cond
+         (zero? rrank)
+           (is (zero? (key/compare ka kb)))
+         (pos? rrank)
+           (is (pos? (key/compare ka kb)))
+         :else
+           (is (neg? (key/compare ka kb))))))))
+
+
+(defn- lexi-comparator
+  "Wrap a comparator for elements of type x to build a lexical comparator
+  over sequences of xs."
+  [cmp]
+  (fn lex-cmp
+    [as bs]
+    (let [prefix-len (min (count as) (count bs))]
+      (loop [as as, bs bs]
+        (if (and (seq as) (seq bs))
+          (let [rrank (cmp (first as) (first bs))]
+            (if (zero? rrank)
+              (recur (rest as) (rest bs))
+              rrank))
+          (- (count as) (count bs)))))))
 
 
 (def lexicoder-generators
@@ -149,12 +168,11 @@
 (deftest sequence-lexicoder
   (check-lexicoder
     (gen/fmap
-      (fn [[[coder arg-gen] n]]
+      (fn [[coder arg-gen]]
         [(key/sequence-lexicoder coder)
-         (gen/vector arg-gen n)])
-      (gen/tuple
-        (gen/one-of (vals lexicoder-generators))
-        gen/nat))))
+         (gen/vector arg-gen)])
+      (gen/one-of (vals lexicoder-generators)))
+    (lexi-comparator compare)))
 
 
 (deftest tuple-lexicoder

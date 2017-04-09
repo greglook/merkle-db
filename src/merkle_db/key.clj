@@ -458,3 +458,46 @@
   with the given lexicoders, in order."
   [& coders]
   (->TupleLexicoder (vec coders)))
+
+
+
+;; ## Reverse Lexicoder
+
+(defn- flip-byte
+  "Returns the inverse of a byte value, accounting for the sign bit."
+  [b]
+  (as-> b b
+    (if (neg? b) (+ b 256) b)
+    (- 255 b)
+    (if (< 127 b) (- b 256) b)))
+
+
+(defrecord ReverseLexicoder
+  [coder]
+
+  Lexicoder
+
+  (encode*
+    [_ value]
+    (let [encoded (encode* coder value)
+          rdata (byte-array (alength encoded))]
+      (dotimes [i (alength encoded)]
+        (aset-byte rdata i (flip-byte (aget encoded i))))
+      rdata))
+
+  (decode*
+    [_ data offset len]
+    (let [encoded (byte-array len)]
+      (dotimes [i (alength encoded)]
+        (aset-byte encoded i (flip-byte (aget ^bytes data (+ offset i)))))
+      (decode* coder encoded 0 len))))
+
+
+(alter-meta! #'->ReverseLexicoder assoc :private true)
+(alter-meta! #'map->ReverseLexicoder assoc :private true)
+
+
+(defn reverse-lexicoder
+  "Wraps the given lexicoder to reverse the ordering of keys encoded with it."
+  [coder]
+  (->ReverseLexicoder coder))

@@ -196,3 +196,12 @@
         [(apply key/tuple-lexicoder (map first generators))
          (apply gen/tuple (map second generators))])
       (gen/not-empty (gen/vector (gen/one-of (vals lexicoder-generators)))))))
+
+
+(deftest reverse-lexicoder
+  (check-lexicoder
+    (gen/fmap
+      (fn [[coder arg-gen]]
+        [(key/reverse-lexicoder coder) arg-gen])
+      (gen/one-of (vals lexicoder-generators)))
+    (comp - compare)))

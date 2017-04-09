@@ -2,7 +2,8 @@
   (:require
     [clojure.spec :as s]
     [clojure.test :refer :all]
-    [merkle-db.key-test :refer [->key]]
+    [merkle-db.key :as key]
+    [merkle-db.key-test]
     [merkle-db.tablet :as tablet]))
 
 
@@ -12,9 +13,9 @@
 
 
 (deftest batch-reads
-  (let [k1 (->key 1 2 3)
+  (let [k1 (key/create 1 2 3)
         r1 {:foo 123}
-        k2 (->key 4 5 6)
+        k2 (key/create 4 5 6)
         r2 {:foo 456}
         tablet (tablet/from-records {k1 r1, k2 r2})]
     (is (empty? (tablet/read-batch tablet/empty-tablet nil)))
@@ -25,27 +26,27 @@
 
 
 (deftest range-reads
-  (let [k1 (->key 1 2 3)
+  (let [k1 (key/create 1 2 3)
         r1 {:foo 123}
-        k2 (->key 4 5 6)
+        k2 (key/create 4 5 6)
         r2 {:foo 456}
         tablet (tablet/from-records {k1 r1, k2 r2})]
     (is (empty? (tablet/read-range tablet/empty-tablet nil nil)))
     (is (= [[k1 r1] [k2 r2]]
            (tablet/read-range tablet nil nil)))
     (is (= [[k1 r1]]
-           (tablet/read-range tablet nil (->key 2))))
+           (tablet/read-range tablet nil (key/create 2))))
     (is (= [[k2 r2]]
-           (tablet/read-range tablet (->key 2) nil)))
+           (tablet/read-range tablet (key/create 2) nil)))
     (is (empty?
-          (tablet/read-range tablet (->key 2) (->key 3))))))
+          (tablet/read-range tablet (key/create 2) (key/create 3))))))
 
 
 #_
 (deftest slice-reads
-  (let [k1 (->key 1 2 3)
+  (let [k1 (key/create 1 2 3)
         r1 {:foo 123}
-        k2 (->key 4 5 6)
+        k2 (key/create 4 5 6)
         r2 {:foo 456}
         tablet (tablet/from-records {k1 r1, k2 r2})]
     (is (empty? (tablet/read-slice tablet/empty-tablet nil nil)))
@@ -66,9 +67,9 @@
 
 
 (deftest record-addition
-  (let [k1 (->key 1 2 3)
+  (let [k1 (key/create 1 2 3)
         r1 {:foo 123}
-        k2 (->key 4 5 6)
+        k2 (key/create 4 5 6)
         r2 {:foo 456}
         tablet (tablet/from-records {k1 r1})]
     (is (= [[k1 {:foo 124}]]
@@ -92,9 +93,9 @@
 
 
 (deftest record-removal
-  (let [k1 (->key 1 2 3)
+  (let [k1 (key/create 1 2 3)
         r1 {:foo 123}
-        k2 (->key 4 5 6)
+        k2 (key/create 4 5 6)
         r2 {:foo 456}
         tablet (tablet/from-records {k1 r1, k2 r2})]
     (is (nil? (tablet/remove-records tablet/empty-tablet #{})))

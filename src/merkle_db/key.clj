@@ -5,12 +5,24 @@
     blocks.data.PersistentBytes))
 
 
+;; ## Key Construction
+
+(defn create
+  "Construct a new `PersistentBytes` value containing the given byte data."
+  [& data]
+  (if (and (= 1 (count data)) (sequential? (first data)))
+    (PersistentBytes/wrap (byte-array (first data)))
+    (PersistentBytes/wrap (byte-array data))))
+
+
 (defn bytes?
   "Predicate which returns true if `x` is a `PersistentBytes` value."
   [x]
-  ; TODO: generator
   (instance? PersistentBytes x))
 
+
+
+;; ## Comparators
 
 (defn compare
   "Lexicographically compares two byte-array keys for order. Returns a negative
@@ -68,5 +80,8 @@
   ([x y & more]
    (reduce max x (cons y more))))
 
+
+
+;; ## Lexicoder Functions
 
 ; TODO: lexicoder functions

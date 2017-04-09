@@ -276,6 +276,7 @@
 
 ;; ## Long Lexicoder
 
+; TODO: use prefix length encoding, otherwise simple values like 0 double in size when escaped.
 (defrecord LongLexicoder
   []
 
@@ -311,6 +312,7 @@
                  (as-> b (if (neg? b) (+ b 256) b))
                  (bit-shift-left (- 56 (* i 8)))
                  (+ value)))
+        ; Unflip sign bit.
         (bit-xor value Long/MIN_VALUE)))))
 
 
@@ -479,7 +481,7 @@
 
   (encode*
     [_ value]
-    (let [encoded (encode* coder value)
+    (let [encoded ^bytes (encode* coder value)
           rdata (byte-array (alength encoded))]
       (dotimes [i (alength encoded)]
         (aset-byte rdata i (flip-byte (aget encoded i))))

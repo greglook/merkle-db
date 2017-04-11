@@ -276,7 +276,19 @@
 
 ;; ## Long Lexicoder
 
-; TODO: use prefix length encoding, otherwise simple values like 0 double in size when escaped.
+(defn- flip-long-sign
+  "Flip the sign bit on a long value."
+  ^long
+  [^long x]
+  (bit-xor x Long/MIN_VALUE))
+
+
+(defn- get-long-byte
+  "Return the `i`th byte in a long, where 0 gives the least significant byte."
+  [l i]
+  (bit-and 0xFF (bit-shift-right l (* i 8))))
+
+
 (defrecord LongLexicoder
   []
 
@@ -285,13 +297,11 @@
   (encode*
     [_ value]
     ; Flip sign bit so that positive values sort after negative values.
-    (let [lexed (bit-xor (long value) Long/MIN_VALUE)
+    (let [lexed (flip-long-sign (long value))
           data (byte-array 8)]
       (dotimes [i 8]
         (->
-          lexed
-          (bit-shift-right (- 56 (* i 8)))
-          (bit-and 0xFF)
+          (get-long-byte lexed (- 7 i))
           (as-> b (if (< 127 b) (- b 256) b))
           (->> (aset-byte data i))))
       data))
@@ -307,13 +317,11 @@
         (recur (inc i)
                (->
                  (aget ^bytes data (+ offset i))
-                 (long)
-                 (bit-and 0xFF)
                  (as-> b (if (neg? b) (+ b 256) b))
                  (bit-shift-left (- 56 (* i 8)))
                  (+ value)))
         ; Unflip sign bit.
-        (bit-xor value Long/MIN_VALUE)))))
+        (flip-long-sign value)))))
 
 
 (alter-meta! #'->LongLexicoder assoc :private true)
@@ -340,7 +348,7 @@
       (let [bits (Double/doubleToRawLongBits
                    (if (zero? value) 0.0 (double value)))]
         (if (neg? bits)
-          (bit-xor (bit-not bits) Long/MIN_VALUE)
+          (flip-long-sign (bit-not bits))
           bits))))
 
   (decode*
@@ -349,7 +357,7 @@
       (Double/longBitsToDouble
         (if-not (neg? bits)
           bits
-          (bit-not (bit-xor bits Long/MIN_VALUE)))))))
+          (bit-not (flip-long-sign bits)))))))
 
 
 (alter-meta! #'->DoubleLexicoder assoc :private true)

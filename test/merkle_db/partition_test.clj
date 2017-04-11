@@ -93,12 +93,7 @@
               [k2 {}]
               [k3 {:x 3, :a 3}]
               [k4 {:d 4}]]
-             (part/read-tablets
-               store
-               part
-               #{:x :a :d}
-               tablet/read-all)))
-      )))
+             (part/read-all store part #{:x :a :d}))))))
 
 
 ; TODO: property tests

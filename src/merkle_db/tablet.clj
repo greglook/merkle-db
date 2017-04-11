@@ -33,6 +33,12 @@
 
 ;; ## Read Functions
 
+(defn nth-key
+  "Return the nth key present in the tablet data."
+  [tablet n]
+  (first (nth (::records tablet) n)))
+
+
 (defn read-all
   "Read a sequence of key/map tuples which contain the field data for all the
   records in the tablet."
@@ -60,28 +66,6 @@
       (drop-while #(neg? (key/compare (first %) start-key)))
     end-key
       (take-while #(not (neg? (key/compare end-key (first %)))))))
-
-
-;; NOTE: slice reads work at the tablet level, but are problematic when extended
-;; to partitions. Not every tablet will have the full (or the same) set of
-;; record entries, so without knowing the set of keys that fall into the
-;; canonical slice in the base tablet, pulling data out of family tablets
-;; becomes more complicated. Effectively, the code would need to read the base
-;; tablet to discover the start and end keys for the slice, then do a
-;; read-range on the family tablets for those keys.
-#_
-(defn read-slice
-  "Read a lazy sequence of key/map tuples which contain the field data for the
-  records whose indices lie in the given range, inclusive. A nil boundary
-  includes all records in that range direction."
-  [tablet start-index end-index]
-  ; OPTIMIZE: input is a vector, so find a way to get a seq starting at the
-  ; desired index.
-  (cond->> (::records tablet)
-    start-index
-      (drop start-index)
-    end-index
-      (take (- (inc end-index) (or start-index 0)))))
 
 
 

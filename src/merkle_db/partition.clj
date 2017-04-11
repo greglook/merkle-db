@@ -109,9 +109,7 @@
         (cons [next-key next-data] (record-seq next-seqs))))))
 
 
-; TODO: need more tightly scoped read functions to take advantage of membership
-; filter for batch-get and handle slice indexes.
-(defn read-tablets
+(defn- read-tablets
   "Performs a read across the tablets in the partition by selecting based on
   the desired fields. The reader function is called on each selected tablet
   along with any extra args, producing a collection of lazy record sequences
@@ -125,6 +123,40 @@
        (map #(apply read-fn % args))
        (record-seq)
        (map (juxt first #(select-keys (second %) fields)))))
+
+
+(defn read-all
+  "Read a lazy sequence of key/map tuples which contain the requested field data
+  for every record in the partition."
+  [store part fields]
+  (read-tablets store part fields tablet/read-all))
+
+
+(defn read-batch
+  "Read a lazy sequence of key/map tuples which contain the requested field
+  data for the records whose keys are in the given collection."
+  [store part fields record-keys]
+  ; OPTIMIZE: use the membership filter to weed out keys which are definitely not present.
+  (read-tablets store part fields tablet/read-batch record-keys))
+
+
+(defn read-range
+  "Read a lazy sequence of key/map tuples which contain the field data for the
+  records whose keys lie in the given range, inclusive. A nil boundary includes
+  all records in that range direction."
+  [store part fields start-key end-key]
+  (read-tablets store part fields tablet/read-range start-key end-key))
+
+
+(defn read-slice
+  "Read a lazy sequence of key/map tuples which contain the field data for the
+  records whose ranks lie in the given range, inclusive. A nil boundary includes
+  all records in that range direction."
+  [store part fields start-index end-index]
+  (let [base (node/get-data store (:base (::tablets part)))
+        start (and start-index (tablet/nth-key base start-index))
+        end (and end-index (tablet/nth-key base end-index))]
+    (read-tablets store part fields tablet/read-range start end)))
 
 
 

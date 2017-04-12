@@ -157,21 +157,20 @@ sure that the full sequence of keys can be enumerated with only the base.
 ```clojure
 {:data/type :merkle-db/partition
  :merkle-db.data/count Long
+ :merkle-db.data/families {family-key #{field-name}}
+ :merkle-db.partition/membership BloomFilter
  :merkle-db.partition/start-key key-bytes
  :merkle-db.partition/end-key key-bytes
  :merkle-db.partition/tablets
- {:base {:data MerkleLink}
-  family-name {:fields #{...}, :data MerkleLink}}}
+ {:base MerkleLink
+  family-key MerkleLink}}
 ```
 
 **TODO:** Should families allow duplicate fields?
 
-**IDEA:** Store a bloom filter in the partition node to provide a quick way to
-check whether specific records may be present.
-
-Partitions store field information locally because occasionally tables may be in
-a transitionary state where some partitions' family configuration does not match
-the desired one set in the table root.
+Partitions store family information locally because occasionally tables may be
+in a transitionary state where some partitions' family configuration does not
+match the desired one set in the table root.
 
 ### Data Tablets
 

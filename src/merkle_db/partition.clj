@@ -6,15 +6,11 @@
     [clojure.spec :as s]
     [merkledag.link :as link]
     [merkle-db.bloom :as bloom]
+    [merkle-db.data :as data]
     [merkle-db.key :as key]
     [merkle-db.node :as node]
     [merkle-db.tablet :as tablet]))
 
-
-(s/def :merkle-db.data/count nat-int?)
-
-(s/def :merkle-db.data/families
-  (s/map-of keyword? (s/coll-of any? :kind set?)))
 
 (s/def ::membership bloom/filter?)
 (s/def ::first-key key/bytes?)
@@ -22,12 +18,12 @@
 (s/def ::tablets (s/map-of keyword? link/merkle-link?))
 
 (s/def :merkle-db/partition
-  (s/keys :req [:merkle-db.data/count
+  (s/keys :req [::data/count
                 ::membership
                 ::first-key
                 ::last-key
                 ::tablets]
-          :opt [:merkle-db.data/families]))
+          :opt [::data/families]))
 
 
 
@@ -76,7 +72,7 @@
   [store part fields read-fn & args]
   ; OPTIMIZE: use transducer instead of intermediate sequences.
   (->> (set fields)
-       (choose-tablets (:merkle-db.data/families part))
+       (choose-tablets (::data/families part))
        (map (::tablets part))
        (map (partial node/get-data store))
        (map #(apply read-fn % args))
@@ -194,12 +190,12 @@
   record data."
   [store part f records]
   (let [tablets (->> records
-                     (reduce (partial append-record-updates (:merkle-db.data/families part)) {})
+                     (reduce (partial append-record-updates (::data/families part)) {})
                      (reduce (partial update-tablet! store f) (::tablets part)))
         record-keys (map first records)
         record-count (count (tablet/read-all (node/get-data store (:base tablets))))]
     (assoc part
-           :merkle-db.data/count record-count
+           ::data/count record-count
            ::tablets tablets
            ::membership (reduce bloom/insert (::membership part) record-keys)
            ::first-key (apply key/min (::first-key part) record-keys)
@@ -221,15 +217,13 @@
                      (into {}))]
     (cond->
       {:data/type :merkle-db/partition
-       :merkle-db.data/count (count records)
+       ::data/count (count records)
        ::membership membership
        ::first-key (first (first records))
        ::last-key (first (last records))
        ::tablets tablets}
       (seq families)
-        (assoc :merkle-db.data/families families))))
-
-
+        (assoc ::data/families families))))
 
 
 ; TODO: split

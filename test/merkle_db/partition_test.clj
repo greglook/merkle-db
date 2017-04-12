@@ -68,7 +68,7 @@
       (is (= 5 (:merkle-db.data/count part)))
       (is (= k0 (:merkle-db.partition/first-key part)))
       (is (= k4 (:merkle-db.partition/last-key part)))
-      (is (some? (get-in part [:merkle-db.partition/tablets :base])))
+      (is (= #{:base :ab :cd} (set (keys (:merkle-db.partition/tablets part)))))
       (is (= #{:a :b} (get-in part [:merkle-db.data/families :ab])))
       (is (= #{:c :d} (get-in part [:merkle-db.data/families :cd]))))
     (testing "record reading"

@@ -74,9 +74,9 @@ A table root is a block which contains table-specific information and links to
 the collections of record data. The records in a table are grouped into
 _partitions_, which contain a contiguous range of record primary keys.
 
-Partitions are the leaves of a _data tree_ of index nodes, sorted by primary key.
-The data fields for each record are stored in _tablets_, which are linked from
-each partition.
+Partitions are the leaves of a tree of index nodes, sorted by record primary
+keys. The data fields for each record are stored in _tablets_, which are linked
+to from each partition.
 
 In addition to the partitions, tables contain a _patch tablet_ linked directly
 from the root node. This tablet holds complete records (and tombstones) sorted
@@ -92,26 +92,28 @@ return to the client.
 ```clojure
 {:data/type :merkle-db/table-root
  :merkle-db/metadata MerkleLink
+ :merkle-db.data/count Long
+ :merkle-db.data/families {Keyword #{field-name}}
  :merkle-db.table/data MerkleLink
  :merkle-db.table/patch MerkleLink
- :merkle-db.table/count Long
- :merkle-db.table/families {Keyword #{field-name}}
  :merkle-db.table/branching-factor Long  ; e.g. 256 children
  :merkle-db.table/partition-limit Long   ; e.g. 100,000 records
+ :merkle-db.table/lexicoder Keyword
  :time/updated-at Instant}
 ```
 
-### Data Trees
+### Index Data Trees
 
-Data trees are modeled after a [B+ tree](https://en.wikipedia.org/wiki/B%2B_tree)
+Index trees are modeled after a [B+ tree](https://en.wikipedia.org/wiki/B%2B_tree)
 and contain both internal index nodes and leaf partitions. Records in a data
 tree are sorted by their _primary key_, which uniquely identifies each record
 within the table. Primary keys are just bytes, allowing for pluggable key
 serialization formats.
 
-The data tree blocks contain a count of the records under them, so the index is
-also an [order statistic tree](https://en.wikipedia.org/wiki/Order_statistic_tree).
-A similar metric for the linked block sizes allows for quick data sizing as well.
+The tree nodes contain a count of the records under them, so the index is also
+an [order statistic tree](https://en.wikipedia.org/wiki/Order_statistic_tree).
+A similar metric for the linked block sizes allows for quick data sizing as
+well.
 
 ```clojure
 {:data/type :merkle-db/index
@@ -393,7 +395,7 @@ blocks of old data (aging).
 In order to support this pattern, the record keys must be monotonically
 increasing. This way, new batches of data can be written as a new partition,
 whose record keys are all greater than any keys already in the table. The new
-partition is appended to the sequence of partitions and a new data tree is built
+partition is appended to the sequence of partitions and a new index tree is built
 to incorporate it.
 
 For reads from time-series data, it is desirable to find out only "new"

@@ -1,8 +1,6 @@
 (ns merkle-db.partition
   (:refer-clojure :exclude [read])
   (:require
-    [clojure.future :refer [any? nat-int?]]
-    [clojure.set :as set]
     [clojure.spec :as s]
     [merkledag.link :as link]
     [merkle-db.bloom :as bloom]
@@ -16,6 +14,7 @@
 (s/def ::first-key key/bytes?)
 (s/def ::last-key key/bytes?)
 (s/def ::tablets (s/map-of keyword? link/merkle-link?))
+
 
 (s/def :merkle-db/partition
   (s/keys :req [::data/count

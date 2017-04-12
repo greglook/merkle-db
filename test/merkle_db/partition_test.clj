@@ -1,6 +1,7 @@
 (ns merkle-db.partition-test
   (:require
     [clojure.test :refer :all]
+    [merkle-db.data :as data]
     [merkle-db.key :as key]
     [merkle-db.key-test]
     [merkle-db.node :as node]
@@ -65,12 +66,12 @@
                 k3 {:x 3, :y 3, :a 3, :b 3}
                 k4 {:z 4, :d 4}})]
     (testing "partition construction"
-      (is (= 5 (:merkle-db.data/count part)))
-      (is (= k0 (:merkle-db.partition/first-key part)))
-      (is (= k4 (:merkle-db.partition/last-key part)))
-      (is (= #{:base :ab :cd} (set (keys (:merkle-db.partition/tablets part)))))
-      (is (= #{:a :b} (get-in part [:merkle-db.data/families :ab])))
-      (is (= #{:c :d} (get-in part [:merkle-db.data/families :cd]))))
+      (is (= 5 (::data/count part)))
+      (is (= k0 (::part/first-key part)))
+      (is (= k4 (::part/last-key part)))
+      (is (= #{:base :ab :cd} (set (keys (::part/tablets part)))))
+      (is (= #{:a :b} (get-in part [::data/families :ab])))
+      (is (= #{:c :d} (get-in part [::data/families :cd]))))
     (testing "record reading"
       (is (= [[k0 {:x 0, :a 0}]
               [k1 {:x 1, :d 1}]

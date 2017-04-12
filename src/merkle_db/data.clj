@@ -1,8 +1,7 @@
 (ns merkle-db.data
   (:require
     [clojure.future :refer [any? nat-int?]]
-    [clojure.spec :as s]
-    [merkle-db.key :as key]))
+    [clojure.spec :as s]))
 
 
 ;; Count of the records contained under a node.

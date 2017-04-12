@@ -15,19 +15,10 @@
   (s/keys :req [::records]))
 
 
-
-;; ## Constructors
-
 (def empty-tablet
   "An empty tablet data value."
   {:data/type :merkle-db/tablet
    ::records []})
-
-
-(defn from-records
-  "Construct a tablet from a map of record keys to field data."
-  [records]
-  (assoc empty-tablet ::records (vec (sort-by key key/compare records))))
 
 
 
@@ -81,6 +72,19 @@
        (not-empty)))
 
 
+(defn from-records
+  "Construct a tablet from a collection of record keys and field data."
+  ([records]
+   (from-records merge-fields records))
+  ([f records]
+   (->>
+     records
+     (map (fn apply-f [[k v]] [k (f k nil v)]))
+     (sort-by first key/compare)
+     (vec)
+     (assoc empty-tablet ::records))))
+
+
 (defn merge-records
   "Update a tablet by merging record data into it.
 
@@ -97,7 +101,7 @@
                    v)]))
        (concat (map #(vector % (or (f % nil (get records %)) {}))
                     (clojure.set/difference
-                      (set (keys records))
+                      (set (map first records))
                       (set (map first (::records tablet))))))
        (sort-by first key/compare)
        (vec)

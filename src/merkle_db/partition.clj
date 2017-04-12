@@ -23,52 +23,11 @@
 
 (s/def :merkle-db/partition
   (s/keys :req [:merkle-db.data/count
-                ::start-key
-                ::end-key
+                ::membership
+                ::first-key
+                ::last-key
                 ::tablets]
           :opt [:merkle-db.data/families]))
-
-
-
-;; ## Constructors
-
-(defn- partition-families
-  "Builds a field family map from a map of tablet keys to link values."
-  [store tablet-ids]
-  (-> {}
-      (into (map (juxt key #(tablet/fields-present (node/get-data store (val %)))))
-            tablet-ids)
-      (dissoc :base)))
-
-
-; TODO: how useful is this outside of testing?
-(defn from-tablets
-  "Constructs a new partition from the given map of tablets. The argument should
-  be a map from tablet keys (including `:base`) to tablet node ids."
-  [store tablet-ids]
-  (when-not (:base tablet-ids)
-    (throw (ex-info "Cannot construct a partition without a base tablet"
-                    {:tablets tablet-ids})))
-  (let [base (node/get-data store (:base tablet-ids))
-        base-records (vec (tablet/read-all base))
-        families (partition-families store tablet-ids)]
-    (cond->
-      {:data/type :merkle-db/partition
-       :merkle-db.data/count (count base-records)
-       ::membership (bloom/create (count base-records))
-       ::first-key (first (first base-records))
-       ::last-key (first (last base-records))
-       ::tablets tablet-ids}
-      (seq families)
-        (assoc :merkle-db.data/families families))))
-
-
-(defn from-records
-  "Constructs a new partition from the given map of record data. The records
-  will be split into tablets matching the given families, if provided."
-  [store families records]
-  ; TODO: implement
-  ,,,)
 
 
 
@@ -162,6 +121,14 @@
 
 ;; ## Update Functions
 
+(defn- map-field-families
+  "Build a map from field keys to the family the field belongs to."
+  [families] #_ ([family-key #{field-key ...}])
+  (into {}
+        (mapcat #(map vector (second %) (repeat (first %))))
+        families))
+
+
 (defn- group-families
   "Build a map from family keys to maps which contain the field data for the
   corresponding family. Fields not grouped in a family will be added to
@@ -178,9 +145,9 @@
   "Add record data to a map of `updates` from family keys to vectors of pairs
   of record keys and family-specific data. The function _always_ appends a pair
   to the `:base` family vector, to ensure the key is represented there."
-  [field->family updates [record-key data]]
+  [families updates [record-key data]]
   (->
-    (group-families field->family data)
+    (group-families (map-field-families families) data)
     (update :base #(or % {}))
     (->>
       (reduce-kv
@@ -190,45 +157,83 @@
         updates))))
 
 
-(defn- update-tablets!
-  "Apply an updating function to the data contained in the given tablets."
+(defn- store-tablet!
+  "Store the given tablet data and return the family key and updated id."
+  [store family-key tablet]
+  (->>
+    (cond-> tablet
+      (not= family-key :base)
+      (tablet/prune-records))
+    (node/store-node! store)
+    (:id)
+    (vector family-key)))
+
+
+(defn- update-tablet!
+  "Apply an updating function to the data contained in the given tablet.
+  Returns an updated tablets map."
   [store f tablets [family-key tablet-updates]]
-  (let [tablet-link (get tablets family-key)
-        tablet (or (node/get-data store tablet-link)
-                   (throw (ex-info (format "Couldn't find tablet %s in backing store"
-                                           family-key)
-                                   {:family family-key
-                                    :link tablet-link})))]
-    (->>
-      tablet-updates
-      (tablet/merge-records tablet f)
-      (node/store-node! store)
-      (:id)
-      (assoc-in tablets family-key))))
+  (->>
+    (if-let [tablet-link (get tablets family-key)]
+      ; Load existing tablet to update it.
+      (->
+        (node/get-data store tablet-link)
+        (or (throw (ex-info (format "Couldn't find tablet %s in backing store"
+                                    family-key)
+                            {:family family-key
+                             :link tablet-link})))
+        (tablet/merge-records f tablet-updates))
+      ; Create new tablet and store it.
+      (tablet/from-records f tablet-updates))
+    (store-tablet! store family-key)
+    (conj tablets)))
 
 
 (defn add-records!
   "Performs an update across the tablets in the partition to merge in the given
   record data."
   [store part f records]
-  (let [field->family (reduce (fn [ftf [family fields]]
-                                (reduce #(assoc %1 %2 family) ftf fields))
-                              {} (:merkle-db.data/families part))
-        ; Update partition tablet map.
-        tablets (->> records
-                     (reduce (partial append-record-updates field->family) {})
-                     (reduce (partial update-tablets! store f) (::tablets part)))
+  (let [tablets (->> records
+                     (reduce (partial append-record-updates (:merkle-db.data/families part)) {})
+                     (reduce (partial update-tablet! store f) (::tablets part)))
+        record-keys (map first records)
         record-count (count (tablet/read-all (node/get-data store (:base tablets))))]
     (assoc part
            :merkle-db.data/count record-count
            ::tablets tablets
-           ::membership (reduce bloom/insert (::membership part) (keys records))
-           ::first-key (apply key/min (::first-key part) (keys records))
-           ::last-key (apply key/max (::last-key part) (keys records)))))
+           ::membership (reduce bloom/insert (::membership part) record-keys)
+           ::first-key (apply key/min (::first-key part) record-keys)
+           ::last-key (apply key/max (::last-key part) record-keys))))
+
+
+(defn from-records
+  "Constructs a new partition from the given map of record data. The records
+  will be split into tablets matching the given families, if provided."
+  [store families f records]
+  (let [records (sort-by first key/compare records)
+        membership (reduce bloom/insert
+                           (bloom/create (count records))
+                           (map first records))
+        tablets (->> records
+                     (reduce (partial append-record-updates families) {})
+                     (map (juxt key #(tablet/from-records f (val %))))
+                     (map (partial apply store-tablet! store))
+                     (into {}))]
+    (cond->
+      {:data/type :merkle-db/partition
+       :merkle-db.data/count (count records)
+       ::membership membership
+       ::first-key (first (first records))
+       ::last-key (first (last records))
+       ::tablets tablets}
+      (seq families)
+        (assoc :merkle-db.data/families families))))
+
+
 
 
 ; TODO: split
-; TODO: merge
+; TODO: join
 
 
 

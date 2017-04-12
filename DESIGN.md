@@ -64,6 +64,7 @@ maps table names to _table root nodes_.
 ```clojure
 {:data/type :merkle-db/db-root
  :merkle-db/metadata MerkleLink
+ :merkle-db.db/name String
  :merkle-db.db/tables {table-name MerkleLink}
  :time/updated-at Instant}
 ```
@@ -157,7 +158,7 @@ sure that the full sequence of keys can be enumerated with only the base.
 ```clojure
 {:data/type :merkle-db/partition
  :merkle-db.data/count Long
- :merkle-db.data/families {family-key #{field-name}}
+ :merkle-db.data/families {Keyword #{field-name}}
  :merkle-db.partition/membership BloomFilter
  :merkle-db.partition/start-key key-bytes
  :merkle-db.partition/end-key key-bytes

@@ -118,7 +118,7 @@
 
 (defn- map-field-families
   "Build a map from field keys to the family the field belongs to."
-  [families] #_ ([family-key #{field-key ...}])
+  [families]
   (into {}
         (mapcat #(map vector (second %) (repeat (first %))))
         families))

@@ -6,6 +6,7 @@
     [clojure.repl :refer :all]
     [clojure.string :as str]
     [clojure.test.check.generators :as gen]
+    [merkle-db.generators :as mdgen]
     [merkle-db.key :as key]
     [merkle-db.node :as node]
     [merkle-db.partition :as part]

@@ -1,9 +1,11 @@
 (ns merkle-db.partition-test
   (:require
+    [clojure.set :as set]
     [clojure.spec :as s]
     [clojure.test :refer :all]
     [clojure.test.check.generators :as gen]
     [com.gfredericks.test.chuck.clojure-test :refer [checking]]
+    [merkle-db.bloom :as bloom]
     [merkle-db.data :as data]
     [merkle-db.generators :as mdgen]
     [merkle-db.key :as key]
@@ -113,25 +115,48 @@
 
 
 (deftest partition-behavior
-  (checking "valid schema" 20
+  (checking "valid properties" 20
     [field-keys (gen/not-empty (gen/set mdgen/field-key))
      records (gen/not-empty (gen/vector (mdgen/record field-keys)))
      families (mdgen/families field-keys)]
-    (is (valid? :merkle-db.data/families families))
+    (is (valid? ::data/families families))
     (let [store (node/memory-node-store)
-          part (part/from-records store families tablet/merge-fields records)]
+          part (part/from-records store families tablet/merge-fields records)
+          tablets (into {}
+                        (map (juxt key #(node/get-data store (val %))))
+                        (::part/tablets part))]
       (is (valid? :merkle-db/partition part)
           "partition data should match schema")
+      (doseq [[family-key tablet] tablets]
+        (is (valid? :merkle-db/tablet tablet)
+            (str "partition tablet " family-key " should match schema")))
+      (let [all-keys (set (map first (mapcat tablet/read-all (vals tablets))))]
+        (is (contains? tablets :base) "partition contains a base tablet")
+        (is (= all-keys (set (map first (tablet/read-all (:base tablets)))))
+            "base tablet contains every record key"))
+      (is (empty? (set/intersection
+                    (tablet/fields-present (:base tablets))
+                    (set (mapcat val families))))
+          "base tablet record data does not contain any fields in families")
+      (doseq [[family-key tablet] (dissoc tablets :base)]
+        (is (empty? (set/difference
+                      (tablet/fields-present tablet)
+                      (get families family-key)))
+            "family tablet should only contain field data for that family")
+        (is (zero? (count (filter empty? (map second (tablet/read-all tablet)))))
+            "family tablet should not contain empty data values"))
+      (is (= (count (part/read-all store part nil)) (::data/count part))
+          "::count attribute is accurate")
+      (is (= (first (first (tablet/read-all (:base tablets))))
+             (::part/first-key part))
+          "::first-key is first key in the base tablet")
+      (is (= (first (last (tablet/read-all (:base tablets))))
+             (::part/last-key part))
+          "::last-key is last key in the base tablet")
+      (is (every? #(bloom/contains? (::part/membership part) %)
+                  (map first (part/read-all store part nil)))
+          "every record key tests true against the ::membership filter")
       ; TODO:
-      ; - partition data matches schema
-      ; - base tablet contains every record key
-      ; - base tablet does not contain any fields in families
-      ; - family tablets only contain field data for that family
-      ; - family tablets contain no empty values
-      ; - ::count attribute is accurate
-      ; - ::first-key is contained in the base tablet
       ; - no record key is less than ::first-key
-      ; - ::last-key is contained in the base tablet
       ; - no record key is greater than ::last-key
-      ; - every record key tests true against the ::membership filter
       )))

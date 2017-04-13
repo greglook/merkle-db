@@ -79,7 +79,7 @@
   ([f records]
    (->>
      records
-     (map (fn apply-f [[k v]] [k (f k nil v)]))
+     (map (fn apply-f [[k v]] [k (or (f k nil v) {})]))
      (sort-by first key/compare)
      (vec)
      (assoc empty-tablet ::records))))

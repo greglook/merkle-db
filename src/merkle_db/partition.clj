@@ -155,13 +155,18 @@
 (defn- store-tablet!
   "Store the given tablet data and return the family key and updated id."
   [store family-key tablet]
-  (->>
-    (cond-> tablet
-      (not= family-key :base)
-      (tablet/prune-records))
-    (node/store-node! store)
-    (:id)
-    (vector family-key)))
+  (let [node (node/store-node!
+               store
+               (cond-> tablet
+                 (not= family-key :base)
+                 (tablet/prune-records)))]
+    [family-key
+     (link/create
+       (if (namespace family-key)
+         (str (namespace family-key) ":" (name family-key))
+         (name family-key))
+       (:id node)
+       (:size node))]))
 
 
 (defn- update-tablet!

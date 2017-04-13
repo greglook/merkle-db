@@ -10,8 +10,15 @@
 ;; Valid field key values.
 (s/def ::field-key any?)
 
+;; Valid family keys.
+(s/def ::family-key
+  (s/and keyword? #(not= % :base)))
+
 ;; Map of family keywords to sets of contained fields.
 (s/def ::families
-  (s/map-of
-    (s/and keyword? #(not= % :base))
-    (s/coll-of ::field-key :kind set?)))
+  (s/and
+    (s/map-of
+      ::family-key
+      (s/coll-of ::field-key :kind set?))
+    #(= (reduce + (map count (vals %)))
+        (count (distinct (apply concat (vals %)))))))

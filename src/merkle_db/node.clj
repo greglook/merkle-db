@@ -26,14 +26,17 @@
 
 (extend-protocol Identifiable
 
+  nil
+  (identify [_] nil)
+
   multihash.core.Multihash
-  (identify [x] x)
+  (identify [m] m)
 
   blocks.data.Block
-  (identify [x] (:id x))
+  (identify [b] (:id b))
 
   merkledag.link.MerkleLink
-  (identify [x] (:target x)))
+  (identify [l] (:target l)))
 
 
 (defprotocol NodeStore
@@ -54,7 +57,7 @@
 
 (defn get-links
   [store id]
-  (let [id (identify id)]
+  (when-let [id (identify id)]
     (some->
       (-get-node store id)
       (:links)
@@ -63,13 +66,13 @@
 
 (defn get-data
   [store id]
-  (let [id (identify id)
-        node (-get-node store id)]
-    (some->
-      (:data node)
-      (vary-meta assoc
-        :merkledag.node/id id
-        :merkledag.node/links (:links node)))))
+  (when-let [id (identify id)]
+    (let [node (-get-node store id)]
+      (some->
+        (:data node)
+        (vary-meta assoc
+          :merkledag.node/id id
+          :merkledag.node/links (:links node))))))
 
 
 (defn store-node!
@@ -81,7 +84,8 @@
 
 (defn delete-node!
   [store id]
-  (-delete-node! store (identify id)))
+  (when-let [id (identify id)]
+    (-delete-node! store id)))
 
 
 (defrecord MemoryNodeStore

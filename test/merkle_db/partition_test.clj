@@ -1,13 +1,19 @@
 (ns merkle-db.partition-test
   (:require
+    [clojure.spec :as s]
     [clojure.test :refer :all]
+    [clojure.test.check.generators :as gen]
+    [com.gfredericks.test.chuck.clojure-test :refer [checking]]
     [merkle-db.data :as data]
+    [merkle-db.generators :as mdgen]
     [merkle-db.key :as key]
     [merkle-db.key-test]
     [merkle-db.node :as node]
     [merkle-db.partition :as part]
     [merkle-db.tablet :as tablet]))
 
+
+;; ## Unit Tests
 
 (deftest tablet-selection
   (let [choose @#'part/choose-tablets]
@@ -81,15 +87,51 @@
              (part/read-all store part #{:x :a :d}))))))
 
 
-; TODO: property tests
-; - partition data matches schema
-; - base tablet contains every record key
-; - base tablet does not contain any fields in families
-; - family tablets only contain field data for that family
-; - family tablets contain no empty values
-; - ::count attribute is accurate
-; - ::first-key is contained in the base tablet
-; - no record key is less than ::first-key
-; - ::last-key is contained in the base tablet
-; - no record key is greater than ::last-key
-; - every record key tests true against the ::membership filter
+
+;; ## Property Tests
+
+;; (is (valid? s expr))
+;; Asserts that the result of `expr` is valid for spec `s`.
+;; Returns the conformed value.
+(defmethod assert-expr 'valid?
+  [msg form]
+  `(let [spec# ~(second form)
+         value# ~(nth form 2)
+         conformed# (s/conform spec# value#)]
+     (if (= ::s/invalid conformed#)
+       (do-report
+         {:type :fail
+          :message ~msg,
+          :expected '~(second form)
+          :actual (s/explain-data spec# value#)})
+       (do-report
+         {:type :pass
+          :message ~msg,
+          :expected '~(second form)
+          :actual conformed#}))
+     conformed#))
+
+
+(deftest partition-behavior
+  (checking "valid schema" 20
+    [field-keys (gen/not-empty (gen/set mdgen/field-key))
+     records (gen/not-empty (gen/vector (mdgen/record field-keys)))
+     families (mdgen/families field-keys)]
+    (is (valid? :merkle-db.data/families families))
+    (let [store (node/memory-node-store)
+          part (part/from-records store families tablet/merge-fields records)]
+      (is (valid? :merkle-db/partition part)
+          "partition data should match schema")
+      ; TODO:
+      ; - partition data matches schema
+      ; - base tablet contains every record key
+      ; - base tablet does not contain any fields in families
+      ; - family tablets only contain field data for that family
+      ; - family tablets contain no empty values
+      ; - ::count attribute is accurate
+      ; - ::first-key is contained in the base tablet
+      ; - no record key is less than ::first-key
+      ; - ::last-key is contained in the base tablet
+      ; - no record key is greater than ::last-key
+      ; - every record key tests true against the ::membership filter
+      )))

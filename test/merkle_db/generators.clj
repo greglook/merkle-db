@@ -1,7 +1,9 @@
 (ns merkle-db.generators
   (:require
+    [clojure.spec :as s]
     [clojure.test.check.generators :as gen]
-    [com.gfredericks.test.chuck.clojure-test :refer [checking]]
+    [com.gfredericks.test.chuck.generators :as tcgen]
+    [merkle-db.data :as data]
     [merkle-db.key :as key]))
 
 
@@ -47,3 +49,18 @@
   "Generates record key/data pairs using the given set of fields."
   [field-keys]
   (gen/tuple record-key (gen/map (gen/elements field-keys) field-value)))
+
+
+(defn families
+  "Generates a map of family keys to distinct sets of fields drawn from the
+  ones given."
+  [field-keys]
+  (-> (tcgen/partition field-keys)
+      (gen/bind
+        (fn [field-sets]
+          (gen/tuple
+            (gen/vector (s/gen ::data/family-key)
+                        (count field-sets))
+            (gen/return (map set field-sets)))))
+      (->> (gen/fmap (partial apply zipmap)))
+      (gen/bind tcgen/sub-map)))

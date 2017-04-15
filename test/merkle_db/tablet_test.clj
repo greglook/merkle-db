@@ -12,6 +12,24 @@
   (is (empty? (tablet/read-all tablet/empty-tablet))))
 
 
+(deftest key-reads
+  (let [k1 (key/create [1 2 3])
+        r1 {:foo 123}
+        k2 (key/create [4 5 6])
+        r2 {:foo 456}
+        tablet (tablet/from-records tablet/merge-fields {k1 r1, k2 r2})]
+    (is (= k2 (tablet/nth-key tablet 1)))
+    (is (thrown? Exception
+          (tablet/nth-key tablet -1)))
+    (is (thrown? Exception
+          (tablet/nth-key tablet 3)))
+    (is (= [k1 k2] (tablet/keys tablet)))
+    (is (= [[k1 r1]]
+           (tablet/read-batch tablet #{k1})))
+    (is (= [[k1 r1] [k2 r2]]
+           (tablet/read-batch tablet #{k1 k2})))))
+
+
 (deftest batch-reads
   (let [k1 (key/create [1 2 3])
         r1 {:foo 123}

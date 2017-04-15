@@ -131,8 +131,9 @@
         (is (valid? :merkle-db/tablet tablet)
             (str "partition tablet " family-key " should match schema")))
       (let [all-keys (set (map first (mapcat tablet/read-all (vals tablets))))]
-        (is (contains? tablets :base) "partition contains a base tablet")
-        (is (= all-keys (set (map first (tablet/read-all (:base tablets)))))
+        (is (contains? tablets :base)
+            "partition contains a base tablet")
+        (is (= all-keys (set (tablet/keys (:base tablets))))
             "base tablet contains every record key"))
       (is (empty? (set/intersection
                     (tablet/fields-present (:base tablets))
@@ -147,16 +148,12 @@
             "family tablet should not contain empty data values"))
       (is (= (count (part/read-all store part nil)) (::data/count part))
           "::count attribute is accurate")
-      (is (= (first (first (tablet/read-all (:base tablets))))
+      (is (= (first (tablet/keys (:base tablets)))
              (::part/first-key part))
           "::first-key is first key in the base tablet")
-      (is (= (first (last (tablet/read-all (:base tablets))))
+      (is (= (last (tablet/keys (:base tablets)))
              (::part/last-key part))
           "::last-key is last key in the base tablet")
       (is (every? #(bloom/contains? (::part/membership part) %)
-                  (map first (part/read-all store part nil)))
-          "every record key tests true against the ::membership filter")
-      ; TODO:
-      ; - no record key is less than ::first-key
-      ; - no record key is greater than ::last-key
-      )))
+                  (tablet/keys (:base tablets)))
+          "every record key tests true against the ::membership filter"))))

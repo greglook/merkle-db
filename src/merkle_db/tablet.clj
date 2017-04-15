@@ -1,5 +1,6 @@
 (ns merkle-db.tablet
   "Functions for working with tablet data."
+  (:refer-clojure :exclude [keys])
   (:require
     [clojure.spec :as s]
     [merkle-db.key :as key]))
@@ -22,13 +23,34 @@
 
 
 
-;; ## Read Functions
+;; ## Key Functions
+
+(defn keys
+  "Return a sequence of the keys in the tablet."
+  [tablet]
+  (map first (::records tablet)))
+
+
+(defn first-key
+  "Return the first record key present in the tablet."
+  [tablet]
+  (first (first (::records tablet))))
+
+
+(defn last-key
+  "Return the last record key present in the tablet."
+  [tablet]
+  (first (peek (::records tablet))))
+
 
 (defn nth-key
   "Return the nth key present in the tablet data."
   [tablet n]
   (first (nth (::records tablet) n)))
 
+
+
+;; ## Read Functions
 
 (defn read-all
   "Read a sequence of key/map tuples which contain the field data for all the
@@ -138,19 +160,7 @@
 (defn fields-present
   "Scans the records in a tablet to determine the full set of fields present."
   [tablet]
-  (set (mapcat (comp keys second) (::records tablet))))
-
-
-(defn first-key
-  "Return the first record key present in the tablet."
-  [tablet]
-  (first (first (::records tablet))))
-
-
-(defn last-key
-  "Return the last record key present in the tablet."
-  [tablet]
-  (first (peek (::records tablet))))
+  (set (mapcat (comp clojure.core/keys second) (::records tablet))))
 
 
 (defn split
@@ -161,7 +171,7 @@
         lkey (last-key tablet)]
     (when-not (and (key/after? split-key fkey)
                    (key/before? split-key lkey))
-      (throw (ex-info (format "Cannot split tablet with key %s which falls outside the record range [%s, %s]"
+      (throw (ex-info (format "Cannot split tablet with key %s which falls outside the contained range [%s, %s]"
                               split-key fkey lkey)
                       {:split-key split-key
                        :first-key fkey

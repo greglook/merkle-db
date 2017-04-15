@@ -1,5 +1,7 @@
 (ns merkle-db.partition
-  (:refer-clojure :exclude [read])
+  "Partitions contain non-overlapping ranges of the records witin a table.
+  Partition nodes contain metadata about the contained records and links to the
+  tablets where the data for each field family is stored."
   (:require
     [clojure.spec :as s]
     [merkledag.link :as link]
@@ -230,10 +232,6 @@
         (assoc ::data/families families))))
 
 
-; TODO: split
-; TODO: join
-
-
 
 ;; ## Deletion Functions
 
@@ -248,3 +246,75 @@
     (->> (::tablets part)
          (into {} (map (juxt key #(update (val %) :id update-tablet!))))
          (assoc part ::tablets))))
+
+
+
+;; ## Utilities
+
+(defn- divide-tablets
+  "Take a map of tablet links and a split key and returns a vector of two
+  tablet maps, each containing the left and right tablet splits, respectively."
+  [store tablets split-key]
+  (reduce-kv
+    (fn divide
+      [[left right] family-key tablet-link]
+      (let [tablet (node/get-data store tablet-link)]
+        (cond
+          ; All tablet data is in the left split.
+          (key/before? (tablet/last-key tablet) split-key)
+          [(assoc left family-key tablet-link) right]
+
+          ; All tablet data is in the right split.
+          (key/after? (tablet/first-key tablet) split-key)
+          [left (assoc right family-key tablet-link)]
+
+          ; Split tablet into two pieces.
+          :else
+          (let [[ltab rtab] (tablet/split tablet split-key)]
+            [(conj left (store-tablet! store family-key ltab))
+             (conj right (store-tablet! store family-key rtab))]))))
+    [{} {}]
+    tablets))
+
+
+(defn split
+  "Split the partition into two partitions at the given key. All records less
+  than the split key will be contained in the first partition, all others in
+  the second."
+  [store part split-key]
+  (when-not (and (key/after? split-key (::first-key part))
+                 (key/before? split-key (::last-key part)))
+    (throw (ex-info (format "Cannot split partition with key %s which falls outside the contained range [%s, %s]"
+                            split-key (::first-key part) (::last-key part))
+                    {:split-key split-key
+                     :first-key (::first-key part)
+                     :last-key (::last-key part)})))
+  (let [defaults (select-keys part [:data/type ::data/families])
+        [left right] (divide-tablets store (::tablets part) split-key)]
+    ; Construct new partitions from left and right tablet maps.
+    [(let [base-keys (tablet/keys (node/get-data store (:base left)))]
+       (assoc defaults
+              ::data/count (count base-keys)
+              ::membership (reduce bloom/insert
+                                   (bloom/create (count base-keys))
+                                   base-keys)
+              ::first-key (first base-keys)
+              ::last-key (last base-keys)
+              ::tablets left))
+     (let [base-keys (tablet/keys (node/get-data store (:base right)))]
+       (assoc defaults
+              ::data/count (count base-keys)
+              ::membership (reduce bloom/insert
+                                   (bloom/create (count base-keys))
+                                   base-keys)
+              ::first-key (first base-keys)
+              ::last-key (last base-keys)
+              ::tablets right))]))
+
+
+(defn join
+  "Join two partitions into a single partition. The partition key ranges must
+  not overlap."
+  [store left right]
+  ; TODO: implement
+  (throw (UnsupportedOperationException. "NYI")))

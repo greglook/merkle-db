@@ -95,11 +95,11 @@ return to the client.
  :merkle-db/metadata MerkleLink
  :merkle-db.data/count Long
  :merkle-db.data/families {Keyword #{field-name}}
+ :merkle-db.key/lexicoder Keyword
  :merkle-db.table/data MerkleLink
  :merkle-db.table/patch MerkleLink
  :merkle-db.table/branching-factor Long  ; e.g. 256 children
- :merkle-db.table/partition-limit Long   ; e.g. 100,000 records
- :merkle-db.table/lexicoder Keyword
+ :merkle-db.partition/limit Long         ; e.g. 100,000 records
  :time/updated-at Instant}
 ```
 
@@ -159,6 +159,7 @@ sure that the full sequence of keys can be enumerated with only the base.
 {:data/type :merkle-db/partition
  :merkle-db.data/count Long
  :merkle-db.data/families {Keyword #{field-name}}
+ :merkle-db.partition/limit Long
  :merkle-db.partition/membership BloomFilter
  :merkle-db.partition/start-key key-bytes
  :merkle-db.partition/end-key key-bytes

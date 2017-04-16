@@ -3,6 +3,7 @@
   Partition nodes contain metadata about the contained records and links to the
   tablets where the data for each field family is stored."
   (:require
+    [clojure.future :refer [pos-int?]]
     [clojure.spec :as s]
     [merkledag.link :as link]
     [merkle-db.bloom :as bloom]
@@ -12,6 +13,7 @@
     [merkle-db.tablet :as tablet]))
 
 
+(s/def ::limit pos-int?)
 (s/def ::membership bloom/filter?)
 (s/def ::first-key key/bytes?)
 (s/def ::last-key key/bytes?)
@@ -19,12 +21,13 @@
 
 
 (s/def :merkle-db/partition
-  (s/keys :req [::data/count
+  (s/keys :req [::data/families
+                ::data/count
+                ::limit
                 ::membership
                 ::first-key
                 ::last-key
-                ::tablets]
-          :opt [::data/families]))
+                ::tablets]))
 
 
 
@@ -211,25 +214,25 @@
 (defn from-records
   "Constructs a new partition from the given map of record data. The records
   will be split into tablets matching the given families, if provided."
-  [store families f records]
+  [store parameters f records]
   (let [records (sort-by first key/compare records)
-        membership (reduce bloom/insert
-                           (bloom/create (count records))
-                           (map first records))
+        limit (or (::limit parameters) 100000)
+        families (or (::data/families parameters) {})
         tablets (->> records
                      (reduce (partial append-record-updates families) {})
                      (map (juxt key #(tablet/from-records f (val %))))
                      (map (partial apply store-tablet! store))
                      (into {}))]
-    (cond->
-      {:data/type :merkle-db/partition
-       ::data/count (count records)
-       ::membership membership
-       ::first-key (first (first records))
-       ::last-key (first (last records))
-       ::tablets tablets}
-      (seq families)
-        (assoc ::data/families families))))
+    {:data/type :merkle-db/partition
+     ::data/families families
+     ::data/count (count records)
+     ::limit limit
+     ::membership (reduce bloom/insert
+                          (bloom/create limit)
+                          (map first records))
+     ::first-key (first (first records))
+     ::last-key (first (last records))
+     ::tablets tablets}))
 
 
 
@@ -289,14 +292,14 @@
                     {:split-key split-key
                      :first-key (::first-key part)
                      :last-key (::last-key part)})))
-  (let [defaults (select-keys part [:data/type ::data/families])
+  (let [defaults (select-keys part [:data/type ::data/families ::limit])
         [left right] (divide-tablets store (::tablets part) split-key)]
     ; Construct new partitions from left and right tablet maps.
     [(let [base-keys (tablet/keys (node/get-data store (:base left)))]
        (assoc defaults
               ::data/count (count base-keys)
               ::membership (reduce bloom/insert
-                                   (bloom/create (count base-keys))
+                                   (bloom/create (::limit part))
                                    base-keys)
               ::first-key (first base-keys)
               ::last-key (last base-keys)
@@ -305,7 +308,7 @@
        (assoc defaults
               ::data/count (count base-keys)
               ::membership (reduce bloom/insert
-                                   (bloom/create (count base-keys))
+                                   (bloom/create (::limit part))
                                    base-keys)
               ::first-key (first base-keys)
               ::last-key (last base-keys)

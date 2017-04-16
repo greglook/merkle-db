@@ -68,19 +68,19 @@
         tablet (tablet/from-records {k1 r1})]
     (is (= [[k1 {:foo 124}]]
            (tablet/read-all
-             (tablet/merge-records
+             (tablet/update-records
                tablet
                tablet/merge-fields
                {k1 {:foo 124}}))))
     (is (= [[k1 {:foo 123, :bar true}]]
            (tablet/read-all
-             (tablet/merge-records
+             (tablet/update-records
                tablet
                tablet/merge-fields
                {k1 {:bar true}}))))
     (is (= [[k1 r1] [k2 r2]]
            (tablet/read-all
-             (tablet/merge-records
+             (tablet/update-records
                tablet
                tablet/merge-fields
                {k2 r2}))))))
@@ -92,17 +92,17 @@
         k2 (key/create [4 5 6])
         r2 {:foo 456}
         tablet (tablet/from-records {k1 r1, k2 r2})]
-    (is (nil? (tablet/remove-records tablet/empty-tablet #{})))
+    (is (nil? (tablet/remove-batch tablet/empty-tablet #{})))
     (is (= [[k1 r1] [k2 r2]]
            (tablet/read-all
-             (tablet/remove-records tablet nil))))
+             (tablet/remove-batch tablet nil))))
     (is (= [[k2 r2]]
            (tablet/read-all
-             (tablet/remove-records tablet #{k1}))))
+             (tablet/remove-batch tablet #{k1}))))
     (is (= [[k1 r1]]
            (tablet/read-all
-             (tablet/remove-records tablet #{k2}))))
-    (is (nil? (tablet/remove-records tablet #{k1 k2})))
+             (tablet/remove-batch tablet #{k2}))))
+    (is (nil? (tablet/remove-batch tablet #{k1 k2})))
     (is (= [[k1 r1]]
            (tablet/read-all
              (tablet/prune-records

@@ -50,6 +50,55 @@
 
 
 
+;; ## Utilities
+
+(defn fields-present
+  "Scans the records in a tablet to determine the full set of fields present."
+  [tablet]
+  (set (mapcat (comp clojure.core/keys second) (::records tablet))))
+
+
+(defn split
+  "Split the tablet into two tablets at the given key. All records less than the
+  split key will be contained in the first tablet, all others in the second. "
+  [tablet split-key]
+  (let [fkey (first-key tablet)
+        lkey (last-key tablet)]
+    (when-not (and (key/after? split-key fkey)
+                   (key/before? split-key lkey))
+      (throw (ex-info (format "Cannot split tablet with key %s which falls outside the contained range [%s, %s]"
+                              split-key fkey lkey)
+                      {:split-key split-key
+                       :first-key fkey
+                       :last-key lkey}))))
+  (let [before-split? #(neg? (key/compare (first %) split-key))]
+    [(->>
+       (::records tablet)
+       (take-while before-split?)
+       (vec)
+       (assoc empty-tablet ::records))
+     (->>
+       (::records tablet)
+       (drop-while before-split?)
+       (vec)
+       (assoc empty-tablet ::records))]))
+
+
+(defn join
+  "Join two tablets into a single tablet. The tablets key ranges must not
+  overlap."
+  [left right]
+  (let [left-bound (last-key left)
+        right-bound (first-key right)]
+    (when (key/before? right-bound left-bound)
+      (throw (ex-info (format "Cannot join tablets with overlapping key ranges: %s > %s"
+                              left-bound right-bound)
+                      {:left-bound left-bound
+                       :right-bound right-bound}))))
+  (update left ::records (comp vec concat) (::records right)))
+
+
+
 ;; ## Read Functions
 
 (defn read-all
@@ -107,7 +156,7 @@
      (assoc empty-tablet ::records))))
 
 
-(defn merge-records
+(defn update-records
   "Update a tablet by merging record data into it.
 
   For each record in the `records` map, the function `f` will be called with
@@ -133,7 +182,13 @@
 
 ;; ## Deletion Functions
 
-(defn remove-records
+(defn prune-records
+  "Update a tablet by removing empty records from the data."
+  [tablet]
+  (update tablet ::records #(vec (remove (comp empty? second) %))))
+
+
+(defn remove-batch
   "Update the tablet by removing certain record keys from it. Returns nil if
   the resulting tablet is empty."
   [tablet record-keys]
@@ -148,56 +203,15 @@
         (assoc tablet ::records records)))))
 
 
-(defn prune-records
-  "Update a tablet by removing empty records from the data."
-  [tablet]
-  (update tablet ::records #(vec (remove (comp empty? second) %))))
-
-
-
-;; ## Utilities
-
-(defn fields-present
-  "Scans the records in a tablet to determine the full set of fields present."
-  [tablet]
-  (set (mapcat (comp clojure.core/keys second) (::records tablet))))
-
-
-(defn split
-  "Split the tablet into two tablets at the given key. All records less than the
-  split key will be contained in the first tablet, all others in the second. "
-  [tablet split-key]
-  (let [fkey (first-key tablet)
-        lkey (last-key tablet)]
-    (when-not (and (key/after? split-key fkey)
-                   (key/before? split-key lkey))
-      (throw (ex-info (format "Cannot split tablet with key %s which falls outside the contained range [%s, %s]"
-                              split-key fkey lkey)
-                      {:split-key split-key
-                       :first-key fkey
-                       :last-key lkey}))))
-  (let [before-split? #(neg? (key/compare (first %) split-key))]
-    [(->>
-       (::records tablet)
-       (take-while before-split?)
-       (vec)
-       (assoc empty-tablet ::records))
-     (->>
-       (::records tablet)
-       (drop-while before-split?)
-       (vec)
-       (assoc empty-tablet ::records))]))
-
-
-(defn join
-  "Join two tablets into a single tablet. The tablets key ranges must not
-  overlap."
-  [left right]
-  (let [left-bound (last-key left)
-        right-bound (first-key right)]
-    (when (key/before? right-bound left-bound)
-      (throw (ex-info (format "Cannot join tablets with overlapping key ranges: %s > %s"
-                              left-bound right-bound)
-                      {:left-bound left-bound
-                       :right-bound right-bound}))))
-  (update left ::records (comp vec concat) (::records right)))
+(defn remove-range
+  "Update the tablet by removing a range of record keys from it. Returns nil
+  if the resulting tablet is empty."
+  [tablet start-key end-key]
+  (update
+    tablet
+    ::records
+    (partial into [] (remove (fn [[key-bytes data]]
+                               (and (or (nil? start-key)
+                                        (not (key/before? key-bytes start-key)))
+                                    (or (nil? end-key)
+                                        (not (key/after? key-bytes end-key)))))))))

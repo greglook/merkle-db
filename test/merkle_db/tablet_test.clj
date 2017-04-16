@@ -83,7 +83,15 @@
              (tablet/update-records
                tablet
                tablet/merge-fields
-               {k2 r2}))))))
+               {k2 r2}))))
+    (is (= [[k1 {}] [k2 {}]]
+           (tablet/read-all
+             (tablet/update-records
+               tablet
+               tablet/merge-fields
+               {k1 {:foo nil, :bar nil}
+                k2 {:baz nil}})))
+        "nil fields should be removed")))
 
 
 (deftest record-removal
@@ -91,22 +99,37 @@
         r1 {:foo 123}
         k2 (key/create [4 5 6])
         r2 {:foo 456}
-        tablet (tablet/from-records {k1 r1, k2 r2})]
-    (is (nil? (tablet/remove-batch tablet/empty-tablet #{})))
-    (is (= [[k1 r1] [k2 r2]]
-           (tablet/read-all
-             (tablet/remove-batch tablet nil))))
-    (is (= [[k2 r2]]
-           (tablet/read-all
-             (tablet/remove-batch tablet #{k1}))))
-    (is (= [[k1 r1]]
-           (tablet/read-all
-             (tablet/remove-batch tablet #{k2}))))
-    (is (nil? (tablet/remove-batch tablet #{k1 k2})))
-    (is (= [[k1 r1]]
-           (tablet/read-all
-             (tablet/prune-records
-               (tablet/from-records {k1 r1, k2 {}})))))))
+        k3 (key/create [7 8 9])
+        r3 {:foo 789}
+        tablet (tablet/from-records {k1 r1, k2 r2, k3 r3})]
+    (testing "pruning"
+      (is (= [[k1 r1]]
+             (tablet/read-all
+               (tablet/prune-records
+                 (tablet/from-records {k1 r1, k2 {}}))))))
+    (testing "by batch"
+      (is (nil? (tablet/remove-batch tablet/empty-tablet #{})))
+      (is (= [[k1 r1] [k2 r2] [k3 r3]]
+             (tablet/read-all
+               (tablet/remove-batch tablet nil))))
+      (is (= [[k2 r2] [k3 r3]]
+             (tablet/read-all
+               (tablet/remove-batch tablet #{k1}))))
+      (is (= [[k1 r1]]
+             (tablet/read-all
+               (tablet/remove-batch tablet #{k2 k3}))))
+      (is (nil? (tablet/remove-batch tablet #{k1 k2 k3}))))
+    (testing "by range"
+      (is (= [k1 k3]
+             (tablet/keys
+               (tablet/remove-range tablet (key/create [3]) (key/create [5])))))
+      (is (= [k2 k3]
+             (tablet/keys
+               (tablet/remove-range tablet nil (key/create [2])))))
+      (is (= [k1]
+             (tablet/keys
+               (tablet/remove-range tablet (key/create [2]) nil))))
+      (is (nil? (tablet/remove-range tablet nil nil))))))
 
 
 (deftest tablet-utilities

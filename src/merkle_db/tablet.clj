@@ -207,11 +207,16 @@
   "Update the tablet by removing a range of record keys from it. Returns nil
   if the resulting tablet is empty."
   [tablet start-key end-key]
-  (update
-    tablet
-    ::records
-    (partial into [] (remove (fn [[key-bytes data]]
-                               (and (or (nil? start-key)
-                                        (not (key/before? key-bytes start-key)))
-                                    (or (nil? end-key)
-                                        (not (key/after? key-bytes end-key)))))))))
+  (->
+    (into
+      []
+      (remove (fn in-range?
+                [[key-bytes data]]
+                (and (or (nil? start-key)
+                         (not (key/before? key-bytes start-key)))
+                     (or (nil? end-key)
+                         (not (key/after? key-bytes end-key))))))
+      (::records tablet))
+    (as-> records
+      (when (seq records)
+        (assoc tablet ::records records)))))

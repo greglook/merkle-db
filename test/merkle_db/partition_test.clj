@@ -115,9 +115,7 @@
 
 (deftest partition-behavior
   (checking "valid properties" 20
-    [field-keys (gen/not-empty (gen/set mdgen/field-key))
-     records (gen/not-empty (gen/vector (mdgen/record field-keys)))
-     families (mdgen/families field-keys)]
+    [[field-keys families records] mdgen/data-context]
     (is (valid? ::data/families families))
     (let [store (node/memory-node-store)
           part (part/from-records store {::data/families families} tablet/merge-fields records)

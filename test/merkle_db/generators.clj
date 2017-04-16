@@ -64,3 +64,16 @@
             (gen/return (map set field-sets)))))
       (->> (gen/fmap (partial apply zipmap)))
       (gen/bind tcgen/sub-map)))
+
+
+(def data-context
+  "Generator for context data and configuration. Generates tuples containing
+  the set of field keys, the field families, and a vector of record key/data
+  pairs."
+  (gen/bind
+    (gen/not-empty (gen/set field-key))
+    (fn [field-keys]
+      (gen/tuple
+        (gen/return field-keys)
+        (families field-keys)
+        (gen/not-empty (gen/vector (record field-keys)))))))

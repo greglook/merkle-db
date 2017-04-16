@@ -118,14 +118,14 @@ well.
 
 ```clojure
 {:data/type :merkle-db/index
- :merkle-db.data/height Long
  :merkle-db.data/count Long
- :merkle-db.data/keys
+ :merkle-db.index/height Long
+ :merkle-db.index/keys
  [key-bytes-A  ; encoded key A
   key-bytes-B  ; encoded key B
   ...
   key-bytes-Z] ; encoded key Z
- :merkle-db.data/children
+ :merkle-db.index/children
  [link-0       ; link to subtree containing pk < A
   link-1       ; link to subtree containing A <= pk < B
   link-2       ; link to subtree containing B <= pk < ...

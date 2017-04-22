@@ -33,13 +33,6 @@
 
 ;; ## Utilities
 
-(defn- into-filter
-  "Creates a bloom filter sized for a population of `n` and inserts all of the
-  elements in `ks` into it."
-  [n ks]
-  (reduce bloom/insert (bloom/create n) ks))
-
-
 (defn- store-tablet!
   "Store the given tablet data and return the family key and updated id."
   [store family-key tablet]
@@ -101,14 +94,14 @@
     [(let [base-keys (tablet/keys (node/get-data store (:base left)))]
        (assoc defaults
               ::data/count (count base-keys)
-              ::membership (into-filter (::limit part) base-keys)
+              ::membership (into (bloom/create (::limit part)) base-keys)
               ::first-key (first base-keys)
               ::last-key (last base-keys)
               ::tablets left))
      (let [base-keys (tablet/keys (node/get-data store (:base right)))]
        (assoc defaults
               ::data/count (count base-keys)
-              ::membership (into-filter (::limit part) base-keys)
+              ::membership (into (bloom/create (::limit part)) base-keys)
               ::first-key (first base-keys)
               ::last-key (last base-keys)
               ::tablets right))]))
@@ -281,7 +274,7 @@
     (assoc part
            ::data/count record-count
            ::tablets tablets
-           ::membership (reduce bloom/insert (::membership part) record-keys)
+           ::membership (into (::membership part) record-keys)
            ::first-key (apply key/min (::first-key part) record-keys)
            ::last-key (apply key/max (::last-key part) record-keys))))
 
@@ -298,13 +291,12 @@
                      (map (juxt key #(tablet/from-records f (val %))))
                      (map (partial apply store-tablet! store))
                      (into {}))]
+    ; FIXME: this may result in a partition larger than the limit in size
     {:data/type :merkle-db/partition
      ::data/families families
      ::data/count (count records)
      ::limit limit
-     ::membership (reduce bloom/insert
-                          (bloom/create limit)
-                          (map first records))
+     ::membership (into (bloom/create limit) (map first records))
      ::first-key (first (first records))
      ::last-key (first (last records))
      ::tablets tablets}))

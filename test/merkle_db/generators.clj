@@ -1,10 +1,33 @@
 (ns merkle-db.generators
   (:require
     [clojure.spec :as s]
+    [clojure.test :as test]
     [clojure.test.check.generators :as gen]
     [com.gfredericks.test.chuck.generators :as tcgen]
     [merkle-db.data :as data]
     [merkle-db.key :as key]))
+
+
+;; (is (valid? s expr))
+;; Asserts that the result of `expr` is valid for spec `s`.
+;; Returns the conformed value.
+(defmethod test/assert-expr 'valid?
+  [msg form]
+  `(let [spec# ~(second form)
+         value# ~(nth form 2)
+         conformed# (s/conform spec# value#)]
+     (if (= ::s/invalid conformed#)
+       (test/do-report
+         {:type :fail
+          :message ~msg,
+          :expected '~(second form)
+          :actual (s/explain-data spec# value#)})
+       (test/do-report
+         {:type :pass
+          :message ~msg,
+          :expected '~(second form)
+          :actual conformed#}))
+     conformed#))
 
 
 (def record-key

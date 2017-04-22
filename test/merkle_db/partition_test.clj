@@ -5,7 +5,6 @@
     [clojure.test :refer :all]
     [clojure.test.check.generators :as gen]
     [com.gfredericks.test.chuck.clojure-test :refer [checking]]
-    [merkle-db.bloom :as bloom]
     [merkle-db.data :as data]
     [merkle-db.generators :as mdgen]
     [merkle-db.key :as key]
@@ -91,28 +90,6 @@
 
 ;; ## Property Tests
 
-;; (is (valid? s expr))
-;; Asserts that the result of `expr` is valid for spec `s`.
-;; Returns the conformed value.
-(defmethod assert-expr 'valid?
-  [msg form]
-  `(let [spec# ~(second form)
-         value# ~(nth form 2)
-         conformed# (s/conform spec# value#)]
-     (if (= ::s/invalid conformed#)
-       (do-report
-         {:type :fail
-          :message ~msg,
-          :expected '~(second form)
-          :actual (s/explain-data spec# value#)})
-       (do-report
-         {:type :pass
-          :message ~msg,
-          :expected '~(second form)
-          :actual conformed#}))
-     conformed#))
-
-
 (deftest partition-behavior
   (checking "valid properties" 20
     [[field-keys families records] mdgen/data-context]
@@ -151,6 +128,5 @@
       (is (= (last (tablet/keys (:base tablets)))
              (::part/last-key part))
           "::last-key is last key in the base tablet")
-      (is (every? #(bloom/contains? (::part/membership part) %)
-                  (tablet/keys (:base tablets)))
+      (is (every? (::part/membership part) (tablet/keys (:base tablets)))
           "every record key tests true against the ::membership filter"))))

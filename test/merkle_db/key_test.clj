@@ -137,7 +137,16 @@
       (gen/fmap #(java.time.Instant/ofEpochMilli %) gen/large-integer)])})
 
 
+(deftest lexicoder-configs
+  (is (thrown? Exception (key/lexicoder "not a keyword or vector")))
+  (is (thrown? Exception (key/lexicoder [123 "needs a keyword first"]))))
+
+
 (deftest string-lexicoder
+  (is (identical? key/string-lexicoder (key/lexicoder :string)))
+  (is (satisfies? key/Lexicoder (key/lexicoder [:string "UTF-8"])))
+  (is (thrown? Exception
+        (key/lexicoder [:string "UTF-8" :bar])))
   (is (thrown? IllegalArgumentException
         (key/encode key/string-lexicoder ""))
       "should not encode empty strings")
@@ -148,6 +157,9 @@
 
 
 (deftest long-lexicoder
+  (is (identical? key/long-lexicoder (key/lexicoder :long)))
+  (is (thrown? Exception
+        (key/lexicoder [:long :bar])))
   (is (thrown? IllegalArgumentException
         (key/decode key/long-lexicoder (byte-array 7)))
       "should require 8 bytes")
@@ -155,10 +167,16 @@
 
 
 (deftest double-lexicoder
+  (is (identical? key/double-lexicoder (key/lexicoder :double)))
+  (is (thrown? Exception
+        (key/lexicoder [:double :bar])))
   (check-lexicoder (:double lexicoder-generators)))
 
 
 (deftest instant-lexicoder
+  (is (identical? key/instant-lexicoder (key/lexicoder :instant)))
+  (is (thrown? Exception
+        (key/lexicoder [:instant :bar])))
   (is (thrown? IllegalArgumentException
         (key/encode key/instant-lexicoder ""))
       "should not encode non-instant value")
@@ -166,6 +184,11 @@
 
 
 (deftest sequence-lexicoder
+  (is (satisfies? key/Lexicoder (key/lexicoder [:seq :long])))
+  (is (thrown? Exception
+        (key/lexicoder :seq)))
+  (is (thrown? Exception
+        (key/lexicoder [:seq :string :foo])))
   (check-lexicoder
     (gen/fmap
       (fn [[coder arg-gen]]
@@ -176,12 +199,14 @@
 
 
 (deftest tuple-lexicoder
+  (is (satisfies? key/Lexicoder (key/lexicoder [:tuple :string])))
+  (is (thrown? Exception
+        (key/lexicoder [:tuple])))
   (is (thrown? IllegalArgumentException
         (key/encode (key/tuple-lexicoder key/long-lexicoder) [0 0]))
       "should not encode tuples larger than coders")
   (is (thrown? IllegalArgumentException
-        (key/encode (key/tuple-lexicoder key/long-lexicoder
-                                         key/string-lexicoder)
+        (key/encode (key/lexicoder [:tuple :long :string])
                     [0]))
       "should not encode tuples smaller than coders")
   (is (thrown? IllegalArgumentException
@@ -199,6 +224,11 @@
 
 
 (deftest reverse-lexicoder
+  (is (satisfies? key/Lexicoder (key/lexicoder [:reverse :instant])))
+  (is (thrown? Exception
+        (key/lexicoder [:reverse])))
+  (is (thrown? Exception
+        (key/lexicoder [:reverse :long :string])))
   (check-lexicoder
     (gen/fmap
       (fn [[coder arg-gen]]

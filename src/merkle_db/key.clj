@@ -130,8 +130,32 @@
      (decode* coder byte-data offset len))))
 
 
+(defmulti lexicoder
+  "Construct a lexicoder from a configuration data structure. The structure
+  should be either a keyword or a vector with the first element a keyword
+  providing the dispatch value."
+  (fn dispatch
+    [config]
+    (if (keyword? config)
+      config
+      (if (and (vector? config) (keyword? (first config)))
+        (first config)
+        (throw (ex-info
+                 (str "Cannot construct lexicoder from invalid config; expecting a keyword or vector with keyword, got: "
+                      (pr-str config))
+                 {:config config}))))))
+
+
 
 ;; ## Lexicoder Utilities
+
+(defn ^:no-doc config-params
+  "Counts the number of parameters given to an argument to the `lexicoder`
+  multimethod."
+  [config]
+  (when (vector? config)
+    (next config)))
+
 
 (defn ^:no-doc escape-bytes
   "Escape the given byte sequence, replacing any 0x00 bytes with 0x0101 and any
@@ -273,6 +297,17 @@
   (string-lexicoder* StandardCharsets/UTF_8))
 
 
+(defmethod lexicoder :string
+  [config]
+  (when (< 1 (count (config-params config)))
+    (throw (ex-info
+             (str "String lexicoder config takes at most one parameter: " (pr-str config))
+             {:config config})))
+  (if-let [[charset] (config-params config)]
+    (string-lexicoder* (Charset/forName charset))
+    string-lexicoder))
+
+
 
 ;; ## Long Lexicoder
 
@@ -333,6 +368,15 @@
   (->LongLexicoder))
 
 
+(defmethod lexicoder :long
+  [config]
+  (when (config-params config)
+    (throw (ex-info
+             (str "Long lexicoder config takes no parameters: " (pr-str config))
+             {:config config})))
+  long-lexicoder)
+
+
 
 ;; ## Double Lexicoder
 
@@ -369,6 +413,15 @@
   (->DoubleLexicoder))
 
 
+(defmethod lexicoder :double
+  [config]
+  (when (config-params config)
+    (throw (ex-info
+             (str "Double lexicoder config takes no parameters: " (pr-str config))
+             {:config config})))
+  double-lexicoder)
+
+
 
 ;; ## Instant Lexicoder
 
@@ -397,6 +450,15 @@
 (def instant-lexicoder
   "Lexicoder for instants in time."
   (->InstantLexicoder))
+
+
+(defmethod lexicoder :instant
+  [config]
+  (when (config-params config)
+    (throw (ex-info
+             (str "Instant lexicoder config takes no parameters: " (pr-str config))
+             {:config config})))
+  instant-lexicoder)
 
 
 
@@ -429,6 +491,15 @@
   coded with the given lexicoder."
   [element-coder]
   (->SequenceLexicoder element-coder))
+
+
+(defmethod lexicoder :seq
+  [config]
+  (when (not= 1 (count (config-params config)))
+    (throw (ex-info
+             (str "Sequence lexicoder config takes exactly one parameter: " (pr-str config))
+             {:config config})))
+  (sequence-lexicoder (lexicoder (second config))))
 
 
 
@@ -468,6 +539,15 @@
   with the given lexicoders, in order."
   [& coders]
   (->TupleLexicoder (vec coders)))
+
+
+(defmethod lexicoder :tuple
+  [config]
+  (when-not (config-params config)
+    (throw (ex-info
+             (str "Tuple lexicoder config takes one or more parameters: " (pr-str config))
+             {:config config})))
+  (apply tuple-lexicoder (map lexicoder (rest config))))
 
 
 
@@ -511,3 +591,12 @@
   "Wraps the given lexicoder to reverse the ordering of keys encoded with it."
   [coder]
   (->ReverseLexicoder coder))
+
+
+(defmethod lexicoder :reverse
+  [config]
+  (when (not= 1 (count (config-params config)))
+    (throw (ex-info
+             (str "Reverse lexicoder config takes exactly one parameter: " (pr-str config))
+             {:config config})))
+  (reverse-lexicoder (lexicoder (second config))))

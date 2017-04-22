@@ -95,7 +95,7 @@
   (print-method
     (tagged-literal
       'merkle-db.bloom.BloomFilter
-      (select-keys x [:bits :k]))
+      [(:bits x) (:k x)])
     w))
 
 

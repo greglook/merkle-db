@@ -133,8 +133,6 @@ well.
   link-26]}    ; link to subtree containing Z <= pk
 ```
 
-**TODO:** Define the exact algorithm for ordering keys.
-
 ### Partitions
 
 Partitions represent contiguous ranges of records, sorted by primary key. The

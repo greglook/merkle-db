@@ -4,8 +4,11 @@
     [blocks.core :as block]
     [clojure.java.io :as io]
     [clojure.repl :refer :all]
+    [clojure.stacktrace :refer [print-cause-trace]]
     [clojure.string :as str]
     [clojure.test.check.generators :as gen]
+    [clojure.tools.namespace.repl :refer [refresh]]
+    [merkle-db.bloom :as bloom]
     [merkle-db.generators :as mdgen]
     [merkle-db.key :as key]
     [merkle-db.node :as node]
@@ -16,8 +19,3 @@
   (:import
     blocks.data.Block
     multihash.core.Multihash))
-
-
-; Conditional imports from clj-stacktrace and clojure.tools.namespace:
-(try (require '[clojure.stacktrace :refer [print-cause-trace]]) (catch Exception e nil))
-(try (require '[clojure.tools.namespace.repl :refer [refresh]]) (catch Exception e nil))

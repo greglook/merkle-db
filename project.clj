@@ -33,4 +33,12 @@
      [com.gfredericks/test.chuck "0.2.7"]]}
 
    :repl
-   {:source-paths ["dev"]}})
+   {:source-paths ["dev"]
+    :dependencies
+    [[clj-stacktrace "0.2.8"]
+     [org.clojure/tools.namespace "0.2.11"]]
+
+    :injections
+    [(let [pct-var (ns-resolve (doto 'clojure.stacktrace require) 'print-cause-trace)
+           pst-var (ns-resolve (doto 'clj-stacktrace.repl require) 'pst+)]
+       (alter-var-root pct-var (constantly (deref pst-var))))]}})

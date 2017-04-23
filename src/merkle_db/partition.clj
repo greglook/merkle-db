@@ -34,18 +34,21 @@
 ;; ## Utilities
 
 (defn- partition-approx
-  "Returns a lazy sequence of lists containing the elements of `coll` in order,
-  where the average of the list sizes is approximately `target`."
-  [target coll]
-  ; FIXME: still not as balanced as it could be
+  "Returns a lazy sequence of `n` lists containing the elements of `coll` in
+  order, where each list is approximately the same size."
+  [n coll]
   (->>
-    [nil 0.0 coll]
+    [nil
+     (->> (range (inc n))
+          (map #(int (* (/ % n) (count coll))))
+          (partition 2 1))
+     coll]
     (iterate
-      (fn [[_ frac more]]
-        (let [length (cond-> (int target) (<= 1.0 frac) inc)]
-          [(seq (take length more))
-           (- (+ frac target) length)
-           (drop length more)])))
+      (fn [[_ [[start end :as split] & splits] xs]]
+        (when-let [length (and split (- end start))]
+          [(seq (take length xs))
+           splits
+           (drop length xs)])))
     (drop 1)
     (take-while first)
     (map first)))
@@ -305,9 +308,7 @@
   (let [records (sort-by first key/compare records)
         limit (or (::limit parameters) 100000)
         families (or (::data/families parameters) {})
-        target-count (/ (count records)
-                        (inc (int (/ (count records)
-                                     limit))))]
+        part-count (inc (int (/ (count records) limit)))]
     (map
       (fn make-partition
         [partition-records]
@@ -324,7 +325,7 @@
                      (map (juxt key #(tablet/from-records f (val %))))
                      (map (partial apply store-tablet! store))
                      (into {}))})
-      (partition-approx target-count records))))
+      (partition-approx part-count records))))
 
 
 

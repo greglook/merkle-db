@@ -15,7 +15,7 @@
 
   (toString
     [this]
-    (format "BloomFilter[%d:%d]" bits k))
+    (format "#merkle-db/bloom-filter [%d %d]" bits k))
 
   (equals
     [this that]
@@ -93,9 +93,7 @@
 (defmethod print-method BloomFilter
   [x w]
   (print-method
-    (tagged-literal
-      'merkle-db.bloom.BloomFilter
-      [(:bits x) (:k x)])
+    (tagged-literal 'merkle-db/bloom-filter [(:bits x) (:k x)])
     w))
 
 

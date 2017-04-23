@@ -7,12 +7,21 @@
   with the lower byte value ranking first. If the prefix of the longer key
   matches all the bytes in the shorter key, the shorter key ranks first."
   (:refer-clojure :exclude [bytes? compare min max])
+  (:require
+    [clojure.spec :as s])
   (:import
     blocks.data.PersistentBytes
     (java.nio.charset
       Charset
       StandardCharsets)
     java.time.Instant))
+
+
+(s/def ::lexicoder
+  (s/or :simple keyword?
+        :params (s/and vector? (s/cat :type keyword?
+                                      :args (s/* ::lexicoder)))))
+
 
 
 ;; ## Key Construction

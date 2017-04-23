@@ -33,6 +33,24 @@
 
 ;; ## Utilities
 
+(defn- partition-approx
+  "Returns a lazy sequence of lists containing the elements of `coll` in order,
+  where the average of the list sizes is approximately `target`."
+  [target coll]
+  ; FIXME: still not as balanced as it could be
+  (->>
+    [nil 0.0 coll]
+    (iterate
+      (fn [[_ frac more]]
+        (let [length (cond-> (int target) (<= 1.0 frac) inc)]
+          [(seq (take length more))
+           (- (+ frac target) length)
+           (drop length more)])))
+    (drop 1)
+    (take-while first)
+    (map first)))
+
+
 (defn- store-tablet!
   "Store the given tablet data and return the family key and updated id."
   [store family-key tablet]
@@ -271,6 +289,7 @@
                      (reduce (partial update-tablet! store f) (::tablets part)))
         record-keys (map first records)
         record-count (count (tablet/read-all (node/get-data store (:base tablets))))]
+    ; FIXME: this may result in a partition larger than the limit in size
     (assoc part
            ::data/count record-count
            ::tablets tablets
@@ -280,26 +299,32 @@
 
 
 (defn from-records
-  "Constructs a new partition from the given map of record data. The records
+  "Constructs new partitions from the given map of record data. The records
   will be split into tablets matching the given families, if provided."
   [store parameters f records]
   (let [records (sort-by first key/compare records)
         limit (or (::limit parameters) 100000)
         families (or (::data/families parameters) {})
-        tablets (->> records
+        target-count (/ (count records)
+                        (inc (int (/ (count records)
+                                     limit))))]
+    (map
+      (fn make-partition
+        [partition-records]
+        {:data/type :merkle-db/partition
+         ::data/families families
+         ::data/count (count partition-records)
+         ::limit limit
+         ::membership (into (bloom/create limit) (map first partition-records))
+         ::first-key (first (first partition-records))
+         ::last-key (first (last partition-records))
+         ::tablets (->>
+                     partition-records
                      (reduce (partial append-record-updates families) {})
                      (map (juxt key #(tablet/from-records f (val %))))
                      (map (partial apply store-tablet! store))
-                     (into {}))]
-    ; FIXME: this may result in a partition larger than the limit in size
-    {:data/type :merkle-db/partition
-     ::data/families families
-     ::data/count (count records)
-     ::limit limit
-     ::membership (into (bloom/create limit) (map first records))
-     ::first-key (first (first records))
-     ::last-key (first (last records))
-     ::tablets tablets}))
+                     (into {}))})
+      (partition-approx target-count records))))
 
 
 

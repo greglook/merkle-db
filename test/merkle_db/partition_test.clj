@@ -62,15 +62,15 @@
         k2 (key/create [2 3 4])
         k3 (key/create [3 4 5])
         k4 (key/create [4 5 6])
-        part (part/from-records
-               store
-               {::data/families {:ab #{:a :b}, :cd #{:c :d}}}
-               tablet/merge-fields
-               {k0 {:x 0, :y 0, :a 0, :c 0}
-                k1 {:x 1, :c 1, :d 1, }
-                k2 {:b 2, :c 2}
-                k3 {:x 3, :y 3, :a 3, :b 3}
-                k4 {:z 4, :d 4}})]
+        [part] (part/from-records
+                 store
+                 {::data/families {:ab #{:a :b}, :cd #{:c :d}}}
+                 tablet/merge-fields
+                 {k0 {:x 0, :y 0, :a 0, :c 0}
+                  k1 {:x 1, :c 1, :d 1, }
+                  k2 {:b 2, :c 2}
+                  k3 {:x 3, :y 3, :a 3, :b 3}
+                  k4 {:z 4, :d 4}})]
     (testing "partition construction"
       (is (= 5 (::data/count part)))
       (is (= k0 (::part/first-key part)))
@@ -95,7 +95,7 @@
     [[field-keys families records] mdgen/data-context]
     (is (valid? ::data/families families))
     (let [store (node/memory-node-store)
-          part (part/from-records store {::data/families families} tablet/merge-fields records)
+          [part] (part/from-records store {::data/families families} tablet/merge-fields records)
           tablets (into {}
                         (map (juxt key #(node/get-data store (val %))))
                         (::part/tablets part))]

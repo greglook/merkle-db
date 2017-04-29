@@ -1,29 +1,63 @@
 (ns merkle-db.core)
 
 
+; TODO: api ns for protocols?
+
+
 (defprotocol IConnection
   "Protocol for interacting with backing connection resources to work with one
   or more databases."
 
   (list-dbs
-    [conn]
+    [conn opts]
     "List information about the available databases.")
 
-  (create-db!
+  (create!
     [conn db-name root-id]
     "Initialize a new database. An initial `:root-id` may be provided, which
     will 'clone' the database at that state.")
 
-  (open-db
+  (drop!
+    [conn db-name]
+    "Drop a database reference. Note that this will not remove block data, as
+    it may be shared.")
+
+  (open
     [conn db-name at-inst]
     "Open a database for use. An optional instant argument may be provided,
     which will return the last committed database version occurring before that
-    time.")
+    time."))
 
-  (drop-db!
+
+; TODO: should these methods be on the connection or on the database?
+(defprotocol ILockManager
+  "A lock manager handles aquiring, refreshing, and releasing a lock on
+  databases for updating."
+
+  (lock-info
     [conn db-name]
-    "Drop a database reference. Note that this will not remove block data, as
-    it may be shared."))
+    "Returns information about the currently-held lock on the database. Returns
+    nil if the database is not currently locked.")
+
+  (lock!
+    [conn db-name client-id duration]
+    "Attempt to acquire a lock to update the database. The provided client-id
+    is treated opaquely but should be a useful identifier. The duration is a
+    requested period in seconds which the lock will expire after.
+
+    Returns a lock info map on success, or throws an exception on failure with
+    details about the current lock holder.")
+
+  (renew-lock!
+    [conn db-name lock-key duration]
+    "Renew a currently-held lock on the database by providing the key and a new
+    requested duration. Returns a lock info map on success. Throws an exception
+    if the lock is not held by this process.")
+
+  (unlock!
+    [conn db-name lock-id]
+    "Release the lock held on the named database. Throws an exception if the
+    lock is not held by this process."))
 
 
 (defprotocol IDatabase
@@ -43,19 +77,7 @@
   (commit!
     [db]
     "Ensure all data has been written to the backing block store and update the
-    database's root value in the ref manager.")
-
-  ; TODO: lock/unlock?
-  #_
-  (lock!
-    [db client-id]
-    [db client-id lock-key]
-    "...")
-
-  #_
-  (unlock!
-    [db client-id lock-key]
-    "..."))
+    database's root value in the ref manager."))
 
 
 (defprotocol ITables
@@ -116,79 +138,3 @@
   (build-table
     [db table-name partition-ids]
     "..."))
-
-
-
-;; ## Connections
-
-; TODO: should probably use deftypes here
-(defrecord Connection
-  [block-store
-   ref-tracker
-   key-codec
-   data-codec]
-
-  IConnection
-
-  (list-dbs
-    [this]
-    ,,,)
-
-
-  (create-db!
-    [this db-name root-id]
-    ,,,)
-
-
-  (open-db
-    [this db-name at-inst]
-    ,,,)
-
-
-  (drop-db!
-    [this db-name]
-    ,,,))
-
-
-(alter-meta! #'->Connection assoc :private true)
-(alter-meta! #'map->Connection assoc :private true)
-
-
-(defn connect
-  [& {:as opts}]
-  (map->Connection opts))
-
-
-#_
-(defn create-db!
-  "Initialize a new database. An initial `:root` value may be provided,
-  allowing for cheap database copy-on-write cloning."
-  [conn db-name & {:keys [root metadata]}]
-  (throw (UnsupportedOperationException. "NYI")))
-
-
-#_
-(defn open-db
-  "Open a database for use."
-  [conn db-name]
-  (throw (UnsupportedOperationException. "NYI")))
-
-
-#_
-(defn drop-db!
-  "Drop a database from the backing tracker. Note that this will not remove the
-  block data, as it may be shared."
-  [conn db-name]
-  (throw (UnsupportedOperationException. "NYI")))
-
-
-
-;; ## Databases
-
-(defrecord Database
-  [connection
-   ,,,])
-
-
-(alter-meta! #'->Database assoc :private true)
-(alter-meta! #'map->Database assoc :private true)

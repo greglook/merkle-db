@@ -203,7 +203,7 @@ manager. It can be used to open databases for reading and writing.
 ```clojure
 ; Create a new connection to a backing block store and reference manager.
 ; Options may include serialization, caching, and other configuration.
-(connect block-store ref-manager & opts) => conn
+(connect node-store ref-manager & opts) => conn
 
 ; List the names of the databases present.
 (list-dbs conn) => #{db-name ...}

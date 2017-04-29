@@ -30,6 +30,11 @@
                 ::tablets]))
 
 
+(def default-limit
+  "The default number of records to build partitions up to."
+  100000)
+
+
 
 ;; ## Utilities
 
@@ -109,23 +114,19 @@
                     {:split-key split-key
                      :first-key (::first-key part)
                      :last-key (::last-key part)})))
-  (let [defaults (select-keys part [:data/type ::data/families ::limit])
-        [left right] (divide-tablets store (::tablets part) split-key)]
+  (let [defaults (select-keys part [:data/type ::data/families ::limit])]
     ; Construct new partitions from left and right tablet maps.
-    [(let [base-keys (tablet/keys (node/get-data store (:base left)))]
-       (assoc defaults
-              ::data/count (count base-keys)
-              ::membership (into (bloom/create (::limit part)) base-keys)
-              ::first-key (first base-keys)
-              ::last-key (last base-keys)
-              ::tablets left))
-     (let [base-keys (tablet/keys (node/get-data store (:base right)))]
-       (assoc defaults
-              ::data/count (count base-keys)
-              ::membership (into (bloom/create (::limit part)) base-keys)
-              ::first-key (first base-keys)
-              ::last-key (last base-keys)
-              ::tablets right))]))
+    (map
+      (fn make-part
+        [tablets]
+        (let [base-keys (tablet/keys (node/get-data store (:base tablets)))]
+          (assoc defaults
+                 ::data/count (count base-keys)
+                 ::membership (into (bloom/create (::limit part)) base-keys)
+                 ::first-key (first base-keys)
+                 ::last-key (last base-keys)
+                 ::tablets tablets)))
+      (divide-tablets store (::tablets part) split-key))))
 
 
 (defn join
@@ -283,24 +284,6 @@
     (conj tablets)))
 
 
-(defn add-records!
-  "Performs an update across the tablets in the partition to merge in the given
-  record data."
-  [store part f records]
-  (let [tablets (->> records
-                     (reduce (partial append-record-updates (::data/families part)) {})
-                     (reduce (partial update-tablet! store f) (::tablets part)))
-        record-keys (map first records)
-        record-count (count (tablet/read-all (node/get-data store (:base tablets))))]
-    ; FIXME: this may result in a partition larger than the limit in size
-    (assoc part
-           ::data/count record-count
-           ::tablets tablets
-           ::membership (into (::membership part) record-keys)
-           ::first-key (apply key/min (::first-key part) record-keys)
-           ::last-key (apply key/max (::last-key part) record-keys))))
-
-
 (defn from-records
   "Constructs new partitions from the given map of record data. The records
   will be split into tablets matching the given families, if provided."
@@ -326,6 +309,36 @@
                      (map (partial apply store-tablet! store))
                      (into {}))})
       (partition-approx part-count records))))
+
+
+(defn add-records!
+  "Performs an update across the tablets in the partition to merge in the given
+  record data. Returns a sequence of one or more partitions."
+  [store part f records]
+  (let [limit (or (::limit part) default-limit)
+        tablets (->> records
+                     (reduce (partial append-record-updates (::data/families part)) {})
+                     (reduce (partial update-tablet! store f) (::tablets part)))
+        record-keys (map first records)
+        record-count (count (tablet/read-all (node/get-data store (:base tablets))))
+        part-count (inc (int (/ record-count limit)))]
+    (if (< 1 part-count)
+      ; Records still fit into one partition
+      [(assoc part
+              ::data/count record-count
+              ::tablets tablets
+              ::membership (into (::membership part) record-keys)
+              ::first-key (apply key/min (::first-key part) record-keys)
+              ::last-key (apply key/max (::last-key part) record-keys))]
+      ; Partition must be split into multiple.
+      (->>
+        (read-all store part nil)
+        (partition-approx part-count)
+        (map
+          (fn make-partition
+            [partition-records]
+            ; TODO: build partitions from records
+            ))))))
 
 
 

@@ -100,8 +100,9 @@
   (-store-node!
     [this links data]
     (let [links (link/collect-table links data)
-          id (digest/sha2-256 (pr-str [links data]))
-          node {:id id, :links links, :data data}]
+          content (pr-str [links data])
+          id (digest/sha2-256 content)
+          node {:id id, :size (count content), :links links, :data data}]
       (swap! memory assoc id node)
       node))
 

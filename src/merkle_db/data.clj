@@ -1,7 +1,8 @@
 (ns merkle-db.data
   (:require
     [clojure.future :refer [any? nat-int?]]
-    [clojure.spec :as s]))
+    [clojure.spec :as s]
+    [merkledag.link :as link]))
 
 
 ;; Count of the records contained under a node.
@@ -22,3 +23,7 @@
       (s/coll-of ::field-key :kind set?))
     #(= (reduce + (map count (vals %)))
         (count (distinct (apply concat (vals %)))))))
+
+
+;; Link to user-supplied metadata.
+(s/def ::metadata link/merkle-link?)

@@ -8,6 +8,7 @@
   matches all the bytes in the shorter key, the shorter key ranks first."
   (:refer-clojure :exclude [bytes? compare min max])
   (:require
+    [clojure.future :refer [any?]]
     [clojure.spec :as s])
   (:import
     blocks.data.PersistentBytes
@@ -20,7 +21,7 @@
 (s/def ::lexicoder
   (s/or :simple keyword?
         :params (s/and vector? (s/cat :type keyword?
-                                      :args (s/* ::lexicoder)))))
+                                      :args (s/* any?)))))
 
 
 

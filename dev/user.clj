@@ -9,6 +9,7 @@
     [clojure.test.check.generators :as gen]
     [clojure.tools.namespace.repl :refer [refresh]]
     [merkle-db.bloom :as bloom]
+    [merkle-db.core :as mdb]
     [merkle-db.generators :as mdgen]
     [merkle-db.key :as key]
     [merkle-db.node :as node]

@@ -1,4 +1,11 @@
-(ns merkle-db.core)
+(ns merkle-db.core
+  (:require
+    [merkledag.link :as link]
+    [merkledag.refs :as refs]
+    [merkledag.refs.memory :refer [memory-ref-tracker]]
+    [merkle-db.data :as data]
+    [merkle-db.db :as db]
+    [merkle-db.node :as node]))
 
 
 ; TODO: api ns for protocols?
@@ -11,6 +18,8 @@
   (list-dbs
     [conn opts]
     "List information about the available databases.")
+
+  ; TODO: inspect database version / history
 
   (create!
     [conn db-name root-id]
@@ -138,3 +147,102 @@
   (build-table
     [db table-name partition-ids]
     "..."))
+
+
+
+;; Test Implementation
+
+(defrecord Database
+  [store tracker db-name root-id]
+
+  IDatabase
+
+  (describe
+    [this]
+    (when-let [db-root (node/get-data store root-id)]
+      (->
+        (assoc db-root
+               :merkledag.node/id root-id
+               ::db/name db-name)
+        (cond->
+          (::data/metadata db-root)
+            (assoc ::data/metadata (node/get-data store (::data/metadata db-root)))))))
+
+
+  (alter-db-meta
+    [this f]
+    (let [db-root (node/get-data store root-id)
+          db-meta (some->> (::data/metadata db-root) (node/get-data store))
+          db-meta' (f db-meta)]
+      (if (= db-meta db-meta')
+        ; Nothing to change.
+        this
+        ; Store updated metadata node.
+        (let [meta-node (node/store-node! store db-meta')
+              meta-link (link/create "meta" (:id meta-node) (:size meta-node))
+              db-node (node/store-node! store (assoc db-root ::data/metadata meta-link))]
+          (assoc this :root-id (:id db-node))))))
+
+
+  (commit!
+    [this]
+    ; TODO: lock db
+    ; TODO: check if current version is the same as the version opened at?
+    (refs/set-ref! tracker db-name root-id)
+    this))
+
+
+(defrecord Connection
+  [store tracker]
+
+  IConnection
+
+  (list-dbs
+    [conn opts]
+    (refs/list-refs tracker {}))
+
+
+  (create!
+    [conn db-name params]
+    ; TODO: lock db
+    (refs/set-ref!
+      tracker
+      db-name
+      (or (:root-id params)
+          (-> params
+              (select-keys [:data/title :data/description ::data/metadata])
+              (assoc :data/type :merkle-db/db-root
+                     ::db/tables {})
+              (->> (node/store-node! store))
+              (:id)))))
+
+
+  (drop!
+    [conn db-name]
+    ; TODO: lock db
+    (refs/set-ref! tracker db-name nil))
+
+
+  (open
+    [conn db-name at-inst]
+    (let [version (if at-inst
+                    (first (drop-while #(.isBefore ^java.time.Instant at-inst (:time %))
+                                       (refs/get-history tracker db-name)))
+                    (refs/get-ref tracker db-name))]
+      (if (:value version)
+        ; Build database.
+        (map->Database
+          {:store store
+           :tracker tracker
+           :db-name db-name
+           :root-id (:value version)})
+        ; No version found.
+        (throw (RuntimeException.
+                 (str "No version found for database " db-name " at instant " at-inst)))))))
+
+
+(defn mem-connection
+  []
+  (map->Connection
+    {:store (node/memory-node-store)
+     :tracker (memory-ref-tracker)}))

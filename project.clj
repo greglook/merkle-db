@@ -23,7 +23,9 @@
   :whidbey
   {:tag-types {'blocks.data.Block {'blocks.data.Block (partial into {})}
                'blocks.data.PersistentBytes {'data/bytes #(apply str (map (partial format "%02x") (seq %)))}
-               'merkle-db.bloom.BloomFilter {'merkle-db.bloom.BloomFilter #(select-keys % [:bits :k])}
+               'merkledag.link.MerkleLink {'data/link (juxt :name :target :tsize)}
+               'merkle_db.bloom.BloomFilter {'merkle-db.bloom.BloomFilter #(select-keys % [:bits :k])}
+               'merkle_db.core.Database {'merkle-db.core.Database (juxt :db-name :root-id)}
                'multihash.core.Multihash {'data/hash 'multihash.core/base58}}}
 
   :profiles

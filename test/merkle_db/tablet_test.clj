@@ -7,9 +7,8 @@
     [merkle-db.tablet :as tablet]))
 
 
-(deftest constants
-  (is (s/valid? :merkle-db/tablet tablet/empty-tablet))
-  (is (empty? (tablet/read-all tablet/empty-tablet))))
+(def empty-tablet
+  (tablet/from-records []))
 
 
 (deftest key-reads
@@ -36,7 +35,7 @@
         k2 (key/create [4 5 6])
         r2 {:foo 456}
         tablet (tablet/from-records tablet/merge-fields {k1 r1, k2 r2})]
-    (is (empty? (tablet/read-batch tablet/empty-tablet nil)))
+    (is (empty? (tablet/read-batch empty-tablet nil)))
     (is (= [[k1 r1]]
            (tablet/read-batch tablet #{k1})))
     (is (= [[k1 r1] [k2 r2]]
@@ -49,7 +48,7 @@
         k2 (key/create [4 5 6])
         r2 {:foo 456}
         tablet (tablet/from-records {k1 r1, k2 r2})]
-    (is (empty? (tablet/read-range tablet/empty-tablet nil nil)))
+    (is (empty? (tablet/read-range empty-tablet nil nil)))
     (is (= [[k1 r1] [k2 r2]]
            (tablet/read-range tablet nil nil)))
     (is (= [[k1 r1]]
@@ -108,7 +107,7 @@
                (tablet/prune-records
                  (tablet/from-records {k1 r1, k2 {}}))))))
     (testing "by batch"
-      (is (nil? (tablet/remove-batch tablet/empty-tablet #{})))
+      (is (nil? (tablet/remove-batch empty-tablet #{})))
       (is (= [[k1 r1] [k2 r2] [k3 r3]]
              (tablet/read-all
                (tablet/remove-batch tablet nil))))

@@ -19,12 +19,6 @@
   (s/keys :req [::records]))
 
 
-(def empty-tablet
-  "An empty tablet data value."
-  {:data/type :merkle-db/tablet
-   ::records []})
-
-
 
 ;; ## Key Functions
 
@@ -55,6 +49,13 @@
 
 ;; ## Utilities
 
+(defn from-records*
+  "Constructs a new bare-bones tablet node."
+  [records]
+  {:data/type :merkle-db/tablet
+   ::records (vec records)})
+
+
 (defn fields-present
   "Scans the records in a tablet to determine the full set of fields present."
   [tablet]
@@ -78,13 +79,11 @@
     [(->>
        (::records tablet)
        (take-while before-split?)
-       (vec)
-       (assoc empty-tablet ::records))
+       (from-records*))
      (->>
        (::records tablet)
        (drop-while before-split?)
-       (vec)
-       (assoc empty-tablet ::records))]))
+       (from-records*))]))
 
 
 (defn join
@@ -155,8 +154,7 @@
      records
      (map (fn apply-f [[k v]] [k (or (f k nil v) {})]))
      (sort-by first key/compare)
-     (vec)
-     (assoc empty-tablet ::records))))
+     (from-records*))))
 
 
 (defn update-records

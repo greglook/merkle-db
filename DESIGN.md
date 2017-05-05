@@ -28,7 +28,7 @@ Secondary goals include:
 - Efficient storage utilization via deduplication and structural sharing.
 - Light-weight versioning and copy-on-write to support "time travel".
 
-Non goals:
+Non-goals:
 
 - High-frequency, highly concurrent writes. Initial versions will have simple
   database-wide locking for updates.
@@ -63,9 +63,10 @@ maps table names to _table root nodes_.
 
 ```clojure
 {:data/type :merkle-db/db-root
- :merkle-db/metadata MerkleLink
- :merkle-db.db/name String
- :merkle-db.db/tables {table-name MerkleLink}
+ :data/title String
+ :data/description String
+ :merkle-db.data/metadata MerkleLink
+ :merkle-db.db/tables {String MerkleLink}
  :time/updated-at Instant}
 ```
 
@@ -92,9 +93,9 @@ return to the client.
 
 ```clojure
 {:data/type :merkle-db/table-root
- :merkle-db/metadata MerkleLink
  :merkle-db.data/count Long
- :merkle-db.data/families {Keyword #{field-name}}
+ :merkle-db.data/families {Keyword #{field-key}}
+ :merkle-db.data/metadata MerkleLink
  :merkle-db.key/lexicoder Keyword
  :merkle-db.table/data MerkleLink
  :merkle-db.table/patch MerkleLink
@@ -156,7 +157,7 @@ sure that the full sequence of keys can be enumerated with only the base.
 ```clojure
 {:data/type :merkle-db/partition
  :merkle-db.data/count Long
- :merkle-db.data/families {Keyword #{field-name}}
+ :merkle-db.data/families {Keyword #{field-key}}
  :merkle-db.partition/limit Long
  :merkle-db.partition/membership BloomFilter
  :merkle-db.partition/start-key key-bytes

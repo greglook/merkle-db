@@ -15,11 +15,17 @@
     [merkle-db.partition :as part]))
 
 
+;; Height of the node in the tree. Partitions are the leaves and have an
+;; implicit height of zero, so the first index node has a height of one.
 (s/def ::height pos-int?)
+
+;; Sorted vector of index keys.
 (s/def ::keys (s/coll-of key/bytes? :kind vector?))
+
+;; Sorted vector of child links.
 (s/def ::children (s/coll-of link/merkle-link? :kind vector?))
 
-
+;; Data tree index node.
 (s/def :merkle-db/index-node
   (s/and
     (s/keys :req [::data/count

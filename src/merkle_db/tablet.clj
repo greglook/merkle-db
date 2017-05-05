@@ -6,12 +6,15 @@
     [merkle-db.key :as key]))
 
 
+;; Records are stored as a key/data pair.
 (s/def ::record-entry
   (s/tuple key/bytes? map?))
 
+;; Sorted vector of record entries.
 (s/def ::records
   (s/coll-of ::record-entry :kind vector?))
 
+;; Tablet node.
 (s/def :merkle-db/tablet
   (s/keys :req [::records]))
 

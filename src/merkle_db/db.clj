@@ -5,8 +5,10 @@
     [merkle-db.data :as data]))
 
 
+;; Map of table names to node links.
 (s/def ::tables (s/map-of string? link/merkle-link?))
 
+;; Database root node.
 (s/def :merkle-db/db-root
   (s/keys :req [::tables]
           :opt [:data/title

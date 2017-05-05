@@ -13,16 +13,26 @@
     [merkle-db.tablet :as tablet]))
 
 
+;; Maximum number of records to allow in each partition.
 (s/def ::limit pos-int?)
+
+;; Bloom filter providing probable membership testing for record keys contained
+;; in the partition.
 (s/def ::membership bloom/filter?)
+
+;; First key present in the partition.
 (s/def ::first-key key/bytes?)
+
+;; Last key present in the partition.
 (s/def ::last-key key/bytes?)
+
+;; Map of family keys (and `:base`) to links to the corresponding tablets.
 (s/def ::tablets (s/map-of keyword? link/merkle-link?))
 
-
+;; Partition node.
 (s/def :merkle-db/partition
-  (s/keys :req [::data/families
-                ::data/count
+  (s/keys :req [::data/count
+                ::data/families
                 ::limit
                 ::membership
                 ::first-key

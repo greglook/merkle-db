@@ -163,8 +163,9 @@
 ;; ## Lexicoder Utilities
 
 (defn ^:no-doc config-params
-  "Counts the number of parameters given to an argument to the `lexicoder`
-  multimethod."
+  "Returns the parameters given to a lexicoder spec. For simple keyword, this
+  function returns nil; for the vector form, it returns a sequence of the
+  values following the lexicoder type key."
   [config]
   (when (vector? config)
     (next config)))
@@ -270,6 +271,51 @@
         (let [element (byte-array (- i idx))]
           (System/arraycopy data idx element 0 (alength element))
           (conj byte-arrays element))))))
+
+
+
+;; ## Bytes Lexicoder
+
+(defrecord BytesLexicoder
+  []
+
+  Lexicoder
+
+  (encode*
+    [_ value]
+    (when (empty? value)
+      (throw (IllegalArgumentException.
+               "Cannot encode empty byte arrays")))
+    value)
+
+  (decode*
+    [_ data offset len]
+    (when (or (empty? data) (zero? len))
+      (throw (IllegalArgumentException.
+               "Cannot decode empty byte arrays")))
+    (if (and (zero? offset) (= len (count data)))
+      data
+      (let [data' (byte-array len)]
+        (System/arraycopy data offset data' 0 len)
+        data'))))
+
+
+(alter-meta! #'->BytesLexicoder assoc :private true)
+(alter-meta! #'map->BytesLexicoder assoc :private true)
+
+
+(def bytes-lexicoder
+  "Lexicoder for passing through raw byte arrays."
+  (->BytesLexicoder))
+
+
+(defmethod lexicoder :bytes
+  [config]
+  (when (seq (config-params config))
+    (throw (ex-info
+             (str "Bytes lexicoder config takes no parameters: " (pr-str config))
+             {:config config})))
+  bytes-lexicoder)
 
 
 

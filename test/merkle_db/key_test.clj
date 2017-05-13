@@ -1,5 +1,6 @@
 (ns merkle-db.key-test
   (:require
+    [clojure.future :refer [bytes?]]
     [clojure.test :refer :all]
     [clojure.test.check.generators :as gen]
     [com.gfredericks.test.chuck.clojure-test :refer [checking]]
@@ -70,7 +71,10 @@
    (checking "reflexive coding" 50
      [[coder arg-gen] generator
       x arg-gen]
-     (is (= x (key/decode coder (key/encode coder x)))))
+     (let [decoded (key/decode coder (key/encode coder x))]
+       (if (bytes? x)
+         (is (zero? (key/compare x decoded)))
+         (is (= x decoded)))))
    (checking "sort order" 100
      [[coder arg-gen] generator
       a arg-gen
@@ -126,6 +130,24 @@
 (deftest lexicoder-configs
   (is (thrown? Exception (key/lexicoder "not a keyword or vector")))
   (is (thrown? Exception (key/lexicoder [123 "needs a keyword first"]))))
+
+
+(deftest bytes-lexicoder
+  (is (identical? key/bytes-lexicoder (key/lexicoder :bytes)))
+  (is (satisfies? key/Lexicoder key/bytes-lexicoder))
+  (is (thrown? Exception
+        (key/lexicoder [:bytes :foo]))
+      "should not accept any config parameters")
+  (is (thrown? IllegalArgumentException
+        (key/encode key/bytes-lexicoder (byte-array 0)))
+      "should not encode empty bytes")
+  (is (thrown? IllegalArgumentException
+        (key/decode key/bytes-lexicoder (byte-array 0)))
+      "should not decode empty bytes")
+  (check-lexicoder
+    (gen/return [key/bytes-lexicoder
+                 (gen/such-that not-empty gen/bytes)])
+    key/compare))
 
 
 (deftest string-lexicoder

@@ -99,10 +99,10 @@ return to the client.
  :merkle-db.data/families {Keyword #{field-key}}
  :merkle-db.data/metadata MerkleLink
  :merkle-db.key/lexicoder Keyword
+ :merkle-db.index/branching-factor Long  ; e.g. 256 children
+ :merkle-db.partition/limit Long         ; e.g. 100,000 records
  :merkle-db.table/data MerkleLink
  :merkle-db.table/patch MerkleLink
- :merkle-db.table/branching-factor Long  ; e.g. 256 children
- :merkle-db.partition/limit Long         ; e.g. 100,000 records
  :time/updated-at Instant}
 ```
 

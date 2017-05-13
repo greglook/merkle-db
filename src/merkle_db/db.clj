@@ -110,10 +110,7 @@
 ;; ## Database Type
 
 (deftype Database
-  [store tracker db-name root-id])
-
-
-(extend-type Database
+  [store tracker db-name root-id _meta]
 
   IDatabase
 

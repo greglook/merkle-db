@@ -29,7 +29,7 @@
     it may be shared.")
 
   (open-db
-    [conn db-name at-inst]
+    [conn db-name opts]
     "Open a database for use. An optional instant argument may be provided,
     which will return the last committed database version occurring before that
     time."))
@@ -69,10 +69,7 @@
 ;; ## Connection Type
 
 (deftype Connection
-  [store tracker])
-
-
-(extend-type Connection
+  [store tracker]
 
   IConnection
 
@@ -81,7 +78,7 @@
     (refs/list-refs tracker {}))
 
 
-  (create!
+  (create-db!
     [conn db-name params]
     ; TODO: lock db
     (refs/set-ref!
@@ -96,26 +93,26 @@
               (:id)))))
 
 
-  (drop!
+  (drop-db!
     [conn db-name]
     ; TODO: lock db
     (refs/set-ref! tracker db-name nil))
 
 
-  (open
-    [conn db-name at-inst]
-    (let [version (if at-inst
-                    (first (drop-while #(.isBefore ^java.time.Instant at-inst (:time %))
+  (open-db
+    [conn db-name opts]
+    (let [version (if-let [^java.time.Instant at-inst (:at-inst opts)]
+                    (first (drop-while #(.isBefore at-inst (:time %))
                                        (refs/get-history tracker db-name)))
                     (refs/get-ref tracker db-name))]
       (if (:value version)
         ; Build database.
-        (db/->Database store tracker db-name (:value version))
+        (merkle_db.db.Database. store tracker db-name (:value version) nil)
         ; No version found.
-        (throw (ex-info (str "No version found for database " db-name " at instant " at-inst)
+        (throw (ex-info (str "No version found for database " db-name " with " opts)
                         {:type ::no-database-version
                          :db-name db-name
-                         :at-inst at-inst}))))))
+                         :opts opts}))))))
 
 
 (alter-meta! #'->Connection assoc :private true)

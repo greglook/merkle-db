@@ -206,16 +206,23 @@ manager. It can be used to open databases for reading and writing.
 ; Options may include serialization, caching, and other configuration.
 (connect node-store ref-manager & opts) => conn
 
-; List the names of the databases present.
-(list-dbs conn) => #{db-name ...}
+; List information about the current version of each database present.
+(list-dbs conn) => (db-version ...)
+{:merkledag.node/id Multihash
+ :merkle-db.db/name String
+ :merkle-db.db/version Long
+ :time/updated-at Instant}
+
+; List information about the version history of a specific database.
+(list-db-history conn db-name) => (db-version ...)
 
 ; Initialize a new database. An initial `:root` value may be provided, allowing
 ; for cheap database copy-on-write cloning.
-(create-db! conn db-name & [root]) => db
+(create-db! conn db-name & opts) => db
 
 ; Open a database for use. An optional argument may be provided, which will
 ; return the last committed database version occurring before that time.
-(open-db conn db-name & [at-inst]) => db
+(open-db conn db-name & opts) => db
 
 ; Drop a database ref. Note that this will not remove the block data, as it
 ; may be shared.
@@ -232,11 +239,13 @@ backing storage until `commit!` is called.
 ```clojure
 ; Retrieve descriptive information about a database, including any user-set
 ; metadata.
-(describe db) =>
-{:id Multihash
- :tables {table-name {:count Long, :size Long}}
- :updated-at Instant
- :metadata *}
+(describe-db db) =>
+{:merkledag.node/id Multihash
+ :merkle-db.db/name String
+ :merkle-db.db/version Long
+ :merkle-db.db/table-names #{table-name}
+ :merkle-db.data/metadata *
+ :time/updated-at Instant}
 
 ; Update the user metadata attached to a database. The function `f` will be
 ; called with the current value of the metadata, followed by any provided
@@ -262,14 +271,18 @@ must be unique within the database.
 ; `:count` and `:size` metrics represent the number of records and data size in
 ; bytes, respectively.
 (describe-table db table-name) =>
-{:id Multihash
- :name String
- :partitions Long
- :count Long
- :size Long
- :patch {:count Long, :size Long}
- :families {Keyword #{field-names}}
- :metadata *}
+{:merkledag.node/id Multihash
+ :merkle-db.data/count Long
+ :merkle-db.data/size Long
+ :merkle-db.data/families {Keyword #{field-names}}
+ :merkle-db.data/metadata *
+ :merkle-db.index/branching-factor Long
+ :merkle-db.key/lexicoder Lexicoder
+ :merkle-db.partition/limit Long
+ :merkle-db.table/name String
+ :merkle-db.table/partition-count Long
+ :merkle-db.table/has-patch? Boolean
+ :time/updated-at Instant}
 
 ; Update the user metadata attached to a table. The function `f` will be
 ; called with the current value of the metadata, followed by any provided
@@ -302,7 +315,16 @@ will be returned.
 ; fields. If start and end keys or indices are given, only records within the
 ; bounds will be returned (inclusive). A nil start or end implies the beginning
 ; or end of the data, respectively.
-(scan db table-name & {:keys [fields from-pk to-pk from-index to-index offset limit]) => (record ...)
+;
+; - fields
+; - patch-merge
+; - from-key
+; - to-key
+; - from-index
+; - to-index
+; - offset
+; - limit
+(scan db table-name & opts) => (record ...)
 
 ; Read a set of records from the database, returning data for the given set of
 ; fields for each located record.

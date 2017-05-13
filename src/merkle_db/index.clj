@@ -46,6 +46,27 @@
 
 ;; ## Read Functions
 
+(defn- assign-keys
+  "Assigns record keys to the children of this node which they would belong
+  to. Returns a lazy sequence of vectors containing the child index and a
+  sequence of record keys."
+  [split-keys record-keys]
+  (->>
+    [nil 0 split-keys record-keys]
+    (iterate
+      (fn [[_ index splits rks]]
+        (when (seq rks)
+          (if (seq splits)
+            ; Take all records coming before the next split key.
+            (let [[in after] (split-with (partial key/before? (first splits)) rks)]
+              [[index in] (inc index) (next splits) after])
+            ; No more splits, emit one final group with any remaining keys.
+            [[(inc index) rks]]))))
+    (drop 1)
+    (take-while first)
+    (map first)))
+
+
 (defn read-all
   "Read a lazy sequence of key/map tuples which contain the requested field data
   for every record in the subtree. This function works on both index nodes and
@@ -70,27 +91,6 @@
     (throw (ex-info (str "Unsupported data-tree node type: "
                          (pr-str (:data/type node)))
                     {:data/type (:data/type node)}))))
-
-
-(defn- assign-keys
-  "Assigns record keys to the children of this node which they would belong
-  to. Returns a lazy sequence of vectors containing the child index and a
-  sequence of record keys."
-  [split-keys record-keys]
-  (->>
-    [nil 0 split-keys record-keys]
-    (iterate
-      (fn [[_ index splits rks]]
-        (when (seq rks)
-          (if (seq splits)
-            ; Take all records coming before the next split key.
-            (let [[in after] (split-with (partial key/before? (first splits)) rks)]
-              [[index in] (inc index) (next splits) after])
-            ; No more splits, emit one final group with any remaining keys.
-            [[(inc index) rks]]))))
-    (drop 1)
-    (take-while first)
-    (map first)))
 
 
 (defn read-batch
@@ -120,8 +120,36 @@
                     {:data/type (:data/type node)}))))
 
 
-; TODO: read-range
-; narrow children by which could contain the range, recurse in order
+(defn read-range
+  "Read a lazy sequence of key/map tuples which contain the field data for the
+  records whose keys lie in the given range, inclusive. A nil boundary includes
+  all records in that range direction."
+  [store node fields start-key end-key]
+  (case (:data/type node)
+    :merkle-db/index-node
+    (->
+      (concat (map vector (::children node) (::keys node))
+              [[(last (::children node))]])
+      (->>
+        (partition 2 1)
+        (map (fn [[[_ start-key] [link end-key]]]
+               [link [start-key end-key]]))
+        (cons [(first (::children node)) nil (first (::key node))]))
+      (cond->>
+        start-key
+          (drop-while #(key/before? (nth % 2) start-key))
+        end-key
+          (take-while #(key/after? end-key (nth % 1))))
+      ,,,
+      #_
+      (read-tablets store part fields tablet/read-range start-key end-key))
+
+    :merkle-db/partition
+    (part/read-range store node fields start-key end-key)
+
+    (throw (ex-info (str "Unsupported data-tree node type: "
+                         (pr-str (:data/type node)))
+                    {:data/type (:data/type node)}))))
 
 
 ; TODO: read-slice

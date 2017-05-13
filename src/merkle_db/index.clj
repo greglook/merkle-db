@@ -15,6 +15,9 @@
     [merkle-db.partition :as part]))
 
 
+;; Maximum number of children an index node in the data tree can have.
+(s/def ::branching-factor (s/and pos-int? #(< 2 %)))
+
 ;; Height of the node in the tree. Partitions are the leaves and have an
 ;; implicit height of zero, so the first index node has a height of one.
 (s/def ::height pos-int?)

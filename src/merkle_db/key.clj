@@ -117,6 +117,10 @@
   "Simple codec for transforming values into keys that have specific ordering
   semantics."
 
+  (lexicoder-config
+    [coder]
+    "Return a configuration value representing this lexicoder.")
+
   (encode*
     [coder value]
     "Return the encoded value as a byte array.")
@@ -281,6 +285,10 @@
 
   Lexicoder
 
+  (lexicoder-config
+    [_]
+    :bytes)
+
   (encode*
     [_ value]
     (when (empty? value)
@@ -321,10 +329,21 @@
 
 ;; ## String Lexicoder
 
+(def ^:private default-string-charset
+  "Default character set to lexicode strings with."
+  StandardCharsets/UTF_8)
+
+
 (defrecord StringLexicoder
   [^Charset charset]
 
   Lexicoder
+
+  (lexicoder-config
+    [_]
+    (if (= charset default-string-charset)
+      :string
+      [:string (str charset)]))
 
   (encode*
     [_ value]
@@ -353,7 +372,7 @@
 
 (def string-lexicoder
   "Lexicoder for UTF-8 character strings."
-  (string-lexicoder* StandardCharsets/UTF_8))
+  (string-lexicoder* default-string-charset))
 
 
 (defmethod lexicoder :string
@@ -387,6 +406,10 @@
   []
 
   Lexicoder
+
+  (lexicoder-config
+    [_]
+    :long)
 
   (encode*
     [_ value]
@@ -444,6 +467,10 @@
 
   Lexicoder
 
+  (lexicoder-config
+    [_]
+    :double)
+
   (encode*
     [_ value]
     (encode*
@@ -489,6 +516,10 @@
 
   Lexicoder
 
+  (lexicoder-config
+    [_]
+    :instant)
+
   (encode*
     [_ value]
     (when-not (instance? Instant value)
@@ -527,6 +558,10 @@
   [element-coder]
 
   Lexicoder
+
+  (lexicoder-config
+    [_]
+    [:seq (lexicoder-config element-coder)])
 
   (encode*
     [_ value]
@@ -568,6 +603,10 @@
   [coders]
 
   Lexicoder
+
+  (lexicoder-config
+    [_]
+    (vec (cons :tuple (map lexicoder-config coders))))
 
   (encode*
     [_ value]
@@ -625,6 +664,10 @@
   [coder]
 
   Lexicoder
+
+  (lexicoder-config
+    [_]
+    [:reverse (lexicoder-config coder)])
 
   (encode*
     [_ value]

@@ -135,6 +135,7 @@
 (deftest bytes-lexicoder
   (is (identical? key/bytes-lexicoder (key/lexicoder :bytes)))
   (is (satisfies? key/Lexicoder key/bytes-lexicoder))
+  (is (= :bytes (key/lexicoder-config key/bytes-lexicoder)))
   (is (thrown? Exception
         (key/lexicoder [:bytes :foo]))
       "should not accept any config parameters")
@@ -153,8 +154,11 @@
 (deftest string-lexicoder
   (is (identical? key/string-lexicoder (key/lexicoder :string)))
   (is (satisfies? key/Lexicoder (key/lexicoder [:string "UTF-8"])))
+  (is (= :string (key/lexicoder-config key/string-lexicoder)))
+  (is (= [:string "US-ASCII"] (key/lexicoder-config (key/string-lexicoder* "US-ASCII"))))
   (is (thrown? Exception
-        (key/lexicoder [:string "UTF-8" :bar])))
+        (key/lexicoder [:string "UTF-8" :bar]))
+      "should only accept one config parameter")
   (is (thrown? IllegalArgumentException
         (key/encode key/string-lexicoder ""))
       "should not encode empty strings")
@@ -166,8 +170,10 @@
 
 (deftest long-lexicoder
   (is (identical? key/long-lexicoder (key/lexicoder :long)))
+  (is (= :long (key/lexicoder-config key/long-lexicoder)))
   (is (thrown? Exception
-        (key/lexicoder [:long :bar])))
+        (key/lexicoder [:long :bar]))
+      "should not accept any config parameters")
   (is (thrown? IllegalArgumentException
         (key/decode key/long-lexicoder (byte-array 7)))
       "should require 8 bytes")
@@ -176,15 +182,19 @@
 
 (deftest double-lexicoder
   (is (identical? key/double-lexicoder (key/lexicoder :double)))
+  (is (= :double (key/lexicoder-config key/double-lexicoder)))
   (is (thrown? Exception
-        (key/lexicoder [:double :bar])))
+        (key/lexicoder [:double :bar]))
+      "should not accept any config parameters")
   (check-lexicoder (gen/return (:double lexicoder-generators))))
 
 
 (deftest instant-lexicoder
   (is (identical? key/instant-lexicoder (key/lexicoder :instant)))
+  (is (= :instant (key/lexicoder-config key/instant-lexicoder)))
   (is (thrown? Exception
-        (key/lexicoder [:instant :bar])))
+        (key/lexicoder [:instant :bar]))
+      "should not accept any config parameters")
   (is (thrown? IllegalArgumentException
         (key/encode key/instant-lexicoder ""))
       "should not encode non-instant value")
@@ -193,10 +203,13 @@
 
 (deftest sequence-lexicoder
   (is (satisfies? key/Lexicoder (key/lexicoder [:seq :long])))
+  (is (= [:seq :long] (key/lexicoder-config (key/sequence-lexicoder key/long-lexicoder))))
   (is (thrown? Exception
-        (key/lexicoder :seq)))
+        (key/lexicoder :seq))
+      "should require at least one config parameter")
   (is (thrown? Exception
-        (key/lexicoder [:seq :string :foo])))
+        (key/lexicoder [:seq :string :foo]))
+      "should only accept one config parameter")
   (check-lexicoder
     (gen/fmap
       (fn [[coder arg-gen]]
@@ -208,8 +221,12 @@
 
 (deftest tuple-lexicoder
   (is (satisfies? key/Lexicoder (key/lexicoder [:tuple :string])))
+  (is (= [:tuple :long :string] (key/lexicoder-config (key/tuple-lexicoder
+                                                        key/long-lexicoder
+                                                        key/string-lexicoder))))
   (is (thrown? Exception
-        (key/lexicoder [:tuple])))
+        (key/lexicoder [:tuple]))
+      "should require at least one config parameter")
   (is (thrown? IllegalArgumentException
         (key/encode (key/tuple-lexicoder key/long-lexicoder) [0 0]))
       "should not encode tuples larger than coders")
@@ -233,6 +250,7 @@
 
 (deftest reverse-lexicoder
   (is (satisfies? key/Lexicoder (key/lexicoder [:reverse :instant])))
+  (is (= [:reverse :bytes] (key/lexicoder-config (key/reverse-lexicoder key/bytes-lexicoder))))
   (is (thrown? Exception
         (key/lexicoder [:reverse])))
   (is (thrown? Exception

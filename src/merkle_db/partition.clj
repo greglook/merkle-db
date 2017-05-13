@@ -13,6 +13,8 @@
     [merkle-db.tablet :as tablet]))
 
 
+;; ## Specs
+
 ;; Maximum number of records to allow in each partition.
 (s/def ::limit pos-int?)
 
@@ -40,13 +42,13 @@
                 ::tablets]))
 
 
+
+;; ## Utilities
+
 (def default-limit
   "The default number of records to build partitions up to."
   100000)
 
-
-
-;; ## Utilities
 
 (defn- partition-approx
   "Returns a lazy sequence of `n` lists containing the elements of `coll` in
@@ -299,7 +301,7 @@
   will be split into tablets matching the given families, if provided."
   [store parameters f records]
   (let [records (sort-by first key/compare records)
-        limit (or (::limit parameters) 100000)
+        limit (or (::limit parameters) default-limit)
         families (or (::data/families parameters) {})
         part-count (inc (int (/ (count records) limit)))]
     (map

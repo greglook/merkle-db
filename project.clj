@@ -4,6 +4,22 @@
   :license {:name "Public Domain"
             :url "http://unlicense.org/"}
 
+  :aliases
+  {"docs" ["do" ["codox"] ["doc-lit"]]
+   "doc-lit" ["marg" "--dir" "target/doc/marginalia"
+              "src/merkle_db/connection.clj"
+              "src/merkle_db/db.clj"
+              "src/merkle_db/table.clj"
+              "src/merkle_db/index.clj"
+              "src/merkle_db/partition.clj"
+              "src/merkle_db/tablet.clj"
+              "src/merkle_db/key.clj"
+              "src/merkle_db/bloom.clj"
+              "src/merkle_db/data.clj"
+              ; core
+              ; node
+              ]}
+
   :deploy-branches ["master"]
   :pedantic? :abort
 
@@ -19,6 +35,11 @@
    :vertical false
    :show-external true
    :ignore-ns #{clojure bigml}}
+
+  :codox
+  {:metadata {:doc/format :markdown}
+   :source-uri "https://github.com/greglook/merkle-db/blob/master/{filepath}#L{line}"
+   :output-path "target/doc/api"}
 
   :whidbey
   {:tag-types {'blocks.data.Block {'blocks.data.Block (partial into {})}

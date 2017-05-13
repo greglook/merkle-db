@@ -6,6 +6,8 @@
     [merkle-db.key :as key]))
 
 
+;; ## Specs
+
 ;; Records are stored as a key/data pair.
 (s/def ::record-entry
   (s/tuple key/bytes? map?))
@@ -114,7 +116,6 @@
   "Read a lazy sequence of key/map tuples which contain the field data for the
   records whose keys are in the given collection."
   [tablet record-keys]
-  ; TODO: record-keys must be a collection of PersistentByte objects
   ; OPTIMIZE: divide up the range by binary-searching for keys in the batch.
   (filter (comp (set record-keys) first) (::records tablet)))
 

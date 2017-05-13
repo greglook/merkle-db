@@ -1,4 +1,7 @@
 (ns merkle-db.table
+  "Tables are named top-level containers of records. Generally, a single table
+  corresponds to a certain 'kind' of data. Tables also contain configuration
+  determining how keys are encoded and records are stored."
   (:require
     [clojure.future :refer [pos-int?]]
     [clojure.spec :as s]
@@ -9,13 +12,15 @@
     [merkle-db.partition :as part]))
 
 
-;; Table names
+;; ## Specs
+
+;; Table names are non-empty strings.
 (s/def ::name (s/and string? #(<= 1 (count %) 127)))
 
-;; Link to the root of the data tree.
+;; Table data is a link to the root of the data tree.
 (s/def ::data link/merkle-link?)
 
-;; Patch tablet containing recent unmerged data.
+;; Tables may have a patch tablet containing recent unmerged data.
 (s/def ::patch link/merkle-link?)
 
 ;; Table root node.
@@ -30,3 +35,6 @@
                 ::key/lexicoder
                 ::part/limit
                 :time/updated-at]))
+
+
+; IDEA: reified table-as-collection type

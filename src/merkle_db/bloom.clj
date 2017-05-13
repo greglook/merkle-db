@@ -1,13 +1,21 @@
 (ns merkle-db.bloom
-  "Wrapper code for implementing a bloom filter for membership testing."
+  "Bloom filters provide a probablistic way to test for membership in a set
+  using a fixed amount of space. This is useful for reducing work when the test
+  definitively rules out the existence of a record."
   (:refer-clojure :exclude [merge])
   (:require
     [bigml.sketchy.bits :as bits]
     [bigml.sketchy.bloom :as bloom]
-    [bigml.sketchy.murmur :as murmur]
-    [clojure.spec :as s]))
+    [bigml.sketchy.murmur :as murmur]))
 
 
+;; The filter type wraps the bigml.sketchy bloom-filter implementation and
+;; provides some extra features:
+;;
+;; - Better printing than the basic map representation.
+;; - Collection semantics supporting `conj`, `into`, `empty`, `merge`, etc.
+;; - Filters can be invoked on elements to test membership, similar to regular
+;;   set types.
 (deftype BloomFilter
   [bins bits k _meta]
 
@@ -15,7 +23,7 @@
 
   (toString
     [this]
-    (format "#merkle-db/bloom-filter [%d %d]" bits k))
+    (format "#{2^%d bits, %d hashes}" bits k))
 
   (equals
     [this that]

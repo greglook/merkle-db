@@ -1,9 +1,13 @@
 (ns merkle-db.index
-  "The index tree in a table is a B+ tree which orders the partitions into a
-  sorted tree structure.
+  "The data tree in a table is a B+ tree which orders the partitions into a
+  sorted branching structure.
 
-  An empty data tree is represented by a nil link from the table. A data tree
-  with fewer records than the partition limit is represented directly by a
+  The branching factor determines the maximum number of children an index node
+  in the data tree can have. Internal (non-root) index nodes with branching
+  factor `b` will have between `ceiling(b/2)` and `b` children.
+
+  An empty data tree is represented by a nil link from the table root. A data
+  tree with fewer records than the partition limit is represented directly by a
   single partition node."
   (:require
     [clojure.future :refer [pos-int?]]
@@ -15,7 +19,10 @@
     [merkle-db.partition :as part]))
 
 
-;; Maximum number of children an index node in the data tree can have.
+;; ## Specs
+
+;; The branching factor determines the number of children an index node in the
+;; data tree can have.
 (s/def ::branching-factor (s/and pos-int? #(< 2 %)))
 
 ;; Height of the node in the tree. Partitions are the leaves and have an
@@ -40,13 +47,6 @@
 
 
 
-;; ## Information Functions
-
-; TODO: list partitions
-; TODO: group partitions into roughly equal sizes
-
-
-
 ;; ## Read Functions
 
 (defn- assign-keys
@@ -54,6 +54,7 @@
   to. Returns a lazy sequence of vectors containing the child index and a
   sequence of record keys."
   [split-keys record-keys]
+  ; OPTIMIZE: use transducers
   (->>
     [nil 0 split-keys record-keys]
     (iterate

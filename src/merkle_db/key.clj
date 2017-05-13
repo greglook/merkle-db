@@ -123,11 +123,11 @@
 
   (encode*
     [coder value]
-    "Return the encoded value as a byte array.")
+    "Encode the key value as a byte array.")
 
   (decode*
     [coder data offset len]
-    "Read an object from the byte array at the given offset."))
+    "Decode a key value from a section of a byte array."))
 
 
 (defn encode
@@ -280,6 +280,8 @@
 
 ;; ## Bytes Lexicoder
 
+;; The byte lexicoder provides a simple pass-through implementation to convert
+;; byte arrays directly into key bytes.
 (deftype BytesLexicoder [])
 
 
@@ -291,6 +293,7 @@
 (ns-unmap *ns* '->BytesLexicoder)
 
 
+;; Returns the global byte lexicoder.
 (defmethod lexicoder :bytes
   [config]
   (when (seq (config-params config))
@@ -330,6 +333,8 @@
 
 ;; ## String Lexicoder
 
+;; String lexicoders perform a translation between character sequences and
+;; key bytes using a character set.
 (deftype StringLexicoder [^Charset charset])
 
 
@@ -352,6 +357,12 @@
 (ns-unmap *ns* '->StringLexicoder)
 
 
+;; Configures a new string lexicoder using either the given character set or
+;; the default of UTF-8, if none is provided.
+;;
+;;     ; Use ASCII string keys
+;;     [:string "US-ASCII"]
+;;
 (defmethod lexicoder :string
   [config]
   (when (< 1 (count (config-params config)))
@@ -391,6 +402,7 @@
 
 ;; ## Long Lexicoder
 
+;; The long lexicoder converts integer values into key bytes.
 (deftype LongLexicoder [])
 
 
@@ -402,6 +414,7 @@
 (ns-unmap *ns* '->LongLexicoder)
 
 
+;; Returns the global double lexicoder.
 (defmethod lexicoder :long
   [config]
   (when (config-params config)
@@ -465,6 +478,7 @@
 
 ;; ## Double Lexicoder
 
+;; The double lexicoder converts floating-point values into key bytes.
 (deftype DoubleLexicoder [])
 
 
@@ -476,6 +490,7 @@
 (ns-unmap *ns* '->DoubleLexicoder)
 
 
+;; Returns the global double lexicoder.
 (defmethod lexicoder :double
   [config]
   (when (config-params config)
@@ -515,6 +530,7 @@
 
 ;; ## Instant Lexicoder
 
+;; The instant lexicoder converts `java.time.Instant` values into key bytes.
 (deftype InstantLexicoder [])
 
 
@@ -526,6 +542,7 @@
 (ns-unmap *ns* '->InstantLexicoder)
 
 
+;; Returns the global instant lexicoder.
 (defmethod lexicoder :instant
   [config]
   (when (config-params config)
@@ -559,6 +576,8 @@
 
 ;; ## Sequence Lexicoder
 
+;; A sequence lexicoder takes a homogeneous sequence of elements and encodes it
+;; such that the sequence as whole is lexically ordered.
 (deftype SequenceLexicoder [element-coder])
 
 
@@ -581,6 +600,11 @@
   (sequence-lexicoder (lexicoder (second config))))
 
 
+;; Configures a new sequence lexicoder by wrapping an element coder:
+;;
+;;     ; Sequence of string path segments.
+;;     [:seq :string]
+;;
 (extend-type SequenceLexicoder
 
   Lexicoder
@@ -605,6 +629,13 @@
 
 ;; ## Tuple Lexicoder
 
+;; Tuple lexicoders encode a heterogeneous mix of key elements as key bytes
+;; which will be ordered such that the tuple as a whole is lexically ordered.
+;;
+;; Specifically, if tuples `[x1 y1]` and `[x2 y2]` are compared, and `x1` ranks
+;; before `x2`, the first tuple will rank before the second, no matter what
+;; values `y1` and `y2` have. Alternately, if `x1` equals `x2`, then `y1` and
+;; `y2` will determine the ranking.
 (deftype TupleLexicoder [coders])
 
 
@@ -618,6 +649,12 @@
 (ns-unmap *ns* '->TupleLexicoder)
 
 
+;; Configures a new tuple lexicoder by wrapping a collection of lexicoder
+;; configurations:
+;;
+;;     ; Composite ordering by name then numeric version.
+;;     [:tuple :string :long]
+;;
 (defmethod lexicoder :tuple
   [config]
   (when-not (config-params config)
@@ -658,6 +695,9 @@
 
 ;; ## Reverse Lexicoder
 
+;; The reversing lexicoder can be used to invert the ordering of another
+;; lexicoder. Each byte in the output of the wrapped coder is subtracted from
+;; the max value to reverse the comparison order.
 (deftype ReverseLexicoder [coder])
 
 
@@ -670,6 +710,12 @@
 (ns-unmap *ns* '->ReverseLexicoder)
 
 
+;; Confures a new reverse lexicoder by wrapping another lexicoder
+;; configuration:
+;;
+;;     ; Sort by time, newest first.
+;;     [:reverse :instant]
+;;
 (defmethod lexicoder :reverse
   [config]
   (when (not= 1 (count (config-params config)))

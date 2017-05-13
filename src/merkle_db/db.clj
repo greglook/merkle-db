@@ -2,9 +2,14 @@
   (:require
     [clojure.spec :as s]
     [merkledag.link :as link]
+    [merkledag.refs :as refs]
     [merkle-db.data :as data]
+    [merkle-db.node :as node]
     [merkle-db.table :as table]))
 
+
+;; Database name.
+(s/def ::name (s/and string? #(<= 1 (count %) 512)))
 
 ;; Map of table names to node links.
 (s/def ::tables (s/map-of ::table/name link/merkle-link?))
@@ -118,7 +123,7 @@
       (->
         (assoc db-root
                :merkledag.node/id root-id
-               ::db/name db-name)
+               ::name db-name)
         (cond->
           (::data/metadata db-root)
             (assoc ::data/metadata (node/get-data store (::data/metadata db-root)))))))

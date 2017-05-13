@@ -8,6 +8,9 @@
 ;; Count of the records contained under a node.
 (s/def ::count nat-int?)
 
+;; Data size in bytes.
+(s/def ::size nat-int?)
+
 ;; Valid field key values.
 (s/def ::field-key any?)
 
@@ -24,6 +27,11 @@
     #(= (reduce + (map count (vals %)))
         (count (distinct (apply concat (vals %)))))))
 
-
 ;; Link to user-supplied metadata.
 (s/def ::metadata link/merkle-link?)
+
+;; Instant point in time.
+(s/def :time/instant #(instance? java.time.Instant %))
+
+;; Time an entity was last modified.
+(s/def :time/updated-at :time/instant)

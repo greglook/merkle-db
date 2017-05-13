@@ -26,7 +26,9 @@ The primary design goals of MerkleDB are:
 Secondary goals include:
 
 - Efficient storage utilization via deduplication and structural sharing.
-- Light-weight versioning and copy-on-write to support "time travel".
+- Light-weight versioning and copy-on-write to support immutable reads.
+- Building on storage and synchronization abstractions to support hosted service
+  backends.
 
 Non-goals:
 

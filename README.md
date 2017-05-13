@@ -1,6 +1,9 @@
 MerkleDB
 ========
 
+[![API codox](https://img.shields.io/badge/doc-API-blue.svg)](https://greglook.github.io/merkle-db/api/)
+[![marginalia docs](https://img.shields.io/badge/doc-marginalia-blue.svg)](https://greglook.github.io/merkle-db/marginalia/uberdoc.html)
+
 MerkleDB is a Clojure library for storing and accessing large data sets in a
 hybrid column-oriented tree of content-adressable data blocks.
 

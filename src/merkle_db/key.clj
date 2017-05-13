@@ -280,8 +280,27 @@
 
 ;; ## Bytes Lexicoder
 
-(defrecord BytesLexicoder
-  []
+(deftype BytesLexicoder [])
+
+
+(def bytes-lexicoder
+  "Lexicoder for passing through raw byte arrays."
+  (->BytesLexicoder))
+
+
+(ns-unmap *ns* '->BytesLexicoder)
+
+
+(defmethod lexicoder :bytes
+  [config]
+  (when (seq (config-params config))
+    (throw (ex-info
+             (str "Bytes lexicoder config takes no parameters: " (pr-str config))
+             {:config config})))
+  bytes-lexicoder)
+
+
+(extend-type BytesLexicoder
 
   Lexicoder
 
@@ -308,60 +327,15 @@
         data'))))
 
 
-(alter-meta! #'->BytesLexicoder assoc :private true)
-(alter-meta! #'map->BytesLexicoder assoc :private true)
-
-
-(def bytes-lexicoder
-  "Lexicoder for passing through raw byte arrays."
-  (->BytesLexicoder))
-
-
-(defmethod lexicoder :bytes
-  [config]
-  (when (seq (config-params config))
-    (throw (ex-info
-             (str "Bytes lexicoder config takes no parameters: " (pr-str config))
-             {:config config})))
-  bytes-lexicoder)
-
-
 
 ;; ## String Lexicoder
+
+(deftype StringLexicoder [^Charset charset])
+
 
 (def ^:private default-string-charset
   "Default character set to lexicode strings with."
   StandardCharsets/UTF_8)
-
-
-(defrecord StringLexicoder
-  [^Charset charset]
-
-  Lexicoder
-
-  (lexicoder-config
-    [_]
-    (if (= charset default-string-charset)
-      :string
-      [:string (str charset)]))
-
-  (encode*
-    [_ value]
-    (when (empty? value)
-      (throw (IllegalArgumentException.
-               "Cannot encode empty strings")))
-    (.getBytes (str value) charset))
-
-  (decode*
-    [_ data offset len]
-    (when (empty? data)
-      (throw (IllegalArgumentException.
-               "Cannot decode empty byte arrays")))
-    (String. ^bytes data (long offset) (long len) charset)))
-
-
-(alter-meta! #'->StringLexicoder assoc :private true)
-(alter-meta! #'map->StringLexicoder assoc :private true)
 
 
 (defn string-lexicoder*
@@ -375,6 +349,9 @@
   (string-lexicoder* default-string-charset))
 
 
+(ns-unmap *ns* '->StringLexicoder)
+
+
 (defmethod lexicoder :string
   [config]
   (when (< 1 (count (config-params config)))
@@ -386,8 +363,53 @@
     string-lexicoder))
 
 
+(extend-type StringLexicoder
+
+  Lexicoder
+
+  (lexicoder-config
+    [this]
+    (if (= (.charset this) default-string-charset)
+      :string
+      [:string (str (.charset this))]))
+
+  (encode*
+    [this value]
+    (when (empty? value)
+      (throw (IllegalArgumentException.
+               "Cannot encode empty strings")))
+    (.getBytes (str value) ^Charset (.charset this)))
+
+  (decode*
+    [this data offset len]
+    (when (empty? data)
+      (throw (IllegalArgumentException.
+               "Cannot decode empty byte arrays")))
+    (String. ^bytes data (long offset) (long len) ^Charset (.charset this))))
+
+
 
 ;; ## Long Lexicoder
+
+(deftype LongLexicoder [])
+
+
+(def long-lexicoder
+  "Lexicoder for long integer values."
+  (->LongLexicoder))
+
+
+(ns-unmap *ns* '->LongLexicoder)
+
+
+(defmethod lexicoder :long
+  [config]
+  (when (config-params config)
+    (throw (ex-info
+             (str "Long lexicoder config takes no parameters: " (pr-str config))
+             {:config config})))
+  long-lexicoder)
+
 
 (defn- flip-long-sign
   "Flip the sign bit on a long value."
@@ -402,8 +424,7 @@
   (bit-and 0xFF (bit-shift-right l (* i 8))))
 
 
-(defrecord LongLexicoder
-  []
+(extend-type LongLexicoder
 
   Lexicoder
 
@@ -441,29 +462,30 @@
         (flip-long-sign value)))))
 
 
-(alter-meta! #'->LongLexicoder assoc :private true)
-(alter-meta! #'map->LongLexicoder assoc :private true)
-
-
-(def long-lexicoder
-  "Lexicoder for long integer values."
-  (->LongLexicoder))
-
-
-(defmethod lexicoder :long
-  [config]
-  (when (config-params config)
-    (throw (ex-info
-             (str "Long lexicoder config takes no parameters: " (pr-str config))
-             {:config config})))
-  long-lexicoder)
-
-
 
 ;; ## Double Lexicoder
 
-(defrecord DoubleLexicoder
-  []
+(deftype DoubleLexicoder [])
+
+
+(def double-lexicoder
+  "Lexicoder for double-precision floating point values."
+  (->DoubleLexicoder))
+
+
+(ns-unmap *ns* '->DoubleLexicoder)
+
+
+(defmethod lexicoder :double
+  [config]
+  (when (config-params config)
+    (throw (ex-info
+             (str "Double lexicoder config takes no parameters: " (pr-str config))
+             {:config config})))
+  double-lexicoder)
+
+
+(extend-type DoubleLexicoder
 
   Lexicoder
 
@@ -490,29 +512,30 @@
           (bit-not (flip-long-sign bits)))))))
 
 
-(alter-meta! #'->DoubleLexicoder assoc :private true)
-(alter-meta! #'map->DoubleLexicoder assoc :private true)
-
-
-(def double-lexicoder
-  "Lexicoder for double-precision floating point values."
-  (->DoubleLexicoder))
-
-
-(defmethod lexicoder :double
-  [config]
-  (when (config-params config)
-    (throw (ex-info
-             (str "Double lexicoder config takes no parameters: " (pr-str config))
-             {:config config})))
-  double-lexicoder)
-
-
 
 ;; ## Instant Lexicoder
 
-(defrecord InstantLexicoder
-  []
+(deftype InstantLexicoder [])
+
+
+(def instant-lexicoder
+  "Lexicoder for instants in time."
+  (->InstantLexicoder))
+
+
+(ns-unmap *ns* '->InstantLexicoder)
+
+
+(defmethod lexicoder :instant
+  [config]
+  (when (config-params config)
+    (throw (ex-info
+             (str "Instant lexicoder config takes no parameters: " (pr-str config))
+             {:config config})))
+  instant-lexicoder)
+
+
+(extend-type InstantLexicoder
 
   Lexicoder
 
@@ -533,51 +556,10 @@
     (Instant/ofEpochMilli (decode* long-lexicoder data offset len))))
 
 
-(alter-meta! #'->InstantLexicoder assoc :private true)
-(alter-meta! #'map->InstantLexicoder assoc :private true)
-
-
-(def instant-lexicoder
-  "Lexicoder for instants in time."
-  (->InstantLexicoder))
-
-
-(defmethod lexicoder :instant
-  [config]
-  (when (config-params config)
-    (throw (ex-info
-             (str "Instant lexicoder config takes no parameters: " (pr-str config))
-             {:config config})))
-  instant-lexicoder)
-
-
 
 ;; ## Sequence Lexicoder
 
-(defrecord SequenceLexicoder
-  [element-coder]
-
-  Lexicoder
-
-  (lexicoder-config
-    [_]
-    [:seq (lexicoder-config element-coder)])
-
-  (encode*
-    [_ value]
-    (->> value
-         (map #(escape-bytes (encode* element-coder %)))
-         (join-bytes)))
-
-  (decode*
-    [_ data offset len]
-    (->> (split-bytes data offset len)
-         (mapv #(let [udata (unescape-bytes %)]
-                  (decode* element-coder udata 0 (alength udata)))))))
-
-
-(alter-meta! #'->SequenceLexicoder assoc :private true)
-(alter-meta! #'map->SequenceLexicoder assoc :private true)
+(deftype SequenceLexicoder [element-coder])
 
 
 (defn sequence-lexicoder
@@ -585,6 +567,9 @@
   coded with the given lexicoder."
   [element-coder]
   (->SequenceLexicoder element-coder))
+
+
+(ns-unmap *ns* '->SequenceLexicoder)
 
 
 (defmethod lexicoder :seq
@@ -596,40 +581,31 @@
   (sequence-lexicoder (lexicoder (second config))))
 
 
-
-;; ## Tuple Lexicoder
-
-(defrecord TupleLexicoder
-  [coders]
+(extend-type SequenceLexicoder
 
   Lexicoder
 
   (lexicoder-config
-    [_]
-    (vec (cons :tuple (map lexicoder-config coders))))
+    [this]
+    [:seq (lexicoder-config (.element-coder this))])
 
   (encode*
-    [_ value]
-    (when (not= (count value) (count coders))
-      (throw (IllegalArgumentException.
-               (format "Cannot encode tuple which does not match lexicoder count %d: %s"
-                       (count coders) (pr-str value)))))
-    (join-bytes (mapv #(escape-bytes (encode* %1 %2)) coders value)))
+    [this value]
+    (->> value
+         (map #(escape-bytes (encode* (.element-coder this) %)))
+         (join-bytes)))
 
   (decode*
-    [_ data offset len]
-    (let [elements (split-bytes data offset len)]
-      (when (not= (count coders) (count elements))
-        (throw (IllegalArgumentException.
-                 (format "Cannot decode tuple which does not match lexicoder count %d: %s"
-                         (count coders) (pr-str elements)))))
-      (mapv #(let [udata (unescape-bytes %2)]
-               (decode* %1 udata 0 (alength udata)))
-            coders elements))))
+    [this data offset len]
+    (->> (split-bytes data offset len)
+         (mapv #(let [udata (unescape-bytes %)]
+                  (decode* (.element-coder this) udata 0 (alength udata)))))))
 
 
-(alter-meta! #'->TupleLexicoder assoc :private true)
-(alter-meta! #'map->TupleLexicoder assoc :private true)
+
+;; ## Tuple Lexicoder
+
+(deftype TupleLexicoder [coders])
 
 
 (defn tuple-lexicoder
@@ -637,6 +613,9 @@
   with the given lexicoders, in order."
   [& coders]
   (->TupleLexicoder (vec coders)))
+
+
+(ns-unmap *ns* '->TupleLexicoder)
 
 
 (defmethod lexicoder :tuple
@@ -648,8 +627,57 @@
   (apply tuple-lexicoder (map lexicoder (rest config))))
 
 
+(extend-type TupleLexicoder
+
+  Lexicoder
+
+  (lexicoder-config
+    [this]
+    (vec (cons :tuple (map lexicoder-config (.coders this)))))
+
+  (encode*
+    [this value]
+    (when (not= (count (.coders this)) (count value))
+      (throw (IllegalArgumentException.
+               (format "Cannot encode tuple which does not match lexicoder count %d: %s"
+                       (count (.coders this)) (pr-str value)))))
+    (join-bytes (mapv #(escape-bytes (encode* %1 %2)) (.coders this) value)))
+
+  (decode*
+    [this data offset len]
+    (let [elements (split-bytes data offset len)]
+      (when (not= (count (.coders this)) (count elements))
+        (throw (IllegalArgumentException.
+                 (format "Cannot decode tuple which does not match lexicoder count %d: %s"
+                         (count (.coders this)) (pr-str elements)))))
+      (mapv #(let [udata (unescape-bytes %2)]
+               (decode* %1 udata 0 (alength udata)))
+            (.coders this) elements))))
+
+
 
 ;; ## Reverse Lexicoder
+
+(deftype ReverseLexicoder [coder])
+
+
+(defn reverse-lexicoder
+  "Wraps the given lexicoder to reverse the ordering of keys encoded with it."
+  [coder]
+  (->ReverseLexicoder coder))
+
+
+(ns-unmap *ns* '->ReverseLexicoder)
+
+
+(defmethod lexicoder :reverse
+  [config]
+  (when (not= 1 (count (config-params config)))
+    (throw (ex-info
+             (str "Reverse lexicoder config takes exactly one parameter: " (pr-str config))
+             {:config config})))
+  (reverse-lexicoder (lexicoder (second config))))
+
 
 (defn- flip-byte
   "Returns the inverse of a byte value, accounting for the sign bit."
@@ -660,45 +688,25 @@
     (if (< 127 b) (- b 256) b)))
 
 
-(defrecord ReverseLexicoder
-  [coder]
+(extend-type ReverseLexicoder
 
   Lexicoder
 
   (lexicoder-config
-    [_]
-    [:reverse (lexicoder-config coder)])
+    [this]
+    [:reverse (lexicoder-config (.coder this))])
 
   (encode*
-    [_ value]
-    (let [encoded ^bytes (encode* coder value)
+    [this value]
+    (let [encoded ^bytes (encode* (.coder this) value)
           rdata (byte-array (alength encoded))]
       (dotimes [i (alength encoded)]
         (aset-byte rdata i (flip-byte (aget encoded i))))
       rdata))
 
   (decode*
-    [_ data offset len]
+    [this data offset len]
     (let [encoded (byte-array len)]
       (dotimes [i (alength encoded)]
         (aset-byte encoded i (flip-byte (aget ^bytes data (+ offset i)))))
-      (decode* coder encoded 0 len))))
-
-
-(alter-meta! #'->ReverseLexicoder assoc :private true)
-(alter-meta! #'map->ReverseLexicoder assoc :private true)
-
-
-(defn reverse-lexicoder
-  "Wraps the given lexicoder to reverse the ordering of keys encoded with it."
-  [coder]
-  (->ReverseLexicoder coder))
-
-
-(defmethod lexicoder :reverse
-  [config]
-  (when (not= 1 (count (config-params config)))
-    (throw (ex-info
-             (str "Reverse lexicoder config takes exactly one parameter: " (pr-str config))
-             {:config config})))
-  (reverse-lexicoder (lexicoder (second config))))
+      (decode* (.coder this) encoded 0 len))))

@@ -8,10 +8,10 @@
     [merkle-db.data :as data]
     [merkle-db.generators :as mdgen]
     [merkle-db.key :as key]
-    [merkle-db.key-test]
     [merkle-db.node :as node]
     [merkle-db.partition :as part]
-    [merkle-db.tablet :as tablet]))
+    [merkle-db.tablet :as tablet]
+    [merkle-db.test-utils]))
 
 
 ;; ## Unit Tests

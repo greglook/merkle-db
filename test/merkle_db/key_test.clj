@@ -144,7 +144,10 @@
       "should not encode empty bytes")
   (is (thrown? IllegalArgumentException
         (key/decode key/bytes-lexicoder (byte-array 0)))
-      "should not decode empty bytes")
+      "should not decode empty bytes"))
+
+
+(deftest ^:generative bytes-lexicoding
   (check-lexicoder
     (gen/return [key/bytes-lexicoder
                  (gen/such-that not-empty gen/bytes)])
@@ -164,8 +167,12 @@
       "should not encode empty strings")
   (is (thrown? IllegalArgumentException
         (key/decode key/string-lexicoder (byte-array 0)))
-      "should not decode empty bytes")
-  (check-lexicoder (gen/return (:string lexicoder-generators))))
+      "should not decode empty bytes"))
+
+
+(deftest ^:generative string-lexicoding
+  (check-lexicoder
+    (gen/return (:string lexicoder-generators)) ))
 
 
 (deftest long-lexicoder
@@ -176,8 +183,12 @@
       "should not accept any config parameters")
   (is (thrown? IllegalArgumentException
         (key/decode key/long-lexicoder (byte-array 7)))
-      "should require 8 bytes")
-  (check-lexicoder (gen/return (:long lexicoder-generators))))
+      "should require 8 bytes"))
+
+
+(deftest ^:generative long-lexicoding
+  (check-lexicoder
+    (gen/return (:long lexicoder-generators)) ))
 
 
 (deftest double-lexicoder
@@ -185,8 +196,12 @@
   (is (= :double (key/lexicoder-config key/double-lexicoder)))
   (is (thrown? Exception
         (key/lexicoder [:double :bar]))
-      "should not accept any config parameters")
-  (check-lexicoder (gen/return (:double lexicoder-generators))))
+      "should not accept any config parameters"))
+
+
+(deftest ^:generative double-lexicoding
+  (check-lexicoder
+    (gen/return (:double lexicoder-generators)) ))
 
 
 (deftest instant-lexicoder
@@ -197,8 +212,12 @@
       "should not accept any config parameters")
   (is (thrown? IllegalArgumentException
         (key/encode key/instant-lexicoder ""))
-      "should not encode non-instant value")
-  (check-lexicoder (gen/return (:instant lexicoder-generators))))
+      "should not encode non-instant value"))
+
+
+(deftest ^:generative instant-lexicoding
+  (check-lexicoder
+    (gen/return (:instant lexicoder-generators)) ))
 
 
 (deftest sequence-lexicoder
@@ -209,7 +228,10 @@
       "should require at least one config parameter")
   (is (thrown? Exception
         (key/lexicoder [:seq :string :foo]))
-      "should only accept one config parameter")
+      "should only accept one config parameter"))
+
+
+(deftest ^:generative sequence-lexicoding
   (check-lexicoder
     (gen/fmap
       (fn [[coder arg-gen]]
@@ -239,7 +261,10 @@
                     (key/encode (key/tuple-lexicoder key/string-lexicoder
                                                      key/long-lexicoder)
                                 ["foo" 123])))
-      "should not decode tuple longer than coders")
+      "should not decode tuple longer than coders"))
+
+
+(deftest ^:generative tuple-lexicoding
   (check-lexicoder
     (gen/fmap
       (fn [generators]
@@ -254,7 +279,10 @@
   (is (thrown? Exception
         (key/lexicoder [:reverse])))
   (is (thrown? Exception
-        (key/lexicoder [:reverse :long :string])))
+        (key/lexicoder [:reverse :long :string]))))
+
+
+(deftest ^:generative reverse-lexicoding
   (check-lexicoder
     (gen/fmap
       (fn [[coder arg-gen]]

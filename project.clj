@@ -30,6 +30,10 @@
    [mvxcvi/blocks "0.10.0-SNAPSHOT"]
    [mvxcvi/merkledag "0.2.0-SNAPSHOT"]]
 
+  :test-selectors
+  {:default (complement :generative)
+   :generative :generative}
+
   :hiera
   {:cluster-depth 2
    :vertical false

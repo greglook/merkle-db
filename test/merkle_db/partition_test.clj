@@ -90,7 +90,7 @@
 
 ;; ## Property Tests
 
-(deftest partition-behavior
+(deftest ^:generative partition-behavior
   (checking "valid properties" 20
     [[field-keys families records] mdgen/data-context]
     (is (valid? ::data/families families))

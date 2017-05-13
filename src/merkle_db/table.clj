@@ -8,6 +8,9 @@
     [merkle-db.partition :as part]))
 
 
+;; Table names
+(s/def ::name (s/and string? #(<= 1 (count %) 127)))
+
 ;; Link to the root of the data tree.
 (s/def ::data link/merkle-link?)
 

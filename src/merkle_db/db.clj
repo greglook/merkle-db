@@ -2,11 +2,12 @@
   (:require
     [clojure.spec :as s]
     [merkledag.link :as link]
-    [merkle-db.data :as data]))
+    [merkle-db.data :as data]
+    [merkle-db.table :as table]))
 
 
 ;; Map of table names to node links.
-(s/def ::tables (s/map-of string? link/merkle-link?))
+(s/def ::tables (s/map-of ::table/name link/merkle-link?))
 
 ;; Database root node.
 (s/def :merkle-db/db-root

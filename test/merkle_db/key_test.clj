@@ -104,27 +104,23 @@
 
 
 (def lexicoder-generators
-  "Map of lexicoder types to generators that return a lexicoder instance and
-  a generator for values matching that lexicoder."
+  "Map of lexicoder types to tuples of a lexicoder instance and a generator for
+  values matching that lexicoder."
   {:string
-   (gen/return
-     [key/string-lexicoder
-      (gen/such-that not-empty gen/string)])
+   [key/string-lexicoder
+    (gen/such-that not-empty gen/string)]
 
    :long
-   (gen/return
-     [key/long-lexicoder
-      gen/large-integer])
+   [key/long-lexicoder
+    gen/large-integer]
 
    :double
-   (gen/return
-     [key/double-lexicoder
-      (gen/double* {:NaN? false})])
+   [key/double-lexicoder
+    (gen/double* {:NaN? false})]
 
    :instant
-   (gen/return
-     [key/instant-lexicoder
-      (gen/fmap #(java.time.Instant/ofEpochMilli %) gen/large-integer)])})
+   [key/instant-lexicoder
+    (gen/fmap #(java.time.Instant/ofEpochMilli %) gen/large-integer)]})
 
 
 (deftest lexicoder-configs
@@ -143,7 +139,7 @@
   (is (thrown? IllegalArgumentException
         (key/decode key/string-lexicoder (byte-array 0)))
       "should not decode empty bytes")
-  (check-lexicoder (:string lexicoder-generators)))
+  (check-lexicoder (gen/return (:string lexicoder-generators))))
 
 
 (deftest long-lexicoder
@@ -153,14 +149,14 @@
   (is (thrown? IllegalArgumentException
         (key/decode key/long-lexicoder (byte-array 7)))
       "should require 8 bytes")
-  (check-lexicoder (:long lexicoder-generators)))
+  (check-lexicoder (gen/return (:long lexicoder-generators))))
 
 
 (deftest double-lexicoder
   (is (identical? key/double-lexicoder (key/lexicoder :double)))
   (is (thrown? Exception
         (key/lexicoder [:double :bar])))
-  (check-lexicoder (:double lexicoder-generators)))
+  (check-lexicoder (gen/return (:double lexicoder-generators))))
 
 
 (deftest instant-lexicoder
@@ -170,7 +166,7 @@
   (is (thrown? IllegalArgumentException
         (key/encode key/instant-lexicoder ""))
       "should not encode non-instant value")
-  (check-lexicoder (:instant lexicoder-generators)))
+  (check-lexicoder (gen/return (:instant lexicoder-generators))))
 
 
 (deftest sequence-lexicoder
@@ -184,7 +180,7 @@
       (fn [[coder arg-gen]]
         [(key/sequence-lexicoder coder)
          (gen/vector arg-gen)])
-      (gen/one-of (vals lexicoder-generators)))
+      (gen/elements (vals lexicoder-generators)))
     (lexi-comparator compare)))
 
 
@@ -210,7 +206,7 @@
       (fn [generators]
         [(apply key/tuple-lexicoder (map first generators))
          (apply gen/tuple (map second generators))])
-      (gen/not-empty (gen/vector (gen/one-of (vals lexicoder-generators)))))))
+      (gen/not-empty (gen/vector (gen/elements (vals lexicoder-generators)))))))
 
 
 (deftest reverse-lexicoder
@@ -223,5 +219,5 @@
     (gen/fmap
       (fn [[coder arg-gen]]
         [(key/reverse-lexicoder coder) arg-gen])
-      (gen/one-of (vals lexicoder-generators)))
+      (gen/elements (vals lexicoder-generators)))
     (comp - compare)))

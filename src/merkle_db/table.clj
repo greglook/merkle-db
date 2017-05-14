@@ -36,5 +36,7 @@
                 ::part/limit
                 :time/updated-at]))
 
+; TODO: table description
+
 
 ; IDEA: reified table-as-collection type

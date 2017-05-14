@@ -1,8 +1,8 @@
 (ns merkle-db.db
   (:require
+    [clojure.future :refer [nat-int?]]
     [clojure.spec :as s]
     [merkledag.link :as link]
-    [merkledag.refs :as refs]
     [merkle-db.data :as data]
     [merkle-db.node :as node]
     [merkle-db.table :as table]))
@@ -13,16 +13,31 @@
 ;; Database name.
 (s/def ::name (s/and string? #(<= 1 (count %) 512)))
 
+;; Database version.
+(s/def ::version nat-int?)
+
 ;; Map of table names to node links.
 (s/def ::tables (s/map-of ::table/name link/merkle-link?))
 
+;; Description of a specific version of a database.
+(s/def ::version-info
+  (s/keys :req [:merkledag.node/id
+                ::name
+                ::version
+                :time/updated-at]))
+
 ;; Database root node.
-(s/def :merkle-db/db-root
+(s/def ::root-node
   (s/keys :req [::tables]
           :opt [:data/title
                 :data/description
                 ::data/metadata
                 :time/updated-at]))
+
+;; Description of the database.
+(s/def ::description
+  (s/merge ::version-info
+           ::root-node))
 
 
 

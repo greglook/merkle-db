@@ -1,12 +1,29 @@
 (ns merkle-db.connection
+  "Connections are stateful components which manage database locking and
+  updating. A connection is backed by a node store, a ref tracker, and a lock
+  manager."
   (:require
+    [clojure.spec :as s]
     [merkledag.refs :as refs]
     [merkle-db.data :as data]
     [merkle-db.db :as db]
+    [merkle-db.lock :as lock]
     [merkle-db.node :as node])
   (:import
     merkle_db.db.Database))
 
+
+;; ## Specs
+
+(s/def ::db-version
+  (s/keys :req [::db/name
+                :merkledag.node/id
+                ::db/version
+                :time/updated-at]))
+
+
+
+;; ## Connection Protocols
 
 (defprotocol IConnection
   "Protocol for interacting with backing connection resources to work with one
@@ -32,51 +49,27 @@
 
   (open-db
     [conn db-name opts]
-    "Open a database for use. An optional instant argument may be provided,
-    which will return the last committed database version occurring before that
-    time.")
+    "Open a database for use.
+
+    - `:version` open a specific version of the database
+    - `:lock`
+    ")
 
   (commit!
     [conn db]
     [conn db-name db]
     [conn db-name db opts]
     "Ensure all data has been written to the backing block store and update the
-    database's root value in the ref manager."))
+    database's root value in the ref manager.
 
-
-(defprotocol ILockManager
-  "A lock manager handles aquiring, refreshing, and releasing a lock on
-  databases for updating."
-
-  (lock-info
-    [conn db-name]
-    "Returns information about the currently-held lock on the database. Returns
-    nil if the database is not currently locked.")
-
-  (lock!
-    [conn db-name client-id duration]
-    "Attempt to acquire a lock to update the database. The provided client-id
-    is treated opaquely but should be a useful identifier. The duration is a
-    requested period in seconds which the lock will expire after.
-
-    Returns a lock info map on success, or throws an exception on failure with
-    details about the current lock holder.")
-
-  (renew-lock!
-    [conn db-name lock-key duration]
-    "Renew a currently-held lock on the database by providing the key and a new
-    requested duration. Returns a lock info map on success. Throws an exception
-    if the lock is not held by this process.")
-
-  (unlock!
-    [conn db-name lock-id]
-    "Release the lock held on the named database. Throws an exception if the
-    lock is not held by this process."))
+    - `:force` commit even if the versions don't match
+    "))
 
 
 
 ;; ## Connection Type
 
+; TODO: implement IRef
 (deftype Connection
   [store tracker])
 

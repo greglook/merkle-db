@@ -226,6 +226,10 @@ manager. It can be used to open databases for reading and writing.
 ; return the last committed database version occurring before that time.
 (open-db conn db-name & opts) => db
 
+; Ensure all data has been written to the backing block store and update the
+; database's root in the ref manager.
+(commit! conn db) => db'
+
 ; Drop a database ref. Note that this will not remove the block data, as it
 ; may be shared.
 (drop-db! conn db-name)
@@ -253,10 +257,6 @@ backing storage until `commit!` is called.
 ; called with the current value of the metadata, followed by any provided
 ; arguments. The result will be used as the new metadata.
 (alter-db-meta db f & args) => db'
-
-; Ensure all data has been written to the backing block store and update the
-; database's root in the ref manager.
-(commit! db) => db'
 ```
 
 ### Table Operations

@@ -8,6 +8,8 @@
     [merkle-db.table :as table]))
 
 
+;; ## Specs
+
 ;; Database name.
 (s/def ::name (s/and string? #(<= 1 (count %) 512)))
 
@@ -38,12 +40,7 @@
     [db f]
     "Update the user metadata attached to a database. The function `f` will be
     called with the current value of the metadata, and the result will be used
-    as the new metadata.")
-
-  (commit!
-    [db]
-    "Ensure all data has been written to the backing block store and update the
-    database's root value in the ref manager."))
+    as the new metadata."))
 
 
 (defprotocol ITables
@@ -110,7 +107,7 @@
 ;; ## Database Type
 
 (deftype Database
-  [store tracker db-name root-id _meta]
+  [store db-name version root-id _meta]
 
   IDatabase
 
@@ -138,15 +135,7 @@
         (let [meta-node (node/store-node! store db-meta')
               meta-link (link/create "meta" (:id meta-node) (:size meta-node))
               db-node (node/store-node! store (assoc db-root ::data/metadata meta-link))]
-          (assoc this :root-id (:id db-node))))))
-
-
-  (commit!
-    [this]
-    ; TODO: lock db
-    ; TODO: check if current version is the same as the version opened at?
-    (refs/set-ref! tracker db-name root-id)
-    this))
+          (assoc this :root-id (:id db-node)))))))
 
 
 (alter-meta! #'->Database assoc :private true)

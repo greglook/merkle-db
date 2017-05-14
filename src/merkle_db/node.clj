@@ -1,4 +1,4 @@
-(ns merkle-db.node
+(ns ^:no-doc merkle-db.node
   "Shim namespace to flesh out MerkleDAG requirements."
   (:require
     [merkledag.link :as link]

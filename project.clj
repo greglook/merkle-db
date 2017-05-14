@@ -15,10 +15,7 @@
               "src/merkle_db/tablet.clj"
               "src/merkle_db/key.clj"
               "src/merkle_db/bloom.clj"
-              "src/merkle_db/data.clj"
-              ; core
-              ; node
-              ]}
+              "src/merkle_db/data.clj"]}
 
   :deploy-branches ["master"]
   :pedantic? :abort
@@ -37,7 +34,7 @@
   :hiera
   {:cluster-depth 2
    :vertical false
-   :show-external true
+   :show-external false
    :ignore-ns #{clojure bigml}}
 
   :codox
@@ -63,9 +60,4 @@
    {:source-paths ["dev"]
     :dependencies
     [[clj-stacktrace "0.2.8"]
-     [org.clojure/tools.namespace "0.2.11"]]
-
-    :injections
-    [(let [pct-var (ns-resolve (doto 'clojure.stacktrace require) 'print-cause-trace)
-           pst-var (ns-resolve (doto 'clj-stacktrace.repl require) 'pst+)]
-       (alter-var-root pct-var (constantly (deref pst-var))))]}})
+     [org.clojure/tools.namespace "0.2.11"]]}})

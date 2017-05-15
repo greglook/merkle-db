@@ -8,7 +8,7 @@
     [clojure.string :as str]
     [clojure.test.check.generators :as gen]
     [clojure.tools.namespace.repl :refer [refresh]]
-    [merkledag.refs.memory :refer [memory-ref-tracker]]
+    [merkledag.ref.memory :refer [memory-ref-tracker]]
     [merkle-db.bloom :as bloom]
     [merkle-db.connection :as conn]
     [merkle-db.db :as db]

@@ -4,7 +4,7 @@
   manager."
   (:require
     [clojure.spec :as s]
-    [merkledag.refs :as refs]
+    [merkledag.ref :as ref]
     [merkle-db.data :as data]
     [merkle-db.db :as db]
     [merkle-db.lock :as lock]
@@ -74,45 +74,62 @@
   [store tracker])
 
 
+(defn- ref-version-info
+  "Convert a ref version map into a database version info map."
+  [info]
+  {:merkledag.node/id (::ref/value info)
+   ::db/name (::ref/name info)
+   ::db/version (::ref/version info)
+   :time/updated-at (::ref/time info)})
+
+
 (extend-type Connection
 
   IConnection
 
   (list-dbs
     [this opts]
-    (refs/list-refs (.tracker this) {}))
+    (->> {}
+         (ref/list-refs (.tracker this))
+         (map ref-version-info)))
+
+
+  (get-db-history
+    [this db-name opts]
+    (map ref-version-info (ref/get-history (.tracker this) db-name)))
 
 
   (create-db!
     [this db-name params]
     ; TODO: lock db
-    (refs/set-ref!
-      (.tracker this)
-      db-name
+    (->>
       (or (:root-id params)
           (-> params
               (select-keys [:data/title :data/description ::data/metadata])
               (assoc :data/type :merkle-db/db-root
                      ::db/tables {})
               (->> (node/store-node! (.store this)))
-              (:id)))))
+              (:id)))
+      (ref/set-ref! (.tracker this) db-name)
+      ; TODO: return opened database?
+      (ref-version-info)))
 
 
   (drop-db!
     [this db-name]
     ; TODO: lock db
-    (refs/set-ref! (.tracker this) db-name nil))
+    (ref-version-info (ref/set-ref! (.tracker this) db-name nil)))
 
 
   (open-db
     [this db-name opts]
     (let [version (if-let [^java.time.Instant at-inst (:at-inst opts)]
-                    (first (drop-while #(.isBefore at-inst (:time %))
-                                       (refs/get-history (.tracker this) db-name)))
-                    (refs/get-ref (.tracker this) db-name))]
-      (if (:value version)
+                    (first (drop-while #(.isBefore at-inst (::ref/time %))
+                                       (ref/get-history (.tracker this) db-name)))
+                    (ref/get-ref (.tracker this) db-name))]
+      (if (::ref/value version)
         ; Build database.
-        (Database. (.store this) db-name (:version version) (:value version) nil)
+        (Database. (.store this) db-name (::ref/version version) (::ref/value version) nil)
         ; No version found.
         (throw (ex-info (str "No version found for database " db-name " with " opts)
                         {:type ::no-database-version
@@ -121,16 +138,16 @@
 
 
   (commit!
-    [this db]
-    (commit! this (.db-name db) db))
-
-
-  (commit!
-    [this db-name ^Database db]
-    ; TODO: lock db
-    ; TODO: check if current version is the same as the version opened at?
-    (refs/set-ref! (.tracker this) db-name (.root-id db))
-    this))
+    ([this db]
+     (commit! this (.db-name db) db))
+    ([this db-name db]
+     (commit! this db-name db nil))
+    ([this db-name ^Database db opts]
+     ; TODO: lock db
+     ; TODO: check if current version is the same as the version opened at?
+     (ref/set-ref! (.tracker this) db-name (.root-id db))
+     ; TODO: return new database?
+     db)))
 
 
 (alter-meta! #'->Connection assoc :private true)

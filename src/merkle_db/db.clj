@@ -150,7 +150,7 @@
         (let [meta-node (node/store-node! store db-meta')
               meta-link (link/create "meta" (:id meta-node) (:size meta-node))
               db-node (node/store-node! store (assoc db-root ::data/metadata meta-link))]
-          (assoc this :root-id (:id db-node)))))))
+          (Database. store db-name version (:id db-node) _meta))))))
 
 
 (alter-meta! #'->Database assoc :private true)

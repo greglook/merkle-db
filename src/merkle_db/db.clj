@@ -1,11 +1,12 @@
 (ns merkle-db.db
   (:require
-    [clojure.future :refer [nat-int?]]
+    [clojure.future :refer [inst? nat-int?]]
     [clojure.spec :as s]
     [merkledag.link :as link]
     [merkle-db.data :as data]
     [merkle-db.node :as node]
-    [merkle-db.table :as table]))
+    [merkle-db.table :as table]
+    [multihash.core :as multihash]))
 
 
 ;; ## Specs
@@ -16,22 +17,23 @@
 ;; Database version.
 (s/def ::version nat-int?)
 
+;; When the database version was committed.
+(s/def ::committed-at inst?)
+
 ;; Map of table names to node links.
 (s/def ::tables (s/map-of ::table/name link/merkle-link?))
 
 ;; Description of a specific version of a database.
 (s/def ::version-info
-  (s/keys :req [:merkledag.node/id
+  (s/keys :req [:merkledag.node/id  ; TODO: just ::root-id or ::root ?
                 ::name
                 ::version
-                :time/updated-at]))
+                ::committed-at]))
 
 ;; Database root node.
 (s/def ::root-node
   (s/keys :req [::tables]
-          :opt [:data/title
-                :data/description
-                ::data/metadata
+          :opt [::data/metadata
                 :time/updated-at]))
 
 ;; Description of the database.
@@ -122,7 +124,59 @@
 ;; ## Database Type
 
 (deftype Database
-  [store db-name version root-id _meta]
+  [store
+   db-name
+   version
+   committed-at
+   root-id
+   _meta]
+
+  Object
+
+  (toString
+    [this]
+    (format "db:%s:%d:%s" db-name version (multihash/base58 root-id)))
+
+  (equals
+    [this that]
+    (boolean
+      (or (identical? this that)
+          (when (identical? (class this) (class that))
+            (let [that ^Database that]
+              (and (= db-name (.db-name that))
+                   (= version (.version that))
+                   (= root-id (.root-id that))))))))
+
+  (hashCode
+    [this]
+    (hash [db-name version root-id]))
+
+
+  clojure.lang.IObj
+
+  (meta [this] _meta)
+
+  (withMeta
+    [this meta-map]
+    (Database. store db-name version committed-at root-id meta-map))
+
+
+  clojure.lang.ILookup
+
+  (valAt
+    [this k]
+    (.valAt this k nil))
+
+  (valAt
+    [this k not-found]
+    (case k
+      :merkledag.node/id root-id
+      ::name db-name
+      ::version version
+      ::committed-at committed-at
+      ;:time/updated-at updated-at
+      not-found))
+
 
   IDatabase
 
@@ -150,7 +204,7 @@
         (let [meta-node (node/store-node! store db-meta')
               meta-link (link/create "meta" (:id meta-node) (:size meta-node))
               db-node (node/store-node! store (assoc db-root ::data/metadata meta-link))]
-          (Database. store db-name version (:id db-node) _meta))))))
+          (Database. store db-name version committed-at (:id db-node) _meta))))))
 
 
 (alter-meta! #'->Database assoc :private true)

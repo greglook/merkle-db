@@ -65,8 +65,6 @@ maps table names to _table root nodes_.
 
 ```clojure
 {:data/type :merkle-db/db-root
- :data/title String
- :data/description String
  :merkle-db.data/metadata MerkleLink
  :merkle-db.db/tables {String MerkleLink}
  :time/updated-at Instant}

@@ -129,7 +129,12 @@
                     (ref/get-ref (.tracker this) db-name))]
       (if (::ref/value version)
         ; Build database.
-        (Database. (.store this) db-name (::ref/version version) (::ref/value version) nil)
+        (Database. (.store this)
+                   db-name
+                   (::ref/version version)
+                   (::ref/time version)
+                   (::ref/value version)
+                   nil)
         ; No version found.
         (throw (ex-info (str "No version found for database " db-name " with " opts)
                         {:type ::no-database-version

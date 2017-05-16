@@ -49,7 +49,7 @@
     'blocks.data.PersistentBytes {'data/bytes #(apply str (map (partial format "%02x") (seq %)))}
     'merkledag.link.MerkleLink {'data/link (juxt :name :target :tsize)}
     'merkle_db.bloom.BloomFilter {'merkle-db.bloom.BloomFilter #(select-keys % [:bits :k])}
-    'merkle_db.core.Database {'merkle-db.core.Database (juxt :db-name :root-id)}
+    'merkle_db.db.Database {'merkle-db.db.Database #(dissoc (into {} %) :merkle-db.db/tables)}
     'multihash.core.Multihash {'data/hash 'multihash.core/base58}}}
 
   :profiles

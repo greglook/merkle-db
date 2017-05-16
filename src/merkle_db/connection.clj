@@ -13,16 +13,6 @@
     merkle_db.db.Database))
 
 
-;; ## Specs
-
-(s/def ::db-version
-  (s/keys :req [::db/name
-                :merkledag.node/id
-                ::db/version
-                :time/updated-at]))
-
-
-
 ;; ## Connection Protocols
 
 (defprotocol IConnection
@@ -80,7 +70,7 @@
   {:merkledag.node/id (::ref/value info)
    ::db/name (::ref/name info)
    ::db/version (::ref/version info)
-   :time/updated-at (::ref/time info)})
+   ::db/committed-at (::ref/time info)})
 
 
 (extend-type Connection
@@ -89,36 +79,38 @@
 
   (list-dbs
     [this opts]
-    (->> {}
+    (->> opts
          (ref/list-refs (.tracker this))
          (map ref-version-info)))
 
 
   (get-db-history
     [this db-name opts]
-    (map ref-version-info (ref/get-history (.tracker this) db-name)))
+    (->> (ref/get-history (.tracker this) db-name)
+         (map ref-version-info)))
 
 
   (create-db!
-    [this db-name params]
+    [this db-name root-data]
     ; TODO: lock db
     (->>
-      (or (:root-id params)
-          (-> params
-              (select-keys [:data/title :data/description ::data/metadata])
-              (assoc :data/type :merkle-db/db-root
-                     ::db/tables {})
-              (->> (node/store-node! (.store this)))
-              (:id)))
+      (if (::db/tables root-data)
+        root-data
+        (assoc root-data ::db/tables nil))
+      (node/store-node! (.store this))
+      (:id)
       (ref/set-ref! (.tracker this) db-name)
-      ; TODO: return opened database?
-      (ref-version-info)))
+      (ref-version-info)
+      (db/load-database (.store this))))
 
 
   (drop-db!
     [this db-name]
     ; TODO: lock db
-    (ref-version-info (ref/set-ref! (.tracker this) db-name nil)))
+    (->>
+      nil
+      (ref/set-ref! (.tracker this) db-name)
+      (ref-version-info)))
 
 
   (open-db
@@ -128,13 +120,8 @@
                                        (ref/get-history (.tracker this) db-name)))
                     (ref/get-ref (.tracker this) db-name))]
       (if (::ref/value version)
-        ; Build database.
-        (Database. (.store this)
-                   db-name
-                   (::ref/version version)
-                   (::ref/time version)
-                   (::ref/value version)
-                   nil)
+        ; Load database.
+        (db/load-database (.store this) (ref-version-info version))
         ; No version found.
         (throw (ex-info (str "No version found for database " db-name " with " opts)
                         {:type ::no-database-version
@@ -144,15 +131,32 @@
 
   (commit!
     ([this db]
-     (commit! this (.db-name db) db))
+     (commit! this (::db/name db) db))
     ([this db-name db]
      (commit! this db-name db nil))
     ([this db-name ^Database db opts]
+     ; TODO: validate spec
+     (when-not (string? db-name)
+       (throw (IllegalArgumentException.
+                (str "Cannot commit database without string name: "
+                     (pr-str db-name)))))
+     (when-not db
+       (throw (IllegalArgumentException. "Cannot commit nil database.")))
      ; TODO: lock db
      ; TODO: check if current version is the same as the version opened at?
-     (ref/set-ref! (.tracker this) db-name (.root-id db))
-     ; TODO: return new database?
-     db)))
+     (let [root-id (:merkledag.node/id db)
+           node-data (when root-id (node/get-data (.store this) root-id))
+           root-data (assoc (.root-data db) ::db/tables (.tables db))
+           current-version (ref/get-ref (.tracker this) db-name)]
+       (if (and (= root-data node-data)
+                (= root-id (:merkledag.node/id current-version))
+                (= db-name (::db/name db)))
+         ; No data has changed, return current database.
+         db
+         ; Otherwise, rebuild db node.
+         (let [root-node (node/store-node! (.store this) root-data)
+               version (ref/set-ref! (.tracker this) db-name (:id root-node))]
+           (db/update-backing db (.store this) (ref-version-info version))))))))
 
 
 (alter-meta! #'->Connection assoc :private true)

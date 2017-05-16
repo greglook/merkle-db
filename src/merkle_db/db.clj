@@ -33,8 +33,7 @@
 ;; Database root node.
 (s/def ::root-node
   (s/keys :req [::tables]
-          :opt [::data/metadata
-                :time/updated-at]))
+          :opt [:time/updated-at]))
 
 ;; Description of the database.
 (s/def ::description
@@ -123,19 +122,30 @@
 
 ;; ## Database Type
 
+;; Databases are implementad as a custom type so they can behave similarly to
+;; natural Clojure values.
+;;
+;; - `store` reference to the merkledag node store backing the database.
+;; - `tables` map of table names to reified table objects.
+;; - `root-data` map of data stored in the database root with `::tables`
+;;   removed.
+;; - `version-info` data about the reference version the database was checked
+;;   out as.
 (deftype Database
   [store
-   db-name
-   version
-   committed-at
-   root-id
+   tables
+   root-data
+   version-info
    _meta]
 
   Object
 
   (toString
     [this]
-    (format "db:%s:%d:%s" db-name version (multihash/base58 root-id)))
+    (format "db:%s:%d %s"
+            (::name version-info "?")
+            (::version version-info "?")
+            (hash root-data)))
 
   (equals
     [this that]
@@ -143,22 +153,23 @@
       (or (identical? this that)
           (when (identical? (class this) (class that))
             (let [that ^Database that]
-              (and (= db-name (.db-name that))
-                   (= version (.version that))
-                   (= root-id (.root-id that))))))))
+              (and (= tables (.tables that))
+                   (= root-data (.root-data that))))))))
 
   (hashCode
     [this]
-    (hash [db-name version root-id]))
+    (hash [tables root-data]))
 
 
   clojure.lang.IObj
 
-  (meta [this] _meta)
+  (meta
+    [this]
+    _meta)
 
   (withMeta
     [this meta-map]
-    (Database. store db-name version committed-at root-id meta-map))
+    (Database. store tables root-data version-info meta-map))
 
 
   clojure.lang.ILookup
@@ -169,19 +180,92 @@
 
   (valAt
     [this k not-found]
-    (case k
-      :merkledag.node/id root-id
-      ::name db-name
-      ::version version
-      ::committed-at committed-at
-      ;:time/updated-at updated-at
-      not-found))
+    (cond
+      (= ::tables k) tables
+      (contains? version-info k) (get version-info k)
+      :else (get root-data k not-found)))
+
+
+  clojure.lang.IPersistentMap
+
+  (count
+    [this]
+    (+ 1 (count root-data) (count version-info)))
+
+  (empty
+    [this]
+    (Database. store tables nil version-info _meta))
+
+  (cons
+    [this element]
+    (cond
+      (instance? java.util.Map$Entry element)
+        (let [^java.util.Map$Entry entry element]
+          (.assoc this (.getKey entry) (.getValue entry)))
+      (vector? element)
+        (.assoc this (first element) (second element))
+      :else
+        (loop [result this
+               entries element]
+          (if (seq entries)
+            (let [^java.util.Map$Entry entry (first entries)]
+              (recur (.assoc result (.getKey entry) (.getValue entry))
+                     (rest entries)))
+            result))))
+
+  (equiv
+    [this that]
+    (.equals this that))
+
+  (containsKey
+    [this k]
+    (not (identical? this (.valAt this k this))))
+
+  (entryAt
+    [this k]
+    (let [v (.valAt this k this)]
+      (when-not (identical? this v)
+        (clojure.lang.MapEntry. k v))))
+
+  (seq
+    [this]
+    (seq (concat [(clojure.lang.MapEntry. ::tables tables)]
+                 (seq version-info)
+                 (seq root-data))))
+
+  (iterator
+    [this]
+    (clojure.lang.RT/iter (seq this)))
+
+  (assoc
+    [this k v]
+    (cond
+      (= k ::tables)
+        (throw (RuntimeException. "NYI"))
+      (contains? version-info k)
+        (throw (IllegalArgumentException.
+                 (str "Cannot change database version-info field " k)))
+      :else
+        (Database. store tables (assoc root-data k v) version-info _meta)))
+
+  (without
+    [this k]
+    (cond
+      (= k ::tables)
+        (throw (IllegalArgumentException.
+                 (str "Cannot remove database tables field " k)))
+      (contains? version-info k)
+        (throw (IllegalArgumentException.
+                 (str "Cannot remove database version-info field " k)))
+      :else
+        (Database. store tables (not-empty (dissoc root-data k)) version-info _meta)))
 
 
   IDatabase
 
   (describe-db
     [this]
+    #_
     (when-let [db-root (node/get-data store root-id)]
       (->
         (assoc db-root
@@ -194,6 +278,7 @@
 
   (alter-db-meta
     [this f]
+    #_
     (let [db-root (node/get-data store root-id)
           db-meta (some->> (::data/metadata db-root) (node/get-data store))
           db-meta' (f db-meta)]
@@ -208,3 +293,24 @@
 
 
 (alter-meta! #'->Database assoc :private true)
+
+
+(defn load-database
+  "Load a database from the store, using the version information given."
+  [store version-info]
+  (let [root-data (node/get-data store (:merkledag.node/id version-info))]
+    (->Database store
+                (::tables root-data)
+                (dissoc root-data ::tables)
+                version-info
+                nil)))
+
+
+(defn ^:no-doc update-backing
+  "Update the database to use the given version information."
+  [^Database db store version-info]
+  (->Database store
+              (.tables db)
+              (.root-data db)
+              version-info
+              (meta db)))

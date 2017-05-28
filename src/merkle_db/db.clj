@@ -44,23 +44,13 @@
 
 ;; ## Database Protocols
 
-(defprotocol IDatabase
+(defprotocol ITables
   "Protocol for interacting with a database at a specific version."
 
-  (describe-db
-    [db]
-    "Retrieve descriptive information about a database, including any user-set
-    metadata.")
-
-  (alter-db-meta
-    [db f]
-    "Update the user metadata attached to a database. The function `f` will be
-    called with the current value of the metadata, and the result will be used
-    as the new metadata."))
-
-
-(defprotocol ITables
-  "..."
+  (list-tables
+    [db opts]
+    "Return a sequence of maps about the tables in the database, including
+    their name and total size.")
 
   (create-table
     [db table-name opts]
@@ -70,17 +60,13 @@
     [db table-name]
     "...")
 
-  (alter-table-meta
+  (alter-table
     [db table-name f]
-    "...")
-
-  (alter-families
-    [db table-name new-families]
     "...")
 
   (drop-table
     [db table-name]
-    "...."))
+    "..."))
 
 
 (defprotocol IRecords
@@ -91,7 +77,7 @@
     "...")
 
   (get-records
-    [db table-name primary-keys fields]
+    [db table-name primary-keys opts]
     "...")
 
   (write
@@ -111,7 +97,7 @@
     "...")
 
   (read-partition
-    [db partition-id fields]
+    [db partition-id opts]
     "...")
 
   (build-table
@@ -147,6 +133,7 @@
             (::version version-info "?")
             (hash root-data)))
 
+
   (equals
     [this that]
     (boolean
@@ -155,6 +142,7 @@
             (let [that ^Database that]
               (and (= tables (.tables that))
                    (= root-data (.root-data that))))))))
+
 
   (hashCode
     [this]
@@ -167,6 +155,7 @@
     [this]
     _meta)
 
+
   (withMeta
     [this meta-map]
     (Database. store tables root-data version-info meta-map))
@@ -177,6 +166,7 @@
   (valAt
     [this k]
     (.valAt this k nil))
+
 
   (valAt
     [this k not-found]
@@ -192,9 +182,11 @@
     [this]
     (+ 1 (count root-data) (count version-info)))
 
+
   (empty
     [this]
     (Database. store tables nil version-info _meta))
+
 
   (cons
     [this element]
@@ -213,13 +205,16 @@
                      (rest entries)))
             result))))
 
+
   (equiv
     [this that]
     (.equals this that))
 
+
   (containsKey
     [this k]
     (not (identical? this (.valAt this k this))))
+
 
   (entryAt
     [this k]
@@ -227,15 +222,18 @@
       (when-not (identical? this v)
         (clojure.lang.MapEntry. k v))))
 
+
   (seq
     [this]
     (seq (concat [(clojure.lang.MapEntry. ::tables tables)]
                  (seq version-info)
                  (seq root-data))))
 
+
   (iterator
     [this]
     (clojure.lang.RT/iter (seq this)))
+
 
   (assoc
     [this k v]
@@ -247,6 +245,7 @@
                  (str "Cannot change database version-info field " k)))
       :else
         (Database. store tables (assoc root-data k v) version-info _meta)))
+
 
   (without
     [this k]
@@ -261,24 +260,41 @@
         (Database. store tables (not-empty (dissoc root-data k)) version-info _meta)))
 
 
-  IDatabase
+  ITables
 
-  (describe-db
-    [this]
-    #_
-    (when-let [db-root (node/get-data store root-id)]
-      (->
-        (assoc db-root
-               :merkledag.node/id root-id
-               ::name db-name)
-        (cond->
-          (::data/metadata db-root)
-            (assoc ::data/metadata (node/get-data store (::data/metadata db-root)))))))
+  (list-tables
+    [this opts]
+    (map (fn [[table-name link]]
+           {:merkledag.node/id (:target link)
+            ::table/name table-name
+            ::data/size (:tsize link)})
+         tables))
 
 
+  (create-table
+    [this table-name opts]
+    ,,,)
+
+
+  (describe-table
+    [this table-name]
+    (when-let [link (get tables table-name)]
+      (node/get-data store link)))
+
+
+  (alter-table
+    [this table-name f]
+    ,,,)
+
+
+  (drop-table
+    [this table-name]
+    (Database. store (dissoc tables table-name) root-data version-info _meta))
+
+
+  #_
   (alter-db-meta
     [this f]
-    #_
     (let [db-root (node/get-data store root-id)
           db-meta (some->> (::data/metadata db-root) (node/get-data store))
           db-meta' (f db-meta)]

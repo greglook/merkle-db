@@ -24,7 +24,7 @@
 (s/def ::patch link/merkle-link?)
 
 ;; Table root node.
-(s/def :merkle-db/table-root
+(s/def ::root-node
   (s/keys :req [::data/count
                 ::index/branching-factor
                 ::part/limit]

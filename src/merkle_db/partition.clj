@@ -5,11 +5,11 @@
   (:require
     [clojure.future :refer [pos-int?]]
     [clojure.spec :as s]
+    [merkledag.core :as mdag]
     [merkledag.link :as link]
     [merkle-db.bloom :as bloom]
     [merkle-db.data :as data]
     [merkle-db.key :as key]
-    [merkle-db.node :as node]
     [merkle-db.tablet :as tablet]))
 
 
@@ -74,18 +74,17 @@
 (defn- store-tablet!
   "Store the given tablet data and return the family key and updated id."
   [store family-key tablet]
-  (let [node (node/store-node!
+  (let [node (mdag/store-node!
                store
                (cond-> tablet
                  (not= family-key :base)
                  (tablet/prune-records)))]
     [family-key
-     (link/create
+     (mdag/link
        (if (namespace family-key)
          (str (namespace family-key) ":" (name family-key))
          (name family-key))
-       (:id node)
-       (:size node))]))
+       node)]))
 
 
 (defn- divide-tablets
@@ -95,7 +94,7 @@
   (reduce-kv
     (fn divide
       [[left right] family-key tablet-link]
-      (let [tablet (node/get-data store tablet-link)]
+      (let [tablet (mdag/get-data store tablet-link)]
         (cond
           ; All tablet data is in the left split.
           (key/before? (tablet/last-key tablet) split-key)
@@ -131,7 +130,7 @@
     (map
       (fn make-part
         [tablets]
-        (let [base-keys (tablet/keys (node/get-data store (:base tablets)))]
+        (let [base-keys (tablet/keys (mdag/get-data store (:base tablets)))]
           (assoc defaults
                  ::data/count (count base-keys)
                  ::membership (into (bloom/create (::limit part)) base-keys)
@@ -197,7 +196,7 @@
   (->> (set fields)
        (choose-tablets (::data/families part))
        (map (::tablets part))
-       (map (partial node/get-data store))
+       (map (partial mdag/get-data store))
        (map #(apply read-fn % args))
        (record-seq)
        (map (juxt first #(select-keys (second %) fields)))))
@@ -231,7 +230,7 @@
   records whose ranks lie in the given range, inclusive. A nil boundary includes
   all records in that range direction."
   [store part fields start-index end-index]
-  (let [base (node/get-data store (:base (::tablets part)))
+  (let [base (mdag/get-data store (:base (::tablets part)))
         start (and start-index (tablet/nth-key base start-index))
         end (and end-index (tablet/nth-key base end-index))]
     (read-tablets store part fields tablet/read-range start end)))
@@ -284,7 +283,7 @@
     (if-let [tablet-link (get tablets family-key)]
       ; Load existing tablet to update it.
       (->
-        (node/get-data store tablet-link)
+        (mdag/get-data store tablet-link)
         (or (throw (ex-info (format "Couldn't find tablet %s in backing store"
                                     family-key)
                             {:family family-key
@@ -332,7 +331,7 @@
                      (reduce (partial append-record-updates (::data/families part)) {})
                      (reduce (partial update-tablet! store f) (::tablets part)))
         record-keys (map first records)
-        record-count (count (tablet/read-all (node/get-data store (:base tablets))))
+        record-count (count (tablet/read-all (mdag/get-data store (:base tablets))))
         part-count (inc (int (/ record-count limit)))]
     (if (< 1 part-count)
       ; Records still fit into one partition
@@ -360,7 +359,7 @@
 (defn remove-records
   [store part record-keys]
   (let [update-tablet! (fn [tablet-id]
-                         (:id (node/update-data! store
+                         (:id (mdag/update-data! store
                                                  tablet-id
                                                  tablet/remove-batch
                                                  record-keys)))]

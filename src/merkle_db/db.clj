@@ -2,9 +2,10 @@
   (:require
     [clojure.future :refer [inst? nat-int?]]
     [clojure.spec :as s]
+    [merkledag.core :as mdag]
     [merkledag.link :as link]
+    [merkledag.node :as node]
     [merkle-db.data :as data]
-    [merkle-db.node :as node]
     [merkle-db.table :as table]
     [multihash.core :as multihash]))
 
@@ -25,7 +26,7 @@
 
 ;; Description of a specific version of a database.
 (s/def ::version-info
-  (s/keys :req [:merkledag.node/id  ; TODO: just ::root-id or ::root ?
+  (s/keys :req [::node/id  ; TODO: just ::root-id or ::root ?
                 ::name
                 ::version
                 ::committed-at]))
@@ -265,7 +266,7 @@
   (list-tables
     [this opts]
     (map (fn [[table-name link]]
-           {:merkledag.node/id (:target link)
+           {::node/id (:target link)
             ::table/name table-name
             ::data/size (:tsize link)})
          tables))
@@ -279,7 +280,7 @@
   (describe-table
     [this table-name]
     (when-let [link (get tables table-name)]
-      (node/get-data store link)))
+      (mdag/get-data store link)))
 
 
   (alter-table
@@ -289,23 +290,7 @@
 
   (drop-table
     [this table-name]
-    (Database. store (dissoc tables table-name) root-data version-info _meta))
-
-
-  #_
-  (alter-db-meta
-    [this f]
-    (let [db-root (node/get-data store root-id)
-          db-meta (some->> (::data/metadata db-root) (node/get-data store))
-          db-meta' (f db-meta)]
-      (if (= db-meta db-meta')
-        ; Nothing to change.
-        this
-        ; Store updated metadata node.
-        (let [meta-node (node/store-node! store db-meta')
-              meta-link (link/create "meta" (:id meta-node) (:size meta-node))
-              db-node (node/store-node! store (assoc db-root ::data/metadata meta-link))]
-          (Database. store db-name version committed-at (:id db-node) _meta))))))
+    (Database. store (dissoc tables table-name) root-data version-info _meta)))
 
 
 (alter-meta! #'->Database assoc :private true)
@@ -314,7 +299,7 @@
 (defn load-database
   "Load a database from the store, using the version information given."
   [store version-info]
-  (let [root-data (node/get-data store (:merkledag.node/id version-info))]
+  (let [root-data (mdag/get-data store (::node/id version-info))]
     (->Database store
                 (::tables root-data)
                 (dissoc root-data ::tables)

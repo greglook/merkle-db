@@ -12,10 +12,10 @@
   (:require
     [clojure.future :refer [pos-int?]]
     [clojure.spec :as s]
+    [merkledag.core :as core]
     [merkledag.link :as link]
     [merkle-db.data :as data]
     [merkle-db.key :as key]
-    [merkle-db.node :as node]
     [merkle-db.partition :as part]))
 
 
@@ -81,7 +81,7 @@
     (mapcat
       (fn read-child
         [child-link]
-        (if-let [child (node/get-data store child-link)]
+        (if-let [child (mdag/get-data store child-link)]
           (read-all store child fields)
           (throw (ex-info (format "Missing child linked from index-node %s: %s"
                                   (:id node) child-link)
@@ -108,7 +108,7 @@
       (fn read-child
         [[index child-keys]]
         (let [child-link (nth (::children node) index)]
-          (if-let [child (node/get-data store child-link)]
+          (if-let [child (mdag/get-data store child-link)]
             (read-batch store child fields child-keys)
             (throw (ex-info (format "Missing child linked from index-node %s: %s"
                                     (:id node) child-link)

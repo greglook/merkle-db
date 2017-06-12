@@ -4,11 +4,12 @@
   manager."
   (:require
     [clojure.spec :as s]
+    [merkledag.core :as mdag]
+    [merkledag.node :as node]
     [merkledag.ref :as ref]
     [merkle-db.data :as data]
     [merkle-db.db :as db]
-    [merkle-db.lock :as lock]
-    [merkle-db.node :as node])
+    [merkle-db.lock :as lock])
   (:import
     merkle_db.db.Database))
 
@@ -67,7 +68,7 @@
 (defn- ref-version-info
   "Convert a ref version map into a database version info map."
   [info]
-  {:merkledag.node/id (::ref/value info)
+  {::node/id (::ref/value info)
    ::db/name (::ref/name info)
    ::db/version (::ref/version info)
    ::db/committed-at (::ref/time info)})
@@ -97,7 +98,8 @@
       (if (::db/tables root-data)
         root-data
         (assoc root-data ::db/tables nil))
-      (node/store-node! (.store this))
+      (hash-map ::node/data)
+      (mdag/store-node! (.store this))
       (:id)
       (ref/set-ref! (.tracker this) db-name)
       (ref-version-info)
@@ -144,17 +146,17 @@
        (throw (IllegalArgumentException. "Cannot commit nil database.")))
      ; TODO: lock db
      ; TODO: check if current version is the same as the version opened at?
-     (let [root-id (:merkledag.node/id db)
-           node-data (when root-id (node/get-data (.store this) root-id))
+     (let [root-id (::node/id db)
+           node-data (when root-id (mdag/get-data (.store this) root-id))
            root-data (assoc (.root-data db) ::db/tables (.tables db))
            current-version (ref/get-ref (.tracker this) db-name)]
        (if (and (= root-data node-data)
-                (= root-id (:merkledag.node/id current-version))
+                (= root-id (::node/id current-version))
                 (= db-name (::db/name db)))
          ; No data has changed, return current database.
          db
          ; Otherwise, rebuild db node.
-         (let [root-node (node/store-node! (.store this) root-data)
+         (let [root-node (mdag/store-node! (.store this) root-data)
                version (ref/set-ref! (.tracker this) db-name (:id root-node))]
            (db/update-backing db (.store this) (ref-version-info version))))))))
 

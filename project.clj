@@ -25,9 +25,10 @@
   [[org.clojure/clojure "1.8.0"]
    [clojure-future-spec "1.9.0-alpha14"]
    [bigml/sketchy "0.4.1"]
-   [mvxcvi/blocks "0.9.1"]
    [mvxcvi/merkledag-core "0.2.0"]
-   [mvxcvi/merkledag-ref "0.1.0-SNAPSHOT"]]
+   [mvxcvi/merkledag-ref "0.1.0-SNAPSHOT"]
+   [mvxcvi/blocks "0.9.1"]
+   #_[mvxcvi/baton "0.1.0-SNAPSHOT"]]
 
   :test-selectors
   {:default (complement :generative)

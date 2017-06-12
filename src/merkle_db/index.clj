@@ -12,7 +12,7 @@
   (:require
     [clojure.future :refer [pos-int?]]
     [clojure.spec :as s]
-    [merkledag.core :as core]
+    [merkledag.core :as mdag]
     [merkledag.link :as link]
     [merkle-db.data :as data]
     [merkle-db.key :as key]

@@ -3,13 +3,13 @@
   updating. A connection is backed by a node store, a ref tracker, and a lock
   manager."
   (:require
-    [clojure.spec :as s]
-    [merkledag.core :as mdag]
-    [merkledag.node :as node]
-    [merkledag.ref :as ref]
-    [merkle-db.data :as data]
-    [merkle-db.db :as db]
-    [merkle-db.lock :as lock])
+    (merkledag
+      [core :as mdag]
+      [node :as node]
+      [ref :as ref])
+    (merkle-db
+      [data :as data]
+      [db :as db]))
   (:import
     merkle_db.db.Database))
 

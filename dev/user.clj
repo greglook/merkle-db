@@ -9,28 +9,32 @@
     [clojure.string :as str]
     [clojure.test.check.generators :as gen]
     [clojure.tools.namespace.repl :refer [refresh]]
-    [merkledag.core :as mdag]
-    [merkledag.link :as link]
-    [merkledag.node :as node]
-    [merkledag.ref.file :refer [file-ref-tracker]]
-    [merkle-db.bloom :as bloom]
-    [merkle-db.connection :as conn]
-    [merkle-db.db :as db]
-    [merkle-db.generators :as mdgen]
-    [merkle-db.key :as key]
-    [merkle-db.partition :as part]
-    [merkle-db.tablet :as tablet]
+    [com.stuartsierra.component :as component]
+    (merkledag
+      [core :as mdag]
+      [link :as link]
+      [node :as node])
+    [merkledag.ref.file :as mrf]
+    (merkle-db
+      [bloom :as bloom]
+      [connection :as conn]
+      [db :as db]
+      [generators :as mdgen]
+      [key :as key]
+      [partition :as part]
+      [tablet :as tablet])
     [multihash.core :as multihash]
     [multihash.digest :as digest]))
 
 
+; TODO: replace this with reloaded repl
 (def conn
   (merkle_db.connection.Connection.
     (mdag/init-store
       :store (file-block-store "var/db/blocks")
       :cache {:total-size-limit (* 32 1024)})
-    (file-ref-tracker
-      "var/db/refs.edn")))
+    (doto (mrf/file-ref-tracker "var/db/refs.edn")
+      (mrf/load-history!))))
 
 
 (defn bootstrap

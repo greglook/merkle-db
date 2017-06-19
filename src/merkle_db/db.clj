@@ -174,6 +174,7 @@
     (cond
       (= ::tables k) tables
       (contains? version-info k) (get version-info k)
+      ; TODO: if val here is a link, auto-resolve it
       :else (get root-data k not-found)))
 
 

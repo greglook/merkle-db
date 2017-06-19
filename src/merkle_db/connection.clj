@@ -43,7 +43,7 @@
     "Open a database for use.
 
     - `:version` open a specific version of the database
-    - `:lock`
+    - `:lock` acquire a lock for updating the database
     ")
 
   (commit!
@@ -54,6 +54,7 @@
     database's root value in the ref manager.
 
     - `:force` commit even if the versions don't match
+    - `:unlock` release the database lock, if held
     "))
 
 
@@ -100,7 +101,7 @@
         (assoc root-data ::db/tables nil))
       (hash-map ::node/data)
       (mdag/store-node! (.store this))
-      (:id)
+      (::node/id)
       (ref/set-ref! (.tracker this) db-name)
       (ref-version-info)
       (db/load-database (.store this))))
@@ -156,8 +157,8 @@
          ; No data has changed, return current database.
          db
          ; Otherwise, rebuild db node.
-         (let [root-node (mdag/store-node! (.store this) root-data)
-               version (ref/set-ref! (.tracker this) db-name (:id root-node))]
+         (let [root-node (mdag/store-node! (.store this) nil root-data)
+               version (ref/set-ref! (.tracker this) db-name (::node/id root-node))]
            (db/update-backing db (.store this) (ref-version-info version))))))))
 
 

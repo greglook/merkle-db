@@ -5,10 +5,10 @@
     [clojure.test :refer :all]
     [clojure.test.check.generators :as gen]
     [com.gfredericks.test.chuck.clojure-test :refer [checking]]
+    [merkledag.core :as mdag]
     [merkle-db.data :as data]
     [merkle-db.generators :as mdgen]
     [merkle-db.key :as key]
-    [merkle-db.node :as node]
     [merkle-db.partition :as part]
     [merkle-db.tablet :as tablet]
     [merkle-db.test-utils]))
@@ -56,7 +56,7 @@
 
 
 (deftest partition-logic
-  (let [store (node/memory-node-store)
+  (let [store (mdag/init-store)
         k0 (key/create [0 1 2])
         k1 (key/create [1 2 3])
         k2 (key/create [2 3 4])
@@ -94,10 +94,10 @@
   (checking "valid properties" 20
     [[field-keys families records] mdgen/data-context]
     (is (valid? ::data/families families))
-    (let [store (node/memory-node-store)
+    (let [store (mdag/init-store)
           [part] (part/from-records store {::data/families families} tablet/merge-fields records)
           tablets (into {}
-                        (map (juxt key #(node/get-data store (val %))))
+                        (map (juxt key #(mdag/get-data store (val %))))
                         (::part/tablets part))]
       (is (valid? :merkle-db/partition part)
           "partition data should match schema")

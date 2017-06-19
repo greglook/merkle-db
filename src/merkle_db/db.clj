@@ -267,26 +267,51 @@
   (list-tables
     [this opts]
     (map (fn [[table-name link]]
-           {::node/id (:target link)
+           {::node/id (::link/target link)
             ::table/name table-name
-            ::data/size (:tsize link)})
+            ::data/size (::link/rsize link)})
          tables))
 
 
   (create-table
     [this table-name opts]
-    ,,,)
+    (when (get tables table-name)
+      (throw (ex-info (format "Cannot create table: already a table named %s"
+                              (pr-str table-name))
+                      {:type ::table-name-conflict
+                       :name table-name})))
+    (let [data (table/root-data opts)
+          ; TODO: validate spec
+          node (mdag/store-node! store nil data)
+          link (mdag/link (str "table:" table-name) node)]
+      (Database. store (assoc tables table-name link) root-data version-info _meta)))
 
 
   (describe-table
     [this table-name]
     (when-let [link (get tables table-name)]
-      (mdag/get-data store link)))
+      ; TODO: wrap in custom data type?
+      (let [node (mdag/get-node store link)]
+        (assoc (::node/data node)
+               ::table/name table-name
+               ::node/id (::link/target link)
+               ::data/size (::link/rsize link)))))
 
 
   (alter-table
     [this table-name f]
-    ,,,)
+    ; TODO: validate spec
+    (if-let [table (some->> (get tables table-name)
+                            (mdag/get-data store))]
+      ; Update table data.
+      (let [table' (f table) ; TODO: set :time/updated-at?
+            table-node (mdag/store-node! store nil table') ; TODO: should re-use or update links from previous node 
+            link (mdag/link (str "table:" table-name) table-node)]
+        (Database. store (assoc tables table-name link) root-data version-info _meta))
+      ; Couldn't find table.
+      (throw (ex-info (str "Database has no table named: "
+                           (pr-str table-name))
+                      {:type ::no-such-table}))))
 
 
   (drop-table

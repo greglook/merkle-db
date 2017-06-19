@@ -31,12 +31,22 @@
           :opt [::data
                 ::patch
                 ::data/families
-                ::data/metadata
                 ::key/lexicoder
-                ::part/limit
                 :time/updated-at]))
 
 ; TODO: table description
+
+
+
+;; ## ...
+
+(defn root-data
+  "Construct a map for a new table root node."
+  [opts]
+  (merge {::index/branching-factor 256
+          ::part/limit 100000}
+          opts
+          {::data/count 0}))
 
 
 ; IDEA: reified table-as-collection type

@@ -40,14 +40,16 @@ Non-goals:
 
 ## Storage Structure
 
-A database is stored as a _merkle tree_, where each node in the tree is an
-immutable [content-addressed block](https://github.com/greglook/blocks)
-identified by a [cryptographic hash](https://github.com/multiformats/clj-multihash)
-of its byte content. The data in each block is serialized with a _codec_ and
-wrapped in [multicodec headers](https://github.com/multiformats/clj-multicodec)
-to support format versioning and feature evolution. Initial versions will likely
-use [CBOR](https://github.com/greglook/clj-cbor) and a header like
-`/merkle-db/v1/cbor+snappy`.
+A database is stored as a _merkle tree_, which is a type of
+[merkle DAG](https://github.com/greglook/merkledag-core) structure.
+Each node in the tree is an immutable [content-addressed
+block](https://github.com/greglook/blocks) identified by a
+[cryptographic hash](https://github.com/multiformats/clj-multihash) of its byte
+content. The data in each block is serialized with a _codec_ and wrapped in
+[multicodec headers](https://github.com/multiformats/clj-multicodec) to support
+format versioning and feature evolution.  Initial versions will use the
+[CBOR](https://github.com/greglook/clj-cbor) format for node data and Snappy for
+compression.
 
 ![MerkleDB database structure](doc/images/db-data-structure.jpg)
 
@@ -65,16 +67,20 @@ maps table names to _table root nodes_.
 
 ```clojure
 {:data/type :merkle-db/db-root
- :merkle-db.data/metadata MerkleLink
  :merkle-db.db/tables {String MerkleLink}
- :time/updated-at Instant}
+ :time/updated-at Instant
+ ,,,}
 ```
+
+Database roots may contain additional arbitrary entries to support user-set
+metadata on the table. For example, this could be used to add a
+`:data/description` value to the database.
 
 ### Table Root Node
 
-A table root is a block which contains table-specific information and links to
-the collections of record data. The records in a table are grouped into
-_partitions_, which contain a contiguous range of record primary keys.
+A table root is a node which contains table-specific information and links to
+the tree of record data. The records in a table are grouped into _partitions_,
+which contain a contiguous range of record primary keys.
 
 Partitions are the leaves of a tree of index nodes, sorted by record primary
 keys. The data fields for each record are stored in _tablets_, which are linked
@@ -95,14 +101,17 @@ return to the client.
 {:data/type :merkle-db/table-root
  :merkle-db.data/count Long
  :merkle-db.data/families {Keyword #{field-key}}
- :merkle-db.data/metadata MerkleLink
  :merkle-db.key/lexicoder Keyword
  :merkle-db.index/branching-factor Long  ; e.g. 256 children
  :merkle-db.partition/limit Long         ; e.g. 100,000 records
  :merkle-db.table/data MerkleLink
  :merkle-db.table/patch MerkleLink
- :time/updated-at Instant}
+ :time/updated-at Instant
+ ,,,}
 ```
+
+Similar to the database root, tables may also contain additional entries to
+attach user-specified metadata to them.
 
 ### Index Data Trees
 
@@ -114,8 +123,7 @@ serialization formats.
 
 The tree nodes contain a count of the records under them, so the index is also
 an [order statistic tree](https://en.wikipedia.org/wiki/Order_statistic_tree).
-A similar metric for the linked block sizes allows for quick data sizing as
-well.
+A similar metric for the linked block sizes allows for quick data sizing.
 
 ```clojure
 {:data/type :merkle-db/index
@@ -139,9 +147,9 @@ well.
 Partitions represent contiguous ranges of records, sorted by primary key. The
 data for records are stored in _tablets_, which are linked from each partition.
 
-Unlike the internal nodes, partitions may represent significantly more entries
-than the tree's branching factor. When partitions grow above a configurable
-limit, they are split into two smaller partitions to enable more parallelism
+Unlike the internal nodes, partitions contain significantly more entries than
+the index branching factor. When partitions grow above this (configurable)
+limit, they are split into two smaller partitions to enable better parallelism
 when processing the table.
 
 Tables may define _families_ of fields which are often accessed together, as a
@@ -160,14 +168,12 @@ sure that the full sequence of keys can be enumerated with only the base.
  :merkle-db.data/families {Keyword #{field-key}}
  :merkle-db.partition/limit Long
  :merkle-db.partition/membership BloomFilter
- :merkle-db.partition/start-key key-bytes
- :merkle-db.partition/end-key key-bytes
+ :merkle-db.partition/first-key key-bytes
+ :merkle-db.partition/last-key key-bytes
  :merkle-db.partition/tablets
  {:base MerkleLink
   family-key MerkleLink}}
 ```
-
-**TODO:** Should families allow duplicate fields?
 
 Partitions store family information locally because occasionally tables may be
 in a transitionary state where some partitions' family configuration does not
@@ -207,30 +213,31 @@ manager. It can be used to open databases for reading and writing.
 (connect node-store ref-manager & opts) => conn
 
 ; List information about the current version of each database present.
-(list-dbs conn) => (db-version ...)
-{:merkledag.node/id Multihash
- :merkle-db.db/name String
- :merkle-db.db/version Long
- :time/updated-at Instant}
+(list-dbs conn opts) =>
+({:merkledag.node/id Multihash
+  :merkle-db.db/name String
+  :merkle-db.db/version Long
+  :merkle-db.db/committed-at Instant}
+ ...)
 
 ; List information about the version history of a specific database.
-(list-db-history conn db-name) => (db-version ...)
+(get-db-history conn db-name) => (db-version ...)
 
 ; Initialize a new database. An initial `:root` value may be provided, allowing
 ; for cheap database copy-on-write cloning.
-(create-db! conn db-name & opts) => db
-
-; Open a database for use. An optional argument may be provided, which will
-; return the last committed database version occurring before that time.
-(open-db conn db-name & opts) => db
-
-; Ensure all data has been written to the backing block store and update the
-; database's root in the ref manager.
-(commit! conn db) => db'
+(create-db! conn db-name root-data) => db
 
 ; Drop a database ref. Note that this will not remove the block data, as it
 ; may be shared.
 (drop-db! conn db-name)
+
+; Open a database for use. An optional argument may be provided, which will
+; return the last committed database version occurring before that time.
+(open-db conn db-name opts) => db
+
+; Ensure all data has been written to the backing block store and update the
+; database's root in the ref manager.
+(commit! conn db) => db'
 ```
 
 ### Database Operations
@@ -240,21 +247,20 @@ block and ref stores. Once you are interacting with the database object, most
 operations will return a locally-updated copy but not actually change the
 backing storage until `commit!` is called.
 
+Database values are map-like, and present both the database version attributes
+(`:merkledag.node/id`, `:merkle-db.db/name`, `:merkle-db.db/version`,
+`:merkle-db.db/committed-at`) as well as the attributes stored in the database
+root node.
+
 ```clojure
-; Retrieve descriptive information about a database, including any user-set
-; metadata.
-(describe-db db) =>
+(into {} db) =>
 {:merkledag.node/id Multihash
+ :merkle-db.db/committed-at Instant
  :merkle-db.db/name String
  :merkle-db.db/version Long
- :merkle-db.db/table-names #{table-name}
- :merkle-db.data/metadata *
- :time/updated-at Instant}
-
-; Update the user metadata attached to a database. The function `f` will be
-; called with the current value of the metadata, followed by any provided
-; arguments. The result will be used as the new metadata.
-(alter-db-meta db f & args) => db'
+ :merkle-db.db/tables {table-name MerkleLink}
+ :time/updated-at Instant
+ ,,,}
 ```
 
 ### Table Operations
@@ -263,9 +269,16 @@ Tables are collections of records, identified by a string name. Each table name
 must be unique within the database.
 
 ```clojure
+; List information about the tables within a database.
+(list-tables db opts) =>
+({:merkledag.node/id Multihash
+  :merkle-db.table/name String
+  :merkle-db.data/size Long}
+ ...)
+
 ; Add a new table to the database. Options may include pre-defined field
 ; families and metadata.
-(create-table db table-name & opts) => db'
+(create-table db table-name opts) => db'
 
 ; Retrieve descriptive information about a table in the database. The various
 ; `:count` and `:size` metrics represent the number of records and data size in
@@ -275,7 +288,6 @@ must be unique within the database.
  :merkle-db.data/count Long
  :merkle-db.data/size Long
  :merkle-db.data/families {Keyword #{field-names}}
- :merkle-db.data/metadata *
  :merkle-db.index/branching-factor Long
  :merkle-db.key/lexicoder Lexicoder
  :merkle-db.partition/limit Long
@@ -287,7 +299,7 @@ must be unique within the database.
 ; Update the user metadata attached to a table. The function `f` will be
 ; called with the current value of the metadata, followed by any provided
 ; arguments. The result will be used as the new metadata.
-(alter-table-meta db table-name f & args) => db'
+(alter-table db table-name f & args) => db'
 
 ; Change the defined field family groups in a table. The new families should be
 ; provided as a keyword mapped to a set of field names. This requires rebuilding
@@ -349,16 +361,16 @@ high-performance applications.
 ; List the partitions which compose the blocks of primary key ranges for the
 ; records in the table.
 (list-partitions db table-name) =>
-({:id Multihash
-  :count Long
-  :size Long
-  :start key-bytes
-  :end key-bytes}
+({:merkledag.node/id Multihash
+  :merkle-db.data/count Long
+  :merkle-db.data/size Long
+  :merkle-db.partition/first-key key-bytes
+  :merkle-db.partition/last-key key-bytes}
  ...)
 
 ; Read all the records in the given partition, returning a sequence of data for
 ; the given set of fields.
-(read-partition db partition-id & [fields]) => (record ...)
+(read-partition db node-id & [fields]) => (record ...)
 
 ; Rebuild a table from a sequence of new or updated partitions. Existing table
 ; settings and metadata are left unchanged.

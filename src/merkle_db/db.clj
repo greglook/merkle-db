@@ -7,7 +7,9 @@
     [merkledag.node :as node]
     [merkle-db.data :as data]
     [merkle-db.table :as table]
-    [multihash.core :as multihash]))
+    [multihash.core :as multihash])
+  (:import
+    java.time.Instant))
 
 
 ;; ## Specs
@@ -304,8 +306,8 @@
     (if-let [table (some->> (get tables table-name)
                             (mdag/get-data store))]
       ; Update table data.
-      (let [table' (f table) ; TODO: set :time/updated-at?
-            table-node (mdag/store-node! store nil table') ; TODO: should re-use or update links from previous node 
+      (let [table' (assoc (f table) :time/update-dat (Instant/now))
+            table-node (mdag/store-node! store nil table') ; TODO: should re-use or update links from previous node
             link (mdag/link (str "table:" table-name) table-node)]
         (Database. store (assoc tables table-name link) root-data version-info _meta))
       ; Couldn't find table.

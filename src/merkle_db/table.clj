@@ -9,7 +9,9 @@
     [merkle-db.data :as data]
     [merkle-db.index :as index]
     [merkle-db.key :as key]
-    [merkle-db.partition :as part]))
+    [merkle-db.partition :as part])
+  (:import
+    java.time.Instant))
 
 
 ;; ## Specs
@@ -46,7 +48,8 @@
   (merge {::index/branching-factor 256
           ::part/limit 100000}
           opts
-          {::data/count 0}))
+          {::data/count 0
+           :time/updated-at (Instant/now)}))
 
 
 ; IDEA: reified table-as-collection type

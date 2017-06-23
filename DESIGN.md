@@ -60,7 +60,7 @@ content of the node, so a change to any part of the tree must propagate up to
 the root node. The entire immutable tree of data at a specific version can
 therefore be identified by the hash of the database root node.
 
-### Database Root Node
+### Database Roots
 
 The root of a database is a block which contains database-wide settings and
 maps table names to _table root nodes_.
@@ -76,26 +76,12 @@ Database roots may contain additional arbitrary entries to support user-set
 metadata on the table. For example, this could be used to add a
 `:data/description` value to the database.
 
-### Table Root Node
+### Table Roots
 
-A table root is a node which contains table-specific information and links to
+A table root is a node which contains table-wide settings and links to
 the tree of record data. The records in a table are grouped into _partitions_,
-which contain a contiguous range of record primary keys.
-
-Partitions are the leaves of a tree of index nodes, sorted by record primary
-keys. The data fields for each record are stored in _tablets_, which are linked
-to from each partition.
-
-In addition to the partitions, tables contain a _patch tablet_ linked directly
-from the root node. This tablet holds complete records (and tombstones) sorted
-by pk which should be preferred to any found in the main table body. This is
-similar to Clojure's `PersistentVector` 'tails' and allow for amortizing table
-updates across multiple operations.
-
-To perform a read from the tree, first the patch tablet is consulted, then the
-tablets from each partition corresponding to the requested fields are used to
-look up record data. The results are merged into a single sequence of records to
-return to the client.
+which each contain the data for a contiguous, non-overlapping range of record
+primary keys.
 
 ```clojure
 {:data/type :merkle-db/table-root
@@ -113,17 +99,18 @@ return to the client.
 Similar to the database root, tables may also contain additional entries to
 attach user-specified metadata to them.
 
-### Index Data Trees
+### Data Index Trees
 
 Index trees are modeled after a [B+ tree](https://en.wikipedia.org/wiki/B%2B_tree)
-and contain both internal index nodes and leaf partitions. Records in a data
-tree are sorted by their _primary key_, which uniquely identifies each record
-within the table. Primary keys are just bytes, allowing for pluggable key
-serialization formats.
+and contain both internal index nodes and leaf partitions. Records in the tree
+are sorted by their _primary key_, which uniquely identifies each record within
+the table. Primary keys are just bytes, allowing for pluggable key serialization
+formats.
 
 The tree nodes contain a count of the records under them, so the index is also
 an [order statistic tree](https://en.wikipedia.org/wiki/Order_statistic_tree).
-A similar metric for the linked block sizes allows for quick data sizing.
+A similar metric for the linked block sizes allows for quick recursive data
+sizing.
 
 ```clojure
 {:data/type :merkle-db/index
@@ -144,13 +131,14 @@ A similar metric for the linked block sizes allows for quick data sizing.
 
 ### Partitions
 
-Partitions represent contiguous ranges of records, sorted by primary key. The
-data for records are stored in _tablets_, which are linked from each partition.
+Partitions hold contiguous non-overlapping ranges of records, sorted by primary
+key. The records' field data is stored in _tablets_, which are linked from each
+partition.
 
-Unlike the internal nodes, partitions contain significantly more entries than
-the index branching factor. When partitions grow above this (configurable)
-limit, they are split into two smaller partitions to enable better parallelism
-when processing the table.
+Unlike the internal nodes, partitions may contain significantly more entries
+than the index tree's branching factor. When partitions grow above this limit,
+they are split into two smaller partitions to enable better parallelism when
+processing the table.
 
 Tables may define _families_ of fields which are often accessed together, as a
 storage optimization for queries. Each family of fields will be written in
@@ -196,6 +184,32 @@ candidate for a custom encoding format. In particular, caching field names at
 the beginning of the data and referencing them by number in the actual record
 bodies would probably save a lot of space. This may not be a huge win compared
 to simply applying compression to the entire tablet block, however.
+
+### Patch Tablets
+
+In addition to the main data tree, tables may contain a _patch tablet_ linked
+directly from the root node. This tablet holds complete records and tombstones
+sorted by pk which override the main data tree. This is similar to Clojure's
+`PersistentVector` 'tails' and allows for amortizing table updates across many
+operations. Later, the contents of the patch tablet can be flushed together to
+update the main data tree.
+
+Insertions and updates write new full record values to the patch tablet. This
+requires a read from the main data tree to fill in values, but saves
+tremendously on storage space. Deletions add a tombstone marker to the patch
+tablet so that later reads can elide the record.
+
+To perform a batch read, first the patch tablet is consulted. If it contains a
+tombstone, the record was deleted. If it contains data, that is taken as the
+full record content. If any records were not found, they are read from the main
+data tree as normal.
+
+To perform a range scan, both the data tree and the patch tablet are read with
+the same range criteria. In the resulting sequence, any records appearing in the
+patch tablet replace the values from the data tree. Tombstones will remove a
+record from the result if it would have been present; patch data will replace
+(not merge with) the data in the tree, or insert the record if it wasn't already
+present.
 
 
 ## Client API

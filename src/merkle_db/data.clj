@@ -15,8 +15,7 @@
 (s/def ::field-key any?)
 
 ;; Valid family keys.
-(s/def ::family-key
-  (s/and keyword? #(not= % :base)))
+(s/def ::family-key keyword?)
 
 ;; Map of family keywords to sets of contained fields.
 (s/def ::families
@@ -26,9 +25,6 @@
       (s/coll-of ::field-key :kind set?))
     #(= (reduce + (map count (vals %)))
         (count (distinct (apply concat (vals %)))))))
-
-;; Link to user-supplied metadata.
-(s/def ::metadata link/merkle-link?)
 
 ;; Instant point in time.
 (s/def :time/instant #(instance? java.time.Instant %))

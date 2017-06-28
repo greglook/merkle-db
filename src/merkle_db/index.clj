@@ -36,7 +36,7 @@
 (s/def ::children (s/coll-of link/merkle-link? :kind vector?))
 
 ;; Data tree index node.
-(s/def :merkle-db/index-node
+(s/def ::node-data
   (s/and
     (s/keys :req [::data/count
                   ::height

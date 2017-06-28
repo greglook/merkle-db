@@ -43,8 +43,7 @@
     "Open a database for use.
 
     - `:version` open a specific version of the database
-    - `:lock` acquire a lock for updating the database
-    ")
+    - `:lock` acquire a lock for updating the database")
 
   (commit!
     [conn db]
@@ -54,8 +53,7 @@
     database's root value in the ref manager.
 
     - `:force` commit even if the versions don't match
-    - `:unlock` release the database lock, if held
-    "))
+    - `:unlock` release the database lock, if held"))
 
 
 

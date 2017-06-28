@@ -1,4 +1,5 @@
 (ns merkle-db.db
+  "Core database functions."
   (:require
     [clojure.future :refer [inst? nat-int?]]
     [clojure.spec :as s]
@@ -28,20 +29,20 @@
 
 ;; Description of a specific version of a database.
 (s/def ::version-info
-  (s/keys :req [::node/id  ; TODO: just ::root-id or ::root ?
+  (s/keys :req [::node/id
                 ::name
                 ::version
                 ::committed-at]))
 
 ;; Database root node.
-(s/def ::root-node
+(s/def ::node-data
   (s/keys :req [::tables]
           :opt [:time/updated-at]))
 
 ;; Description of the database.
 (s/def ::description
   (s/merge ::version-info
-           ::root-node))
+           ::node-data))
 
 
 

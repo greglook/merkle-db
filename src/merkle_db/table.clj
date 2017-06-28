@@ -26,7 +26,7 @@
 (s/def ::patch link/merkle-link?)
 
 ;; Table root node.
-(s/def ::root-node
+(s/def ::node-data
   (s/keys :req [::data/count
                 ::index/branching-factor
                 ::part/limit]
@@ -50,6 +50,3 @@
           opts
           {::data/count 0
            :time/updated-at (Instant/now)}))
-
-
-; IDEA: reified table-as-collection type

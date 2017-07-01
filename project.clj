@@ -49,9 +49,10 @@
   {:tag-types
    {'blocks.data.Block {'blocks.data.Block (partial into {})}
     'blocks.data.PersistentBytes {'data/bytes #(apply str (map (partial format "%02x") (seq %)))}
-    'merkledag.link.MerkleLink {'data/link (juxt :name :target :tsize)}
-    'merkle_db.bloom.BloomFilter {'merkle-db.bloom.BloomFilter #(select-keys % [:bits :k])}
-    'merkle_db.db.Database {'merkle-db.db.Database #(dissoc (into {} %) :merkle-db.db/tables)}
+    'merkledag.link.MerkleLink {'merkledag/link (juxt :name :target :tsize)}
+    'merkle_db.bloom.BloomFilter {'merkle-db/bloom-filter #(select-keys % [:bits :k])}
+    'merkle_db.db.Database {'merkle-db/db #(dissoc (into {} %) :merkle-db.db/tables)}
+    'merkle_db.table.Table {'merkle-db/table (partial into {})}
     'multihash.core.Multihash {'data/hash 'multihash.core/base58}}}
 
   :profiles

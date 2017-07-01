@@ -145,6 +145,7 @@
        (throw (IllegalArgumentException. "Cannot commit nil database.")))
      ; TODO: lock db
      ; TODO: check if current version is the same as the version opened at?
+     ; TODO: check for dirty tables, serialize to links
      (let [root-id (::node/id db)
            node-data (when root-id (mdag/get-data (.store this) root-id))
            root-data (assoc (.root-data db) ::db/tables (.tables db))

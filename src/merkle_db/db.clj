@@ -10,12 +10,14 @@
     [merkle-db.table :as table]
     [multihash.core :as multihash])
   (:import
-    java.time.Instant))
+    java.time.Instant
+    merkle_db.table.Table))
 
 
-;; ## Specs
+;; ## Data Specifications
 
 ;; Database name.
+;; TODO: disallow certain characters like '/'
 (s/def ::name (s/and string? #(<= 1 (count %) 512)))
 
 ;; Database version.
@@ -27,86 +29,121 @@
 ;; Map of table names to node links.
 (s/def ::tables (s/map-of ::table/name link/merkle-link?))
 
-;; Description of a specific version of a database.
+;; Database root node.
+(s/def ::node-data
+  (s/keys :req [::tables]
+          :opt [:time/updated-at]))
+
+(def info-keys
+  #{::node/id ::name ::version ::committed-at})
+
+;; Information from the database version.
 (s/def ::version-info
   (s/keys :req [::node/id
                 ::name
                 ::version
                 ::committed-at]))
 
-;; Database root node.
-(s/def ::node-data
-  (s/keys :req [::tables]
-          :opt [:time/updated-at]))
-
 ;; Description of the database.
 (s/def ::description
-  (s/merge ::version-info
-           ::node-data))
+  (s/merge ::node-data ::version-info))
 
 
 
-;; ## Database Protocols
+;; ## Database API
 
-(defprotocol ITables
+(defprotocol IDatabase
   "Protocol for interacting with a database at a specific version."
 
   (list-tables
     [db opts]
-    "Return a sequence of maps about the tables in the database, including
-    their name and total size.")
+    "Return a sequence of maps with partial information about the tables in the
+    database, including their name and total size.
 
-  (create-table
-    [db table-name opts]
-    "...")
+    Options may include:
 
-  (describe-table
+    ...")
+
+  (get-table
     [db table-name]
-    "...")
+    "Return a value representing the named table in the database, or nil if no
+    such table exists.")
 
-  (alter-table
-    [db table-name f]
-    "...")
+  (set-table
+    [db table-name value]
+    "Set the state of the named table. Returns an updated database value.")
 
   (drop-table
     [db table-name]
-    "..."))
+    "Remove the named table from the database. Returns an updated database
+    value.")
+
+  (flush!
+    [db]
+    "Ensure any pending changes are persistently stored. Returns an updated
+    database value."))
 
 
-(defprotocol IRecords
-  "..."
+(defn create-table
+  "Create a new table with the given name and options. Returns an updated
+  database value, or throws an exception if the table already exists."
+  [db table-name opts]
+  (when (get-table db table-name)
+    (throw (ex-info
+             (str "Cannot create table: database already has a table named "
+                  table-name)
+             {:type ::table-conflict
+              :table-name table-name})))
+  ; TODO: review how this works
+  (let [table (Table. nil
+                      {::table/name table-name}
+                      (table/root-data opts)
+                      nil
+                      true
+                      nil)]
+    (set-table db table-name table)))
 
-  (scan
-    [db table-name opts]
-    "...")
 
-  (get-records
-    [db table-name primary-keys opts]
-    "...")
+(defn rename-table
+  "Update the database by moving the table named `from` to the name `to`.
+  Returns an updated database value, or throws an exception if table `from`
+  does not exist or `to` already exists."
+  [db from to]
+  (let [table (get-table db from)]
+    (when-not table
+      (throw (ex-info
+               (str "Cannot rename table: database has no table named "
+                    from)
+               {:type ::no-table
+                :from from
+                :to to})))
+    (when (get-table db to)
+      (throw (ex-info
+               (str "Cannot rename table: database already has a table named "
+                    to)
+               {:type ::table-conflict
+                :from from
+                :to to})))
+    (-> db
+        (drop-table from)
+        (set-table to table))))
 
-  (write
-    [db table-name records]
-    "...")
 
-  (delete
-    [db table-name primary-keys]
-    "..."))
-
-
-(defprotocol IPartitions
-  "..."
-
-  (list-partitions
-    [db table-name]
-    "...")
-
-  (read-partition
-    [db partition-id opts]
-    "...")
-
-  (build-table
-    [db table-name partition-ids]
-    "..."))
+(defn update-table
+  "Update the table by calling `f` with the current table value and the
+  remaining `args`. Returns an updated database value, or throws an
+  exception if the table does not exist."
+  [db table-name f & args]
+  (let [table (get-table db table-name)]
+    (when-not table
+      (throw (ex-info
+               (str "Cannot update table: database has no table named "
+                    table-name)
+               {:type ::no-table
+                :table-name table-name})))
+    ; TODO: validate table spec?
+    ; TODO: set :time/updated-at
+    (set-table db table-name (apply f table args))))
 
 
 
@@ -116,26 +153,23 @@
 ;; natural Clojure values.
 ;;
 ;; - `store` reference to the merkledag node store backing the database.
+;; - `version-info` data from the reference version the database was opened at.
+;; - `root-data` map of data stored in the database root, excluding `::tables`.
 ;; - `tables` map of table names to reified table objects.
-;; - `root-data` map of data stored in the database root with `::tables`
-;;   removed.
-;; - `version-info` data about the reference version the database was checked
-;;   out as.
 (deftype Database
   [store
-   tables
-   root-data
    version-info
+   root-data
+   tables
    _meta]
 
   Object
 
   (toString
     [this]
-    (format "db:%s:%d %s"
+    (format "db:%s:%s"
             (::name version-info "?")
-            (::version version-info "?")
-            (hash root-data)))
+            (::version version-info "?")))
 
 
   (equals
@@ -143,14 +177,13 @@
     (boolean
       (or (identical? this that)
           (when (identical? (class this) (class that))
-            (let [that ^Database that]
-              (and (= tables (.tables that))
-                   (= root-data (.root-data that))))))))
+            (and (= root-data (.root-data ^Database that))
+                 (= tables (.tables ^Database that)))))))
 
 
   (hashCode
     [this]
-    (hash [tables root-data]))
+    (hash-combine (hash root-data) (hash tables)))
 
 
   clojure.lang.IObj
@@ -162,7 +195,7 @@
 
   (withMeta
     [this meta-map]
-    (Database. store tables root-data version-info meta-map))
+    (Database. store version-info root-data tables meta-map))
 
 
   clojure.lang.ILookup
@@ -175,8 +208,8 @@
   (valAt
     [this k not-found]
     (cond
-      (= ::tables k) tables
-      (contains? version-info k) (get version-info k)
+      (= ::tables k) tables ; TODO: better return val
+      (contains? info-keys k) (get version-info k not-found)
       ; TODO: if val here is a link, auto-resolve it
       :else (get root-data k not-found)))
 
@@ -185,12 +218,12 @@
 
   (count
     [this]
-    (+ 1 (count root-data) (count version-info)))
+    (+ (count root-data) (count version-info) 1))
 
 
   (empty
     [this]
-    (Database. store tables nil version-info _meta))
+    (Database. store version-info nil tables _meta))
 
 
   (cons
@@ -218,7 +251,9 @@
 
   (containsKey
     [this k]
-    (not (identical? this (.valAt this k this))))
+    (or (= k ::tables)
+        (contains? version-info k)
+        (contains? root-data k)))
 
 
   (entryAt
@@ -230,9 +265,9 @@
 
   (seq
     [this]
-    (seq (concat [(clojure.lang.MapEntry. ::tables tables)]
-                 (seq version-info)
-                 (seq root-data))))
+    (seq (concat (seq version-info)
+                 (seq root-data)
+                 [(clojure.lang.MapEntry. ::tables tables)])))
 
 
   (iterator
@@ -244,12 +279,13 @@
     [this k v]
     (cond
       (= k ::tables)
-        (throw (RuntimeException. "NYI"))
-      (contains? version-info k)
+        (throw (IllegalArgumentException.
+                 (str "Cannot directly set database tables field " k)))
+      (contains? info-keys k)
         (throw (IllegalArgumentException.
                  (str "Cannot change database version-info field " k)))
       :else
-        (Database. store tables (assoc root-data k v) version-info _meta)))
+        (Database. store version-info (assoc root-data k v) tables _meta)))
 
 
   (without
@@ -258,71 +294,101 @@
       (= k ::tables)
         (throw (IllegalArgumentException.
                  (str "Cannot remove database tables field " k)))
-      (contains? version-info k)
+      (contains? info-keys k)
         (throw (IllegalArgumentException.
                  (str "Cannot remove database version-info field " k)))
       :else
-        (Database. store tables (not-empty (dissoc root-data k)) version-info _meta)))
+        (Database.
+          store
+          tables
+          (not-empty (dissoc root-data k))
+          version-info
+          _meta))))
 
 
-  ITables
+(alter-meta! #'->Database assoc :private true)
+
+
+; TODO: constructor functions
+
+
+
+;; ## Protocol Implementation
+
+(extend-type Database
+
+  IDatabase
 
   (list-tables
     [this opts]
-    (map (fn [[table-name link]]
-           {::node/id (::link/target link)
-            ::table/name table-name
-            ::data/size (::link/rsize link)})
-         tables))
+    ; TODO: figure out useful options
+    (map (fn link->info
+           [[table-name value]]
+           (if (link/merkle-link? value)
+             {::node/id (::link/target value)
+              ::table/name table-name
+              ::data/size (::link/rsize value)}
+             (select-keys
+               value
+               [::node/id ::table/name ::data/size])))
+         (.tables this)))
 
 
-  (create-table
-    [this table-name opts]
-    (when (get tables table-name)
-      (throw (ex-info (format "Cannot create table: already a table named %s"
-                              (pr-str table-name))
-                      {:type ::table-name-conflict
-                       :name table-name})))
-    (let [data (table/root-data opts)
-          ; TODO: validate spec
-          node (mdag/store-node! store nil data)
-          link (mdag/link (str "table:" table-name) node)]
-      (Database. store (assoc tables table-name link) root-data version-info _meta)))
-
-
-  (describe-table
+  (get-table
     [this table-name]
-    (when-let [link (get tables table-name)]
-      ; TODO: wrap in custom data type?
-      (let [node (mdag/get-node store link)]
-        (assoc (::node/data node)
-               ::table/name table-name
-               ::node/id (::link/target link)
-               ::data/size (::link/rsize link)))))
+    (when-let [value (get (.tables this) table-name)]
+      (if (link/merkle-link? value)
+        ; Resolve link to stored table root.
+        (let [node (mdag/get-node (.store this) value)]
+          (Table.
+            (.store this)
+            {::table/name table-name
+             ::node/id (::link/target value)
+             ::data/size (::link/rsize value)}
+            (::node/data node)
+            nil
+            false
+            {::node/links (::node/links node)}))
+        ; Dirty table value.
+        value)))
 
 
-  (alter-table
-    [this table-name f]
-    ; TODO: validate spec
-    (if-let [table (some->> (get tables table-name)
-                            (mdag/get-data store))]
-      ; Update table data.
-      (let [table' (assoc (f table) :time/update-dat (Instant/now))
-            table-node (mdag/store-node! store nil table') ; TODO: should re-use or update links from previous node
-            link (mdag/link (str "table:" table-name) table-node)]
-        (Database. store (assoc tables table-name link) root-data version-info _meta))
-      ; Couldn't find table.
-      (throw (ex-info (str "Database has no table named: "
-                           (pr-str table-name))
-                      {:type ::no-such-table}))))
+  (set-table
+    [this table-name ^Table value]
+    (when-not (s/valid? ::table/node-data (.root-data value))
+      (throw (ex-info
+               "Updated table is not valid"
+               {:type ::invalid-table
+                :errors (s/explain-data ::table/node-data
+                                        (.root-data value))})))
+    (let [table (if (.dirty? value)
+                  (Table.
+                    (.store this)
+                    {::table/name table-name}
+                    (.root-data value)
+                    (.patch-data value)
+                    true
+                    (._meta value))
+                  (link/create
+                    (str "table:" table-name)
+                    (::node/id value)
+                    (::data/size value)))]
+      (Database.
+        (.store this)
+        (assoc (.tables this) table-name table)
+        (.root-data this)
+        (.version-info this)
+        (._meta this))))
 
 
   (drop-table
     [this table-name]
-    (Database. store (dissoc tables table-name) root-data version-info _meta)))
-
-
-(alter-meta! #'->Database assoc :private true)
+    (Database.
+      (.store this)
+      (dissoc (.tables this) table-name)
+      (.root-data this)
+      (.version-info this)
+      (._meta this))))
 
 
 (defn load-database

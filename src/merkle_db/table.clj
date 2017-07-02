@@ -5,12 +5,15 @@
   (:require
     [clojure.future :refer [pos-int?]]
     [clojure.spec :as s]
-    [merkledag.link :as link]
-    [merkledag.node :as node]
-    [merkle-db.data :as data]
-    [merkle-db.index :as index]
-    [merkle-db.key :as key]
-    [merkle-db.partition :as part])
+    (merkledag
+      [core :as mdag]
+      [link :as link]
+      [node :as node])
+    (merkle-db
+      [data :as data]
+      [index :as index]
+      [key :as key]
+      [partition :as part]))
   (:import
     java.time.Instant))
 
@@ -257,6 +260,46 @@
 
 
 ; TODO: constructor functions
+
+
+; TODO: put this in protocol?
+(defn flush!
+  "Ensure that all local state has been persisted to the storage backend and
+  return an updated non-dirty table."
+  ([table]
+   (flush! table false))
+  ([^Table table apply-patches?]
+   (if (.dirty? table)
+     (let [[patch-link data-link]
+             (if (or (seq? (.patch-data table)) (::patch table))
+               (if apply-patches?
+                 ; Combine patch-data and patch tablet and update data tree.
+                 [nil (throw (UnsupportedOperationException. "updated data-tree link"))]
+                 ; flush any patch-data to the patch tablet
+                 ; if patch tablet overflows, update main data tree
+                 (throw (UnsupportedOperationException. "NYI")))
+               ; No patch data or tablet.
+               [nil (::data table)])
+           node (mdag/store-node!
+                  (.store table)
+                  nil
+                  (-> (.root-data table)
+                      (assoc :data/type :merkle-db/table)
+                      (dissoc ::patch ::data)
+                      (cond->
+                        patch-link (assoc ::patch patch-link)
+                        data-link (assoc ::data data-link))))]
+       (->Table
+         (.store table)
+         (assoc (.table-info table)
+                ::node/id (::node/id node)
+                ::data/size (node/reachable-size node))
+         (dissoc (::node/data node) :data/type)
+         nil
+         false
+         (._meta table)))
+     ; Table is clean, return directly.
+     table)))
 
 
 

@@ -3,11 +3,13 @@
   (:require
     [clojure.future :refer [inst? nat-int?]]
     [clojure.spec :as s]
-    [merkledag.core :as mdag]
-    [merkledag.link :as link]
-    [merkledag.node :as node]
-    [merkle-db.data :as data]
-    [merkle-db.table :as table]
+    (merkledag
+      [core :as mdag]
+      [link :as link]
+      [node :as node])
+    (merkle-db
+      [data :as data]
+      [table :as table])
     [multihash.core :as multihash])
   (:import
     java.time.Instant
@@ -35,18 +37,19 @@
           :opt [:time/updated-at]))
 
 (def info-keys
-  #{::node/id ::name ::version ::committed-at})
+  #{::node/id ::name ::version ::committed-at ::data/size})
 
 ;; Information from the database version.
-(s/def ::version-info
+(s/def ::db-info
   (s/keys :req [::node/id
                 ::name
                 ::version
-                ::committed-at]))
+                ::committed-at]
+          :opt [::data/size]))
 
 ;; Description of the database.
 (s/def ::description
-  (s/merge ::node-data ::version-info))
+  (s/merge ::node-data ::db-info))
 
 
 
@@ -62,7 +65,13 @@
 
     Options may include:
 
-    ...")
+    - `:named`
+      If set to a string, return tables whose names are prefixed by the value.
+      This may also be a regular expression to match table names against.
+    - `:offset`
+      Skip this many matching results.
+    - `:limit`
+      Return at most this many results.")
 
   (get-table
     [db table-name]
@@ -153,12 +162,13 @@
 ;; natural Clojure values.
 ;;
 ;; - `store` reference to the merkledag node store backing the database.
-;; - `version-info` data from the reference version the database was opened at.
+;; - `db-info` map of higher-level database properties such as the name,
+;;   node-id, size, version opened, etc.
 ;; - `root-data` map of data stored in the database root, excluding `::tables`.
 ;; - `tables` map of table names to reified table objects.
 (deftype Database
   [store
-   version-info
+   db-info
    root-data
    tables
    _meta]
@@ -168,8 +178,8 @@
   (toString
     [this]
     (format "db:%s:%s"
-            (::name version-info "?")
-            (::version version-info "?")))
+            (::name db-info "?")
+            (::version db-info "?")))
 
 
   (equals
@@ -195,7 +205,7 @@
 
   (withMeta
     [this meta-map]
-    (Database. store version-info root-data tables meta-map))
+    (Database. store db-info root-data tables meta-map))
 
 
   clojure.lang.ILookup
@@ -209,7 +219,7 @@
     [this k not-found]
     (cond
       (= ::tables k) tables ; TODO: better return val
-      (contains? info-keys k) (get version-info k not-found)
+      (contains? info-keys k) (get db-info k not-found)
       ; TODO: if val here is a link, auto-resolve it
       :else (get root-data k not-found)))
 
@@ -218,12 +228,12 @@
 
   (count
     [this]
-    (+ (count root-data) (count version-info) 1))
+    (+ (count root-data) (count db-info) 1))
 
 
   (empty
     [this]
-    (Database. store version-info nil tables _meta))
+    (Database. store db-info nil tables _meta))
 
 
   (cons
@@ -252,7 +262,7 @@
   (containsKey
     [this k]
     (or (= k ::tables)
-        (contains? version-info k)
+        (contains? db-info k)
         (contains? root-data k)))
 
 
@@ -265,7 +275,7 @@
 
   (seq
     [this]
-    (seq (concat (seq version-info)
+    (seq (concat (seq db-info)
                  (seq root-data)
                  [(clojure.lang.MapEntry. ::tables tables)])))
 
@@ -283,9 +293,9 @@
                  (str "Cannot directly set database tables field " k)))
       (contains? info-keys k)
         (throw (IllegalArgumentException.
-                 (str "Cannot change database version-info field " k)))
+                 (str "Cannot change database info field " k)))
       :else
-        (Database. store version-info (assoc root-data k v) tables _meta)))
+        (Database. store db-info (assoc root-data k v) tables _meta)))
 
 
   (without
@@ -296,20 +306,39 @@
                  (str "Cannot remove database tables field " k)))
       (contains? info-keys k)
         (throw (IllegalArgumentException.
-                 (str "Cannot remove database version-info field " k)))
+                 (str "Cannot remove database info field " k)))
       :else
         (Database.
           store
-          tables
+          db-info
           (not-empty (dissoc root-data k))
-          version-info
+          tables
           _meta))))
 
 
 (alter-meta! #'->Database assoc :private true)
 
 
-; TODO: constructor functions
+(defn ^:no-doc load-database
+  "Load a database from the store, using the version information given."
+  [store version]
+  (let [node (mdag/get-node store (::node/id version))]
+    (->Database store
+                (assoc version
+                       ::data/size (node/reachable-size node))
+                (dissoc (::node/data node) :data/type ::tables)
+                (::tables (::node/data node))
+                nil)))
+
+
+(defn ^:no-doc update-backing
+  "Update the database to use the given version information."
+  [^Database db store db-info]
+  (->Database store
+              db-info
+              (.root-data db)
+              (.tables db)
+              (meta db)))
 
 
 
@@ -373,40 +402,52 @@
                     (str "table:" table-name)
                     (::node/id value)
                     (::data/size value)))]
-      (Database.
+      (->Database
         (.store this)
-        (assoc (.tables this) table-name table)
+        (.db-info this)
         (.root-data this)
-        (.version-info this)
+        (assoc (.tables this) table-name table)
         (._meta this))))
 
 
   (drop-table
     [this table-name]
-    (Database.
+    (->Database
       (.store this)
-      (dissoc (.tables this) table-name)
+      (.db-info this)
       (.root-data this)
-      (.version-info this)
-      (._meta this))))
+      (dissoc (.tables this) table-name)
+      (._meta this)))
 
 
-(defn load-database
-  "Load a database from the store, using the version information given."
-  [store version-info]
-  (let [root-data (mdag/get-data store (::node/id version-info))]
-    (->Database store
-                (::tables root-data)
-                (dissoc root-data ::tables)
-                version-info
-                nil)))
-
-
-(defn ^:no-doc update-backing
-  "Update the database to use the given version information."
-  [^Database db store version-info]
-  (->Database store
-              (.tables db)
-              (.root-data db)
-              version-info
-              (meta db)))
+  (flush!
+    [this]
+    (let [tables (reduce-kv
+                   (fn [acc table-name value]
+                     (assoc
+                       acc table-name
+                       (if (link/merkle-link? value)
+                         value
+                         (let [table (table/flush! value false)]
+                           (link/create
+                             (str "table:" table-name)
+                             (::node/id table)
+                             (::data/size table))))))
+                   {} (.tables this))
+          node (mdag/store-node!
+                 (.store this)
+                 nil
+                 (assoc (.root-data this)
+                        :data/type :merkle-db/db
+                        ::tables tables))]
+      (->Database
+        (.store this)
+        (assoc (.db-info this)
+               ::node/id (::node/id node)
+               ::data/size (node/reachable-size node))
+        (dissoc (::node/data node)
+                :data/type
+                ::tables)
+        tables
+        (assoc (._meta this)
+               ::node/links (::node/links node))))))

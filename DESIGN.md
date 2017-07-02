@@ -6,7 +6,7 @@ data store:
 
 - A _database_ is a collection of _tables_, along with some user metadata.
 - Tables are collections of _records_, which are identified uniquely within the
-  table by a primary key.
+  table by an id key.
 - Each record is an associative collection of _fields_, mapping field names to
   values.
 - Values may have any type that the underlying serialization format supports.
@@ -81,7 +81,7 @@ metadata on the table. For example, this could be used to add a
 A table root is a node which contains table-wide settings and links to
 the tree of record data. The records in a table are grouped into _partitions_,
 which each contain the data for a contiguous, non-overlapping range of record
-primary keys.
+keys.
 
 ```clojure
 {:data/type :merkle-db/table-root
@@ -103,8 +103,8 @@ attach user-specified metadata to them.
 
 Index trees are modeled after a [B+ tree](https://en.wikipedia.org/wiki/B%2B_tree)
 and contain both internal index nodes and leaf partitions. Records in the tree
-are sorted by their _primary key_, which uniquely identifies each record within
-the table. Primary keys are just bytes, allowing for pluggable key serialization
+are sorted by their _id key_, which uniquely identifies each record within
+the table. Record keys are just bytes, allowing for pluggable key serialization
 formats.
 
 The tree nodes contain a count of the records under them, so the index is also
@@ -131,8 +131,8 @@ sizing.
 
 ### Partitions
 
-Partitions hold contiguous non-overlapping ranges of records, sorted by primary
-key. The records' field data is stored in _tablets_, which are linked from each
+Partitions hold contiguous non-overlapping ranges of records, sorted by id key.
+The records' field data is stored in _tablets_, which are linked from each
 partition.
 
 Unlike the internal nodes, partitions may contain significantly more entries
@@ -224,10 +224,10 @@ manager. It can be used to open databases for reading and writing.
 ```clojure
 ; Create a new connection to a backing block store and reference manager.
 ; Options may include serialization, caching, and other configuration.
-(connect node-store ref-manager & opts) => conn
+(conn/connect node-store ref-manager & opts) => conn
 
 ; List information about the current version of each database present.
-(list-dbs conn opts) =>
+(conn/list-dbs conn opts) =>
 ({:merkledag.node/id Multihash
   :merkle-db.db/name String
   :merkle-db.db/version Long
@@ -235,23 +235,26 @@ manager. It can be used to open databases for reading and writing.
  ...)
 
 ; List information about the version history of a specific database.
-(get-db-history conn db-name) => (db-version ...)
+(conn/get-db-history conn db-name) => (db-version ...)
 
-; Initialize a new database. An initial `:root` value may be provided, allowing
-; for cheap database copy-on-write cloning.
-(create-db! conn db-name root-data) => db
+; Initialize a new database with some optional root data.
+(conn/create-db! conn db-name root-data) => db
 
 ; Drop a database ref. Note that this will not remove the block data, as it
 ; may be shared.
-(drop-db! conn db-name)
+(conn/drop-db! conn db-name)
 
 ; Open a database for use. An optional argument may be provided, which will
 ; return the last committed database version occurring before that time.
-(open-db conn db-name opts) => db
+(conn/open-db conn db-name opts) => db
 
 ; Ensure all data has been written to the backing block store and update the
 ; database's root in the ref manager.
-(commit! conn db) => db'
+(conn/commit! conn db) => db'
+
+; You can optionally commit the database under a new name, creating a virtual
+; copy of the database.
+(conn/commit! conn db-name db) => db'
 ```
 
 ### Database Operations
@@ -269,22 +272,16 @@ root node.
 ```clojure
 (into {} db) =>
 {:merkledag.node/id Multihash
+ :merkle-db.data/size Long
  :merkle-db.db/committed-at Instant
  :merkle-db.db/name String
  :merkle-db.db/version Long
  :merkle-db.db/tables {table-name MerkleLink}
  :time/updated-at Instant
  ,,,}
-```
 
-### Table Operations
-
-Tables are collections of records, identified by a string name. Each table name
-must be unique within the database.
-
-```clojure
 ; List information about the tables within a database.
-(list-tables db opts) =>
+(db/list-tables db opts) =>
 ({:merkledag.node/id Multihash
   :merkle-db.table/name String
   :merkle-db.data/size Long}
@@ -292,12 +289,10 @@ must be unique within the database.
 
 ; Add a new table to the database. Options may include pre-defined field
 ; families and metadata.
-(create-table db table-name opts) => db'
+(db/create-table db table-name opts) => db'
 
-; Retrieve descriptive information about a table in the database. The various
-; `:count` and `:size` metrics represent the number of records and data size in
-; bytes, respectively.
-(describe-table db table-name) =>
+; Return a reified value representing the table.
+(db/get-table db table-name) =>
 {:merkledag.node/id Multihash
  :merkle-db.data/count Long
  :merkle-db.data/size Long
@@ -306,30 +301,26 @@ must be unique within the database.
  :merkle-db.key/lexicoder Lexicoder
  :merkle-db.partition/limit Long
  :merkle-db.table/name String
- :merkle-db.table/partition-count Long
- :merkle-db.table/has-patch? Boolean
  :time/updated-at Instant}
 
-; Update the user metadata attached to a table. The function `f` will be
-; called with the current value of the metadata, followed by any provided
-; arguments. The result will be used as the new metadata.
-(alter-table db table-name f & args) => db'
-
-; Change the defined field family groups in a table. The new families should be
-; provided as a keyword mapped to a set of field names. This requires rebuilding
-; the record tablets, and may take some time. It can sort of be done "online"
-; though, by committing after each partition is rebuilt.
-(alter-families db table-name new-families) => db'
+; Update the named table. The function `f` will be called with the current
+; table value, followed by any provided arguments. The result will be used as
+; the new table.
+(db/update-table db table-name f & args) => db'
 
 ; Remove a table from the database.
-(drop-table db table-name) => db'
+(db/drop-table db table-name) => db'
+
+; Flush local changes to the backing store.
+(db/flush! db) => db'
 ```
 
-### Record Operations
+### Table Operations
 
-These operations provide a high-level interface for accessing and manipulating
-record data. Record maps are returned with both rank and the primary key
-attached as metadata.
+Tables are collections of records, identified by a string name. Each table name
+must be unique within the database. These operations provide a high-level
+interface for accessing and manipulating record data. Record maps are returned
+with both rank and the id key attached as metadata.
 
 The lookup functions all take a set of `fields` to return
 information for. This helps reduce the amount of work done to fetch undesired
@@ -350,19 +341,19 @@ will be returned.
 ; - to-index
 ; - offset
 ; - limit
-(scan db table-name & opts) => (record ...)
+(table/scan table opts) => (record ...)
 
 ; Read a set of records from the database, returning data for the given set of
 ; fields for each located record.
-(get-records db table-name primary-keys & [fields]) => record
+(table/get-records table record-keys fields) => record
 
-; Write a collection of records to the database, represented as a map of primary
+; Write a collection of records to the database, represented as a map of record
 ; key values to record data maps.
-(write db table-name records) => db'
+(table/write table records) => table'
 
-; Remove a set of records from the table, identified by a collection of primary
+; Remove a set of records from the table, identified by a collection of record
 ; keys.
-(delete db table-name primary-keys) => db'
+(table/delete table record-keys) => db'
 ```
 
 ### Partition Operations
@@ -372,7 +363,7 @@ parallelism. These operations are lower-level and intended for use by
 high-performance applications.
 
 ```clojure
-; List the partitions which compose the blocks of primary key ranges for the
+; List the partitions which compose the blocks of record key ranges for the
 ; records in the table.
 (list-partitions db table-name) =>
 ({:merkledag.node/id Multihash
@@ -415,8 +406,8 @@ loaded for each partition.
 
 ### Bulk Update
 
-Doing large bulk writes with non-sorted primary keys will generally update most
-of the partitions within a table. In this case, using the high-level write
+Doing large bulk writes with unsorted record keys will generally update most of
+the partitions within a table. In this case, using the high-level write
 operation will generally not be very efficient. Instead, updates may be done in
 parallel by applying the following method to each table:
 

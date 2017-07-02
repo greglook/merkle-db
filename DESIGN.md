@@ -190,7 +190,7 @@ to simply applying compression to the entire tablet block, however.
 In addition to the main data tree, tables may contain a _patch tablet_ linked
 directly from the root node. This tablet holds complete records and tombstones
 sorted by pk which override the main data tree. This is similar to Clojure's
-`PersistentVector` 'tails' and allows for amortizing table updates across many
+`PersistentVector` tail and allows for amortizing table updates across many
 operations. Later, the contents of the patch tablet can be flushed together to
 update the main data tree.
 
@@ -270,6 +270,7 @@ Database values are map-like, and present both the database version attributes
 root node.
 
 ```clojure
+; Databases provide direct keyword access to their properties:
 (into {} db) =>
 {:merkledag.node/id Multihash
  :merkle-db.data/size Long
@@ -292,16 +293,7 @@ root node.
 (db/create-table db table-name opts) => db'
 
 ; Return a reified value representing the table.
-(db/get-table db table-name) =>
-{:merkledag.node/id Multihash
- :merkle-db.data/count Long
- :merkle-db.data/size Long
- :merkle-db.data/families {Keyword #{field-names}}
- :merkle-db.index/branching-factor Long
- :merkle-db.key/lexicoder Lexicoder
- :merkle-db.partition/limit Long
- :merkle-db.table/name String
- :time/updated-at Instant}
+(db/get-table db table-name) => table
 
 ; Update the named table. The function `f` will be called with the current
 ; table value, followed by any provided arguments. The result will be used as
@@ -341,11 +333,11 @@ will be returned.
 ; - to-index
 ; - offset
 ; - limit
-(table/scan table opts) => (record ...)
+(table/scan table opts) => ([key record] ...)
 
 ; Read a set of records from the database, returning data for the given set of
 ; fields for each located record.
-(table/get-records table record-keys fields) => record
+(table/get-records table record-keys fields) => ([key record] ...)
 
 ; Write a collection of records to the database, represented as a map of record
 ; key values to record data maps.
@@ -353,7 +345,7 @@ will be returned.
 
 ; Remove a set of records from the table, identified by a collection of record
 ; keys.
-(table/delete table record-keys) => db'
+(table/delete table record-keys) => table'
 ```
 
 ### Partition Operations
@@ -365,7 +357,7 @@ high-performance applications.
 ```clojure
 ; List the partitions which compose the blocks of record key ranges for the
 ; records in the table.
-(list-partitions db table-name) =>
+(table/list-partitions table) =>
 ({:merkledag.node/id Multihash
   :merkle-db.data/count Long
   :merkle-db.data/size Long
@@ -375,11 +367,11 @@ high-performance applications.
 
 ; Read all the records in the given partition, returning a sequence of data for
 ; the given set of fields.
-(read-partition db node-id & [fields]) => (record ...)
+(table/read-partition table node-id fields) => ([k record] ...)
 
 ; Rebuild a table from a sequence of new or updated partitions. Existing table
 ; settings and metadata are left unchanged.
-(build-table db table-name partition-ids) => db'
+(table/rebuild table partition-ids) => table'
 ```
 
 

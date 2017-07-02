@@ -62,29 +62,63 @@
 
   (scan
     [table opts]
-    "...")
+    "Scan the table, returning data from records which match the given options.
+    Returns a lazy sequence of vectors which each hold a record key and a map
+    of the record data.
+
+    If start and end keys or indices are given, only records within the
+    bounds will be returned (inclusive). A nil start or end implies the beginning
+    or end of the data, respectively.
+
+    Options may include:
+
+    - `:fields`
+      Only return data for the selected set of fields. If not provided, all
+      fields are returned.
+    - `:from-key`
+      Return records with keys equal to or greater than the marker.
+    - `:to-key`
+      Return records with keys equal to or less than the marker.
+    - `:from-index`
+      Return records with indexes equal to or greater than the marker.
+    - `:to-index`
+      Return records with indexes equal to or less than the marker.
+    - `:offset`
+      Skip this many records in the output.
+    - `:limit`
+      Return at most this many records.")
 
   (get-records
-    [table primary-keys opts]
-    "...")
+    [table id-keys opts]
+    "Read a set of records from the database, returning data for each present
+    record.
+
+    Options may include:
+
+    - `:fields`
+      Only return data for the selected set of fields. If not provided, all
+      fields are returned.")
 
   (write
-    [table records]
-    "...")
+    [table records opts]
+    "Write a collection of records to the database, represented as a map of
+    record key values to record data maps.")
 
   (delete
-    [table primary-keys]
-    "...")
+    [table id-keys]
+    "Remove a set of records from the table, identified by a collection of
+    id keys. Returns an updated table.")
 
   ;; Partitions
 
   (list-partitions
     [table]
-    "...")
+    "List the partitions which comprise the table. Returns a sequence of
+    partition nodes.")
 
   (read-partition
     [table partition-id opts]
-    "..."))
+    "Read all the records in the identified partition."))
 
 
 
@@ -167,7 +201,7 @@
     [this k not-found]
     (if (contains? info-keys k)
       (get table-info k not-found)
-      ; TODO: if val here is a link, auto-resolve it
+      ; TODO: link-expand value if it's not ::data or ::patch
       (get root-data k not-found)))
 
 

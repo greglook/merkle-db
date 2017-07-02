@@ -216,7 +216,7 @@
     (cond
       (= ::tables k) tables ; TODO: better return val
       (contains? info-keys k) (get db-info k not-found)
-      ; TODO: if val here is a link, auto-resolve it
+      ; TODO: link-expand value
       :else (get root-data k not-found)))
 
 
@@ -224,7 +224,7 @@
 
   (count
     [this]
-    (+ (count root-data) (count db-info) 1))
+    (+ (count db-info) (count root-data) 1))
 
 
   (empty

@@ -22,9 +22,13 @@
       [generators :as mdgen]
       [key :as key]
       [partition :as part]
+      [table :as table]
       [tablet :as tablet])
     [multihash.core :as multihash]
-    [multihash.digest :as digest]))
+    [multihash.digest :as digest])
+  (:import
+    java.time.Instant
+    java.time.format.DateTimeFormatter))
 
 
 ; TODO: replace this with reloaded repl
@@ -32,12 +36,28 @@
   (merkle_db.connection.Connection.
     (mdag/init-store
       :store (file-block-store "var/db/blocks")
-      :cache {:total-size-limit (* 32 1024)})
+      :cache {:total-size-limit (* 32 1024)}
+      :types {'inst
+              {:reader #(Instant/parse ^String %)
+               :writers {Instant #(.format DateTimeFormatter/ISO_INSTANT ^Instant %)}}})
     (doto (mrf/file-ref-tracker "var/db/refs.edn")
       (mrf/load-history!))))
 
 
-(defn bootstrap
+(def db
+  (try
+    (conn/open-db conn "iris" {})
+    (catch Exception ex
+      (println "Failed to load iris database:" (pr-str ex)))))
+
+
+(defn alter-db
+  [f & args]
+  (apply alter-var-root #'db f args))
+
+
+#_
+(defn bootstrap!
   []
   (conn/create-db! conn "iris" {})
   ; create table

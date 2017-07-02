@@ -167,3 +167,9 @@
 
 
 (alter-meta! #'->Connection assoc :private true)
+
+
+(defn connect
+  "Create a new connection to some backing storage and ref tracker."
+  [store tracker]
+  (->Connection store tracker))

@@ -33,7 +33,7 @@
 
 ; TODO: replace this with reloaded repl
 (def conn
-  (merkle_db.connection.Connection.
+  (conn/connect
     (mdag/init-store
       :store (file-block-store "var/db/blocks")
       :cache {:total-size-limit (* 32 1024)}

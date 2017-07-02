@@ -41,7 +41,8 @@
                 ::key/lexicoder
                 :time/updated-at]))
 
-(def info-keys
+(def ^:no-doc info-keys
+  "Set of keys which may appear in the table info map."
   #{::node/id ::name ::data/size})
 
 (s/def ::table-info
@@ -49,7 +50,6 @@
                 ::name
                 ::version
                 ::committed-at]))
-
 
 
 

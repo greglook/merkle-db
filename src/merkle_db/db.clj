@@ -36,7 +36,8 @@
   (s/keys :req [::tables]
           :opt [:time/updated-at]))
 
-(def info-keys
+(def ^:no-doc info-keys
+  "Set of keys which may appear in the database info map."
   #{::node/id ::name ::version ::committed-at ::data/size})
 
 ;; Information from the database version.
@@ -46,10 +47,6 @@
                 ::version
                 ::committed-at]
           :opt [::data/size]))
-
-;; Description of the database.
-(s/def ::description
-  (s/merge ::node-data ::db-info))
 
 
 
@@ -103,7 +100,6 @@
                   table-name)
              {:type ::table-conflict
               :table-name table-name})))
-  ; TODO: review how this works
   (let [table (Table. nil
                       {::table/name table-name}
                       (table/root-data opts)

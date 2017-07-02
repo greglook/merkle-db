@@ -93,6 +93,11 @@
   (create-db!
     [this db-name root-data]
     ; TODO: lock db
+    (when (::ref/value (ref/get-ref (.tracker this) db-name))
+      (throw (ex-info (str "Cannot create new database: " db-name
+                           " already exists")
+                      {:type ::db-conflict
+                       :db-name db-name})))
     (->>
       (if (::db/tables root-data)
         root-data

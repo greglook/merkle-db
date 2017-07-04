@@ -75,14 +75,10 @@
     - `:fields`
       Only return data for the selected set of fields. If not provided, all
       fields are returned.
-    - `:from-key`
+    - `:start-key`
       Return records with keys equal to or greater than the marker.
-    - `:to-key`
+    - `:end-key`
       Return records with keys equal to or less than the marker.
-    - `:from-index`
-      Return records with indexes equal to or greater than the marker.
-    - `:to-index`
-      Return records with indexes equal to or less than the marker.
     - `:offset`
       Skip this many records in the output.
     - `:limit`
@@ -99,15 +95,26 @@
       Only return data for the selected set of fields. If not provided, all
       fields are returned.")
 
-  (write
+  (insert
     [table records opts]
-    "Write a collection of records to the database, represented as a map of
-    record key values to record data maps.")
+    "Insert some record data into the database, represented by a collection
+    of pairs of record key values and field maps.
+
+    Options may include:
+
+    - `:merge-field`
+      A function which will be called with `(f field-key old-val new-val)`, and
+      should return the new value to use for that field. By default, `new-val`
+      is used directly.
+    - `:merge-record`
+      A function which will be called with `(f record-key old-data new-data)`,
+      and should return the data map to use for the record. By default, this
+      merges the data maps and removes nil-valued fields.")
 
   (delete
     [table id-keys]
-    "Remove a set of records from the table, identified by a collection of
-    id keys. Returns an updated table.")
+    "Remove some records from the table, identified by a collection of id keys.
+    Returns an updated table.")
 
   ;; Partitions
 
@@ -199,9 +206,10 @@
 
   (valAt
     [this k not-found]
+    ; TODO: something different with ::data or ::patch?
     (if (contains? info-keys k)
       (get table-info k not-found)
-      ; TODO: link-expand value if it's not ::data or ::patch
+      ; TODO: link-expand value
       (get root-data k not-found)))
 
 
@@ -218,7 +226,7 @@
       store
       (dissoc table-info ::node/id)
       (root-data nil)
-      nil
+      (empty patch-data)
       true
       _meta))
 
@@ -276,7 +284,13 @@
       (let [root' (assoc root-data k v)]
         (if (= root-data root')
           this
-          (Table. store table-info root' patch-data true _meta)))))
+          (Table.
+            store
+            (dissoc table-info ::node/id)
+            root'
+            patch-data
+            true
+            _meta)))))
 
 
   (without
@@ -287,13 +301,19 @@
       (let [root' (not-empty (dissoc root-data k))]
         (if (= root-data root')
           this
-          (Table. store table-info root' patch-data true _meta))))))
+          (Table.
+            store
+            (dissoc table-info ::node/id)
+            root'
+            patch-data
+            true
+            _meta))))))
 
 
 (alter-meta! #'->Table assoc :private true)
 
 
-; TODO: constructor functions
+; TODO: constructor functions: (sorted-map-by key/compare) for patch-data
 
 
 ; TODO: put this in protocol?

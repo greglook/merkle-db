@@ -359,6 +359,62 @@
 
 ;; ## Protocol Implementation
 
+; TODO: put this somewhere else
+(def tombstone ::tombstone)
+
+
+; TODO: put this somewhere else
+(defn- tombstone?
+  "Returns true if the value x is a tombstone."
+  [x]
+  (identical? ::tombstone x))
+
+
+(defn- remove-tombstones
+  "Returns a lazy sequence with tombstoned records removed."
+  [rs]
+  (remove (comp tombstone? second) rs))
+
+
+(defn- prepare-patch
+  "Takes a full set of patch data and returns a cleaned sequence based on the
+  given options."
+  [patch opts]
+  (when (seq patch)
+    (cond->> patch
+      (:start-key opts)
+        (drop-while #(neg? (key/compare (first %) (:start-key opts))))
+      (:end-key opts)
+        (take-while #(not (neg? (key/compare (:end-key opts) (first %)))))
+      (:fields opts)
+        (map (fn [[k r]]
+               [k (if (map? r) (select-keys r (:fields opts)) r)])))))
+
+
+(defn- patch-seq
+  "Combines an ordered sequence of patch data with a lazy sequence of record
+  keys and data. Any records present in the patch will appear in the output
+  sequence, replacing any equivalent keys from the sequence."
+  [patch records]
+  (lazy-seq
+    (cond
+      ; No more patch data, return records directly.
+      (empty? patch)
+        records
+      ; No more records, return patch with tombstones removed.
+      (empty? records)
+        (remove (comp tombstone? second) patch)
+      ; Next key is in both patch and records.
+      (= (ffirst patch) (ffirst records))
+        (cons (first patch) (patch-seq (next patch) (next records)))
+      ; Next key is in patch, not in records.
+      (key/before? (ffirst patch) (ffirst records))
+        (cons (first patch) (patch-seq (next patch) records))
+      ; Next key is in records, not in patch.
+      :else
+        (cons (first records) (patch-seq patch (next records))))))
+
+
 (extend-type Table
 
   ITable
@@ -367,31 +423,98 @@
 
   (scan
     [this opts]
-    (throw (UnsupportedOperationException. "NYI")))
+    ; TODO: apply lexicoder
+    (->>
+      (patch-seq
+        ; Merged patch data to apply to the records.
+        (prepare-patch (.patch-data this) opts) ; TODO: merge ::patch
+        ; Lazy sequence of matching records from the index tree.
+        (when-let [data-node (mdag/get-data
+                               (.store this)
+                               (::data (.node-data this)))]
+          (if (or (:start-key opts) (:end-key opts))
+            (index/read-range
+              (.store this)
+              data-node
+              (:fields opts)
+              (:start-key opts)
+              (:end-key opts))
+            (index/read-all
+              (.store this)
+              data-node
+              (:fields opts)))))
+      (remove-tombstones)))
 
 
   (get-records
-    [this primary-keys opts]
-    (throw (UnsupportedOperationException. "NYI")))
+    [this id-keys opts]
+    ; TODO: apply lexicoder
+    (let [id-keys (set id-keys)
+          patch-map (.patch-data this) ; TODO: merge ::patch
+          patch-entries (select-keys patch-map id-keys)
+          extra-keys (apply disj id-keys (keys patch-entries))
+          patch-entries (cond->> (remove-tombstones patch-entries)
+                          (seq (:fields opts))
+                            (map (fn [[k r]] [k (select-keys r (:fields opts))])))
+          data-entries (when-let [data-node (and (seq extra-keys)
+                                                 (mdag/get-data
+                                                   (.store this)
+                                                   (::data (.node-data this))))]
+                         (index/read-batch
+                           (.store this)
+                           data-node
+                           (:fields opts)
+                           extra-keys))]
+      (concat patch-entries data-entries)))
 
 
-  (write
-    [this records]
-    (throw (UnsupportedOperationException. "NYI")))
+  (insert
+    [this records opts]
+    ; TODO: apply lexicoder
+    (let [{:keys [merge-record merge-field]} opts
+          update-record (cond
+                          merge-record merge-record
+                          merge-field
+                          (fn merge-fields
+                            [_ old-data new-data]
+                            (reduce
+                              (fn [data field-key]
+                                (let [])
+                                (assoc data
+                                       field-key
+                                       (merge-field field-key
+                                                    (get old-data field-key)
+                                                    (get new-data field-key))))
+                              {} (distinct (concat (keys old-data) (keys new-data)))))
+                          :else
+                          (fn merge-simple
+                            [_ old-data new-data]
+                            (into {}
+                                  (filter (comp some? val))
+                                  (merge old-data new-data))))
+          extant (into {} (get-records this (map first records) nil))
+          new-records (map
+                        (fn [[k data]]
+                          [k (update-record k (get extant k) data)])
+                        records)]
+      ; Add new data maps to patch-data.
+      (->Table
+        (.store this)
+        (dissoc (.table-info this) ::node/id)
+        (.root-data this)
+        (into (.patch-data this) new-records)
+        true
+        (._meta this))))
 
 
   (delete
-    [this primary-keys]
-    (throw (UnsupportedOperationException. "NYI")))
-
-
-  ;; Partitions
-
-  (list-partitions
-    [this]
-    (throw (UnsupportedOperationException. "NYI")))
-
-
-  (read-partition
-    [this partition-id opts]
-    (throw (UnsupportedOperationException. "NYI"))))
+    [this id-keys]
+    ; TODO: apply lexicoder
+    ; Add tombstones to patch-data.
+    (->Table
+      (.store this)
+      (dissoc (.table-info this) ::node/id)
+      (.root-data this)
+      (into (.patch-data this) (map vector id-keys (repeat tombstone)))
+      true
+      (._meta this))))

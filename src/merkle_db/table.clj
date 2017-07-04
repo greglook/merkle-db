@@ -298,7 +298,7 @@
     (if (contains? info-keys k)
       (throw (IllegalArgumentException.
                (str "Cannot remove table info field " k)))
-      (let [root' (not-empty (dissoc root-data k))]
+      (let [root' (dissoc root-data k)]
         (if (= root-data root')
           this
           (Table.
@@ -314,6 +314,21 @@
 
 
 ; TODO: constructor functions: (sorted-map-by key/compare) for patch-data
+
+(defn- update-patch
+  "Returns a new `Table` value with the given function applied to update its
+  patch data."
+  [^Table table f & args]
+  (let [patch' (apply f (.patch-data table) args)]
+    (if (= patch' (.patch-data table))
+      table
+      (->Table
+        (.store table)
+        (dissoc (.table-info table) ::node/id)
+        (.root-data table)
+        patch'
+        true
+        (._meta table)))))
 
 
 ; TODO: put this in protocol?
@@ -422,7 +437,7 @@
   ;; Records
 
   (scan
-    [this opts]
+    [^Table this opts]
     ; TODO: apply lexicoder
     (->>
       (patch-seq
@@ -447,7 +462,7 @@
 
 
   (get-records
-    [this id-keys opts]
+    [^Table this id-keys opts]
     ; TODO: apply lexicoder
     (let [id-keys (set id-keys)
           patch-map (.patch-data this) ; TODO: merge ::patch
@@ -498,23 +513,11 @@
                           [k (update-record k (get extant k) data)])
                         records)]
       ; Add new data maps to patch-data.
-      (->Table
-        (.store this)
-        (dissoc (.table-info this) ::node/id)
-        (.root-data this)
-        (into (.patch-data this) new-records)
-        true
-        (._meta this))))
+      (update-patch this into new-records)))
 
 
   (delete
     [this id-keys]
     ; TODO: apply lexicoder
     ; Add tombstones to patch-data.
-    (->Table
-      (.store this)
-      (dissoc (.table-info this) ::node/id)
-      (.root-data this)
-      (into (.patch-data this) (map vector id-keys (repeat tombstone)))
-      true
-      (._meta this))))
+    (update-patch this into (map vector id-keys (repeat tombstone)))))

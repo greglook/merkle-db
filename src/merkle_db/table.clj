@@ -471,6 +471,115 @@
         (cons (first records) (patch-seq patch (next records))))))
 
 
+(defn- table-lexicoder
+  "Construct a lexicoder for the keys in a table."
+  [table]
+  (key/lexicoder (::key/lexicoder table :bytes)))
+
+
+(defn- key-decoder
+  "Return a function which will decode the keys in record entries with the
+  given lexicoder."
+  [lexicoder]
+  (fn [[k r]] [(key/decode lexicoder k) r]))
+
+
+(defn- scan*
+  [^Table table opts]
+  (let [lexicoder (table-lexicoder table)
+        start-key (some->> (:start-key opts) (key/encode lexicoder))
+        end-key (some->> (:end-key opts) (key/encode lexicoder))]
+    (->>
+      (patch-seq
+        ; Merged patch data to apply to the records.
+        (prepare-patch (.patch-data table) opts) ; TODO: merge ::patch
+        ; Lazy sequence of matching records from the index tree.
+        (when-let [data-node (mdag/get-data
+                               (.store table)
+                               (::data (.root-data table)))]
+          (if (or start-key end-key)
+            (index/read-range
+              (.store table)
+              data-node
+              (:fields opts)
+              start-key
+              end-key)
+            (index/read-all
+              (.store table)
+              data-node
+              (:fields opts)))))
+      (remove-tombstones)
+      (map (key-decoder lexicoder)))))
+
+
+(defn- get-records*
+  [^Table table id-keys opts]
+  (let [lexicoder (table-lexicoder table)
+        id-keys (into #{} (map (partial key/encode lexicoder)) id-keys)
+        patch-map (.patch-data table) ; TODO: merge ::patch
+        patch-entries (select-keys patch-map id-keys)
+        extra-keys (apply disj id-keys (keys patch-entries))
+        patch-entries (cond->> (remove-tombstones patch-entries)
+                        (seq (:fields opts))
+                          (map (fn [[k r]] [k (select-keys r (:fields opts))])))
+        data-entries (when-let [data-node (and (seq extra-keys)
+                                               (mdag/get-data
+                                                 (.store table)
+                                                 (::data (.root-data table))))]
+                       (index/read-batch
+                         (.store table)
+                         data-node
+                         (:fields opts)
+                         extra-keys))]
+    (->> (concat patch-entries data-entries)
+         (map (key-decoder lexicoder)))))
+
+
+(defn- insert*
+  [table records opts]
+  (let [{:keys [merge-record merge-field]} opts
+        lexicoder (table-lexicoder table)
+        update-record (cond
+                        merge-record merge-record
+                        merge-field
+                        (fn merge-fields
+                          [_ old-data new-data]
+                          (reduce
+                            (fn [data field-key]
+                              (assoc data
+                                     field-key
+                                     (merge-field field-key
+                                                  (get old-data field-key)
+                                                  (get new-data field-key))))
+                            {} (distinct (concat (keys old-data) (keys new-data)))))
+                        :else
+                        (fn merge-simple
+                          [_ old-data new-data]
+                          (into {}
+                                (filter (comp some? val))
+                                (merge old-data new-data))))
+        extant (into {} (get-records table (map first records) nil))
+        new-records (map
+                      (fn [[k data]]
+                        [(key/encode lexicoder k)
+                         (update-record k (get extant k) data)])
+                      records)]
+    ; Add new data maps to patch-data.
+    ; TODO: adjust ::data/count based on extant keys
+    (update-patch table into new-records)))
+
+
+(defn- delete*
+  [table id-keys]
+  (let [lexicoder (key/lexicoder (::key/lexicoder table :bytes))]
+    ; TODO: need to look up whether the keys exist;
+    ; don't add tombstones for absent keys, adjust ::data/count
+    (update-patch
+      table into
+      (map (fn [k] [(key/encode lexicoder k) tombstone])
+           id-keys))))
+
+
 (extend-type Table
 
   ITable
@@ -478,87 +587,20 @@
   ;; Records
 
   (scan
-    [^Table this opts]
-    ; TODO: apply lexicoder
-    (->>
-      (patch-seq
-        ; Merged patch data to apply to the records.
-        (prepare-patch (.patch-data this) opts) ; TODO: merge ::patch
-        ; Lazy sequence of matching records from the index tree.
-        (when-let [data-node (mdag/get-data
-                               (.store this)
-                               (::data (.node-data this)))]
-          (if (or (:start-key opts) (:end-key opts))
-            (index/read-range
-              (.store this)
-              data-node
-              (:fields opts)
-              (:start-key opts)
-              (:end-key opts))
-            (index/read-all
-              (.store this)
-              data-node
-              (:fields opts)))))
-      (remove-tombstones)))
+    [this opts]
+    (scan* this opts))
 
 
   (get-records
-    [^Table this id-keys opts]
-    ; TODO: apply lexicoder
-    (let [id-keys (set id-keys)
-          patch-map (.patch-data this) ; TODO: merge ::patch
-          patch-entries (select-keys patch-map id-keys)
-          extra-keys (apply disj id-keys (keys patch-entries))
-          patch-entries (cond->> (remove-tombstones patch-entries)
-                          (seq (:fields opts))
-                            (map (fn [[k r]] [k (select-keys r (:fields opts))])))
-          data-entries (when-let [data-node (and (seq extra-keys)
-                                                 (mdag/get-data
-                                                   (.store this)
-                                                   (::data (.node-data this))))]
-                         (index/read-batch
-                           (.store this)
-                           data-node
-                           (:fields opts)
-                           extra-keys))]
-      (concat patch-entries data-entries)))
+    [this id-keys opts]
+    (get-records* this id-keys opts))
 
 
   (insert
     [this records opts]
-    ; TODO: apply lexicoder
-    (let [{:keys [merge-record merge-field]} opts
-          update-record (cond
-                          merge-record merge-record
-                          merge-field
-                          (fn merge-fields
-                            [_ old-data new-data]
-                            (reduce
-                              (fn [data field-key]
-                                (let [])
-                                (assoc data
-                                       field-key
-                                       (merge-field field-key
-                                                    (get old-data field-key)
-                                                    (get new-data field-key))))
-                              {} (distinct (concat (keys old-data) (keys new-data)))))
-                          :else
-                          (fn merge-simple
-                            [_ old-data new-data]
-                            (into {}
-                                  (filter (comp some? val))
-                                  (merge old-data new-data))))
-          extant (into {} (get-records this (map first records) nil))
-          new-records (map
-                        (fn [[k data]]
-                          [k (update-record k (get extant k) data)])
-                        records)]
-      ; Add new data maps to patch-data.
-      (update-patch this into new-records)))
+    (insert* this records opts))
 
 
   (delete
     [this id-keys]
-    ; TODO: apply lexicoder
-    ; Add tombstones to patch-data.
-    (update-patch this into (map vector id-keys (repeat tombstone)))))
+    (delete* this id-keys)))

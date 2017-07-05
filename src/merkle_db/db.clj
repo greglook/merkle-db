@@ -358,36 +358,24 @@
     (when-let [value (get (.tables this) table-name)]
       (if (link/merkle-link? value)
         ; Resolve link to stored table root.
-        (let [node (mdag/get-node (.store this) value)]
-          (Table.
-            (.store this)
-            {::table/name table-name
-             ::node/id (::link/target value)
-             ::data/size (::link/rsize value)}
-            (::node/data node)
-            nil
-            false
-            {::node/links (::node/links node)}))
+        (table/load-table (.store this) table-name value)
         ; Dirty table value.
         value)))
 
 
   (set-table
-    [this table-name ^Table value]
+    [this table-name value]
     (when-not (s/valid? ::table/node-data (.root-data value))
       (throw (ex-info
                "Updated table is not valid"
                {:type ::invalid-table
                 :errors (s/explain-data ::table/node-data
                                         (.root-data value))})))
-    (let [table (if (.dirty? value)
-                  (Table.
+    (let [table (if (table/dirty? value)
+                  (table/set-backing
+                    value
                     (.store this)
-                    {::table/name table-name}
-                    (.root-data value)
-                    (.patch-data value)
-                    true
-                    (._meta value))
+                    table-name)
                   (link/create
                     (str "table:" table-name)
                     (::node/id value)

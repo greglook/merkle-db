@@ -323,6 +323,33 @@
     nil))
 
 
+(defn ^:no-doc load-table
+  "Load a table node from the store."
+  [store table-name target]
+  (let [node (mdag/get-node store target)]
+    (->Table
+      store
+      {::name table-name
+       ::node/id (::node/id node)
+       ::data/size (node/reachable-size node)}
+      (::node/data node)
+      (sorted-map-by key/compare)
+      false
+      {::node/links (::node/links node)})))
+
+
+(defn ^:no-doc set-backing
+  "Change the backing store and info for a table."
+  [^Table table store table-name]
+  (->Table
+    store
+    {::name table-name}
+    (.root-data table)
+    (.patch-data table)
+    (.dirty? table)
+    (._meta table)))
+
+
 (defn- update-patch
   "Returns a new `Table` value with the given function applied to update its
   patch data."
@@ -339,6 +366,12 @@
         (._meta table)))))
 
 
+(defn dirty?
+  "Return true if the table has local non-persisted modifications."
+  [^Table table]
+  (.dirty? table))
+
+
 ; TODO: put this in protocol?
 (defn flush!
   "Ensure that all local state has been persisted to the storage backend and
@@ -346,7 +379,7 @@
   ([table]
    (flush! table false))
   ([^Table table apply-patches?]
-   (if (.dirty? table)
+   (if (dirty? table)
      (let [[patch-link data-link]
              (if (or (seq? (.patch-data table)) (::patch table))
                (if apply-patches?

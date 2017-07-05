@@ -21,6 +21,10 @@
 
 ;; ## Specs
 
+(def default-branching-factor
+  "The default number of children to limit each index node to."
+  256)
+
 ;; The branching factor determines the number of children an index node in the
 ;; data tree can have.
 (s/def ::branching-factor (s/and pos-int? #(< 2 %)))

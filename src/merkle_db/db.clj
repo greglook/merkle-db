@@ -100,13 +100,7 @@
                   table-name)
              {:type ::table-conflict
               :table-name table-name})))
-  (let [table (Table. nil
-                      {::table/name table-name}
-                      (table/root-data opts)
-                      nil
-                      true
-                      nil)]
-    (set-table db table-name table)))
+  (set-table db table-name (table/bare-table nil table-name opts)))
 
 
 (defn rename-table

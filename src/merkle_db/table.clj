@@ -131,14 +131,8 @@
 
 ;; ## Utility Functions
 
-(defn root-data
-  "Construct a map for a new table root node."
-  [opts]
-  (merge {::index/branching-factor 256
-          ::part/limit 100000}
-          opts
-          {::data/count 0
-           :time/updated-at (Instant/now)}))
+; (merge-patch patch-tablet patch-data) => patch-tablet
+; (apply-patch data-tree patch-data) => data-link
 
 
 
@@ -225,7 +219,7 @@
     (Table.
       store
       (dissoc table-info ::node/id)
-      (root-data nil)
+      {::data/count 0}
       (empty patch-data)
       true
       _meta))
@@ -313,7 +307,21 @@
 (alter-meta! #'->Table assoc :private true)
 
 
-; TODO: constructor functions: (sorted-map-by key/compare) for patch-data
+(defn ^:no-doc bare-table
+  "Build a new ephemeral table value without a backing store."
+  [store table-name opts]
+  (->Table
+    store
+    {::name table-name}
+    (merge
+      {::index/branching-factor index/default-branching-factor
+       ::part/limit part/default-limit}
+      (dissoc opts ::data ::patch)
+      {::data/count 0})
+    (sorted-map-by key/compare)
+    true
+    nil))
+
 
 (defn- update-patch
   "Returns a new `Table` value with the given function applied to update its

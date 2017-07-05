@@ -281,6 +281,9 @@ root node.
  :time/updated-at Instant
  ,,,}
 
+; Additional attributes can be associated:
+(assoc db :merkle-db.key/lexicoder :string) => db'
+
 ; List information about the tables within a database.
 (db/list-tables db opts) =>
 ({:merkledag.node/id Multihash
@@ -311,8 +314,7 @@ root node.
 
 Tables are collections of records, identified by a string name. Each table name
 must be unique within the database. These operations provide a high-level
-interface for accessing and manipulating record data. Record maps are returned
-with both rank and the id key attached as metadata.
+interface for accessing and manipulating record data.
 
 The lookup functions all take a set of `fields` to return
 information for. This helps reduce the amount of work done to fetch undesired
@@ -326,22 +328,23 @@ will be returned.
 ; or end of the data, respectively.
 ;
 ; - fields
-; - patch-merge
 ; - from-key
 ; - to-key
-; - from-index
-; - to-index
 ; - offset
 ; - limit
 (table/scan table opts) => ([key record] ...)
 
 ; Read a set of records from the database, returning data for the given set of
 ; fields for each located record.
-(table/get-records table record-keys fields) => ([key record] ...)
+(table/get-records table record-keys opts) => ([key record] ...)
 
 ; Write a collection of records to the database, represented as a map of record
-; key values to record data maps.
-(table/write table records) => table'
+; key values to record data maps. The options may include merge resolution
+; functions which control how the updates are applied.
+;
+; - merge-field
+; - merge-record
+(table/insert table records opts) => table'
 
 ; Remove a set of records from the table, identified by a collection of record
 ; keys.
@@ -368,6 +371,10 @@ high-performance applications.
 ; Read all the records in the given partition, returning a sequence of data for
 ; the given set of fields.
 (table/read-partition table node-id fields) => ([k record] ...)
+
+; Add a single new partition to a table. The partition must not overlap with
+; existing partitions.
+(table/add-partition table partition) => table'
 
 ; Rebuild a table from a sequence of new or updated partitions. Existing table
 ; settings and metadata are left unchanged.
@@ -442,11 +449,9 @@ try to write version _v-1_ and wind up with the database still reflecting
 version _v_. This makes writes idempotent, guaranteeing the database always
 reflects the latest version of a record.
 
-Logical versions can be implemented with custom record fields and read/rebuild
-data loading logic.
-
-**TODO:** Reads/writes need to accept a "merge" function which takes the
-existing data and the new data and returns the data to use.
+Logical versions can be implemented with a custom `merge-record` function on
+inserts. The function should use a version field on the records to determine
+which whole data map to keep when writes occur.
 
 ### Transaction Metadata
 

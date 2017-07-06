@@ -40,26 +40,17 @@
       :types {'inst
               {:reader #(Instant/parse ^String %)
                :writers {Instant #(.format DateTimeFormatter/ISO_INSTANT ^Instant %)}}})
-    (doto (mrf/file-ref-tracker "var/db/refs.edn")
+    (doto (mrf/file-ref-tracker "var/db/refs.tsv")
       (mrf/load-history!))))
 
 
 (def db
   (try
-    (conn/open-db conn "iris" {})
+    (conn/open-db conn "iris")
     (catch Exception ex
-      (println "Failed to load iris database:" (pr-str ex)))))
+      (println "Failed to load iris database:" (.getMessage ex)))))
 
 
 (defn alter-db
   [f & args]
   (apply alter-var-root #'db f args))
-
-
-#_
-(defn bootstrap!
-  []
-  (conn/create-db! conn "iris" {})
-  ; create table
-  ; load data
-  )

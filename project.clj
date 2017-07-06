@@ -28,7 +28,8 @@
    [mvxcvi/merkledag-core "0.2.0"]
    [mvxcvi/merkledag-ref "0.1.0"]
    [mvxcvi/blocks "0.9.1"]
-   #_[mvxcvi/baton "0.1.0-SNAPSHOT"]]
+   #_[mvxcvi/baton "0.1.0-SNAPSHOT"]
+   [rhizome "0.2.7" :scope "provided"]]
 
   :test-selectors
   {:default (complement :generative)

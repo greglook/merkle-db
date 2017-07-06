@@ -3,6 +3,7 @@
   (:require
     [clojure.future :refer [inst? nat-int?]]
     [clojure.spec :as s]
+    [clojure.string :as str]
     (merkledag
       [core :as mdag]
       [link :as link]
@@ -56,6 +57,7 @@
   "Protocol for interacting with a database at a specific version."
 
   (list-tables
+    [db]
     [db opts]
     "Return a sequence of maps with partial information about the tables in the
     database, including their name and total size.
@@ -143,6 +145,18 @@
     ; TODO: validate table spec?
     ; TODO: set :time/updated-at
     (set-table db table-name (apply f table args))))
+
+
+(defn- link-or-table->info
+  "Coerce either a link value or a table record to a map of information."
+  [[table-name value]]
+  (if (link/merkle-link? value)
+    {::node/id (::link/target value)
+     ::table/name table-name
+     ::data/size (::link/rsize value)}
+    (select-keys
+      value
+      [::node/id ::table/name ::data/size])))
 
 
 
@@ -313,22 +327,24 @@
   "Load a database from the store, using the version information given."
   [store version]
   (let [node (mdag/get-node store (::node/id version))]
-    (->Database store
-                (assoc version
-                       ::data/size (node/reachable-size node))
-                (dissoc (::node/data node) :data/type ::tables)
-                (::tables (::node/data node))
-                nil)))
+    (->Database
+      store
+      (assoc version
+             ::data/size (node/reachable-size node))
+      (dissoc (::node/data node) :data/type ::tables)
+      (::tables (::node/data node))
+      nil)))
 
 
 (defn ^:no-doc update-backing
   "Update the database to use the given version information."
   [^Database db store db-info]
-  (->Database store
-              db-info
-              (.root-data db)
-              (.tables db)
-              (meta db)))
+  (->Database
+    store
+    db-info
+    (.root-data db)
+    (.tables db)
+    (meta db)))
 
 
 
@@ -339,18 +355,18 @@
   IDatabase
 
   (list-tables
-    [this opts]
-    ; TODO: figure out useful options
-    (map (fn link->info
-           [[table-name value]]
-           (if (link/merkle-link? value)
-             {::node/id (::link/target value)
-              ::table/name table-name
-              ::data/size (::link/rsize value)}
-             (select-keys
-               value
-               [::node/id ::table/name ::data/size])))
-         (.tables this)))
+    ([this]
+     (list-tables this nil))
+    ([this opts]
+     (cond->> (map link-or-table->info (.tables this))
+       (:named opts)
+         (filter #(if (string? (:named opts))
+                    (str/starts-with? (::table/name %) (:named opts))
+                    (re-seq (:named opts) (::table/name %))))
+       (:offset opts)
+         (drop (:offset opts))
+       (:limit opts)
+         (take (:limit opts)))))
 
 
   (get-table

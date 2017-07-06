@@ -21,16 +21,19 @@
   or more databases."
 
   (list-dbs
+    [conn]
     [conn opts]
     "List information about the available databases.")
 
   (get-db-history
+    [conn db-name]
     [conn db-name opts]
     "Retrieve a history of the versions of the database.")
 
   (create-db!
-    [conn db-name parameters]
-    "Initialize a new database. An initial `:root-id` may be provided, which
+    [conn db-name]
+    [conn db-name attrs]
+    "Initialize a new database. Optional additional root attributes
     will 'clone' the database at that state.")
 
   (drop-db!
@@ -39,6 +42,7 @@
     it may be shared.")
 
   (open-db
+    [conn db-name]
     [conn db-name opts]
     "Open a database for use.
 
@@ -78,36 +82,42 @@
   IConnection
 
   (list-dbs
-    [this opts]
-    (->> opts
-         (ref/list-refs (.tracker this))
-         (map ref-version-info)))
+    ([this]
+     (list-dbs nil))
+    ([this opts]
+     (->> opts
+          (ref/list-refs (.tracker this))
+          (map ref-version-info))))
 
 
   (get-db-history
-    [this db-name opts]
-    (->> (ref/get-history (.tracker this) db-name)
-         (map ref-version-info)))
+    ([this db-name]
+     (get-db-history this db-name nil))
+    ([this db-name opts]
+     (->> (ref/get-history (.tracker this) db-name)
+          (map ref-version-info))))
 
 
   (create-db!
-    [this db-name root-data]
-    ; TODO: lock db
-    (when (::ref/value (ref/get-ref (.tracker this) db-name))
-      (throw (ex-info (str "Cannot create new database: " db-name
-                           " already exists")
-                      {:type ::db-conflict
-                       :db-name db-name})))
-    (->>
-      (if (::db/tables root-data)
-        root-data
-        (assoc root-data ::db/tables nil))
-      (hash-map ::node/data)
-      (mdag/store-node! (.store this))
-      (::node/id)
-      (ref/set-ref! (.tracker this) db-name)
-      (ref-version-info)
-      (db/load-database (.store this))))
+    ([this db-name]
+     (create-db! this db-name nil))
+    ([this db-name root-data]
+     ; TODO: lock db
+     (when (::ref/value (ref/get-ref (.tracker this) db-name))
+       (throw (ex-info (str "Cannot create new database: " db-name
+                            " already exists")
+                       {:type ::db-conflict
+                        :db-name db-name})))
+     (->>
+       (if (::db/tables root-data)
+         root-data
+         (assoc root-data ::db/tables nil))
+       (hash-map ::node/data)
+       (mdag/store-node! (.store this))
+       (::node/id)
+       (ref/set-ref! (.tracker this) db-name)
+       (ref-version-info)
+       (db/load-database (.store this)))))
 
 
   (drop-db!
@@ -120,19 +130,21 @@
 
 
   (open-db
-    [this db-name opts]
-    (let [version (if-let [^java.time.Instant at-inst (:at-inst opts)]
-                    (first (drop-while #(.isBefore at-inst (::ref/time %))
-                                       (ref/get-history (.tracker this) db-name)))
-                    (ref/get-ref (.tracker this) db-name))]
-      (if (::ref/value version)
-        ; Load database.
-        (db/load-database (.store this) (ref-version-info version))
-        ; No version found.
-        (throw (ex-info (str "No version found for database " db-name " with " opts)
-                        {:type ::no-database-version
-                         :db-name db-name
-                         :opts opts})))))
+    ([this db-name]
+     (open-db this db-name nil))
+    ([this db-name opts]
+     (let [version (if-let [^java.time.Instant at-inst (:at-inst opts)]
+                     (first (drop-while #(.isBefore at-inst (::ref/time %))
+                                        (ref/get-history (.tracker this) db-name)))
+                     (ref/get-ref (.tracker this) db-name))]
+       (if (::ref/value version)
+         ; Load database.
+         (db/load-database (.store this) (ref-version-info version))
+         ; No version found.
+         (throw (ex-info (str "No version found for database " db-name " with " opts)
+                         {:type ::no-database-version
+                          :db-name db-name
+                          :opts opts}))))))
 
 
   (commit!

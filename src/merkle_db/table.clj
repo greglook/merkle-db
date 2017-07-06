@@ -61,6 +61,7 @@
   ;; Records
 
   (scan
+    [table]
     [table opts]
     "Scan the table, returning data from records which match the given options.
     Returns a lazy sequence of vectors which each hold a record key and a map
@@ -85,6 +86,7 @@
       Return at most this many records.")
 
   (get-records
+    [table id-keys]
     [table id-keys opts]
     "Read a set of records from the database, returning data for each present
     record.
@@ -96,6 +98,7 @@
       fields are returned.")
 
   (insert
+    [table records]
     [table records opts]
     "Insert some record data into the database, represented by a collection
     of pairs of record key values and field maps.
@@ -146,14 +149,14 @@
 ;;   node-id, and recursive size.
 ;; - `root-data` map of data stored in the table root.
 ;; - `patch-data` sorted map of loaded patch record data.
-;; - `dirty?` flag to indicate whether the table data has been changed since
+;; - `dirty` flag to indicate whether the table data has been changed since
 ;;   the node was loaded.
 (deftype Table
   [store
    table-info
    root-data
    patch-data
-   dirty?
+   dirty
    _meta]
 
   Object
@@ -188,7 +191,7 @@
 
   (withMeta
     [this meta-map]
-    (Table. store table-info root-data patch-data dirty? meta-map))
+    (Table. store table-info root-data patch-data dirty meta-map))
 
 
   clojure.lang.ILookup
@@ -346,7 +349,7 @@
     {::name table-name}
     (.root-data table)
     (.patch-data table)
-    (.dirty? table)
+    (.dirty table)
     (._meta table)))
 
 
@@ -369,7 +372,7 @@
 (defn dirty?
   "Return true if the table has local non-persisted modifications."
   [^Table table]
-  (.dirty? table))
+  (.dirty table))
 
 
 ; TODO: put this in protocol?
@@ -587,18 +590,24 @@
   ;; Records
 
   (scan
-    [this opts]
-    (scan* this opts))
+    ([this]
+     (scan* this nil))
+    ([this opts]
+     (scan* this opts)))
 
 
   (get-records
-    [this id-keys opts]
-    (get-records* this id-keys opts))
+    ([this id-keys]
+     (get-records* this id-keys nil))
+    ([this id-keys opts]
+     (get-records* this id-keys opts)))
 
 
   (insert
-    [this records opts]
-    (insert* this records opts))
+    ([this records]
+     (insert* this records nil))
+    ([this records opts]
+     (insert* this records opts)))
 
 
   (delete

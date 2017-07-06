@@ -140,6 +140,9 @@
         (key/lexicoder [:bytes :foo]))
       "should not accept any config parameters")
   (is (thrown? IllegalArgumentException
+        (key/encode key/bytes-lexicoder "foo"))
+      "should not encode non-byte-arrays")
+  (is (thrown? IllegalArgumentException
         (key/encode key/bytes-lexicoder (byte-array 0)))
       "should not encode empty bytes")
   (is (thrown? IllegalArgumentException
@@ -163,6 +166,9 @@
         (key/lexicoder [:string "UTF-8" :bar]))
       "should only accept one config parameter")
   (is (thrown? IllegalArgumentException
+        (key/encode key/string-lexicoder 123))
+      "should not encode non-strings")
+  (is (thrown? IllegalArgumentException
         (key/encode key/string-lexicoder ""))
       "should not encode empty strings")
   (is (thrown? IllegalArgumentException
@@ -182,6 +188,9 @@
         (key/lexicoder [:long :bar]))
       "should not accept any config parameters")
   (is (thrown? IllegalArgumentException
+        (key/encode key/long-lexicoder 0.0))
+      "should not encode non-integers")
+  (is (thrown? IllegalArgumentException
         (key/decode key/long-lexicoder (byte-array 7)))
       "should require 8 bytes"))
 
@@ -196,7 +205,10 @@
   (is (= :double (key/lexicoder-config key/double-lexicoder)))
   (is (thrown? Exception
         (key/lexicoder [:double :bar]))
-      "should not accept any config parameters"))
+      "should not accept any config parameters")
+  (is (thrown? IllegalArgumentException
+        (key/encode key/double-lexicoder 123))
+      "should not encode non-floats"))
 
 
 (deftest ^:generative double-lexicoding
@@ -228,7 +240,10 @@
       "should require at least one config parameter")
   (is (thrown? Exception
         (key/lexicoder [:seq :string :foo]))
-      "should only accept one config parameter"))
+      "should only accept one config parameter")
+  (is (thrown? IllegalArgumentException
+        (key/encode (key/sequence-lexicoder key/long-lexicoder) #{123}))
+      "should not encode non-sequential values"))
 
 
 (deftest ^:generative sequence-lexicoding
@@ -249,6 +264,9 @@
   (is (thrown? Exception
         (key/lexicoder [:tuple]))
       "should require at least one config parameter")
+  (is (thrown? IllegalArgumentException
+        (key/encode (key/tuple-lexicoder key/long-lexicoder) #{123}))
+      "should not encode non-sequential values")
   (is (thrown? IllegalArgumentException
         (key/encode (key/tuple-lexicoder key/long-lexicoder) [0 0]))
       "should not encode tuples larger than coders")

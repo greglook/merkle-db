@@ -313,16 +313,21 @@
 
   (encode*
     [_ value]
+    (when-not (clojure.future/bytes? value)
+      (throw (IllegalArgumentException.
+               (format "BytesLexicoder cannot encode non-byte-array value: %s (%s)"
+                       (pr-str value)
+                       (.getName (class value))))))
     (when (empty? value)
       (throw (IllegalArgumentException.
-               "Cannot encode empty byte arrays")))
+               "BytesLexicoder cannot encode empty byte arrays")))
     value)
 
   (decode*
     [_ data offset len]
     (when (or (empty? data) (zero? len))
       (throw (IllegalArgumentException.
-               "Cannot decode empty byte arrays")))
+               "BytesLexicoder cannot decode empty byte arrays")))
     (if (and (zero? offset) (= len (count data)))
       data
       (let [data' (byte-array len)]
@@ -386,16 +391,21 @@
 
   (encode*
     [this value]
+    (when-not (string? value)
+      (throw (IllegalArgumentException.
+               (format "StringLexicoder cannot encode non-string value: %s (%s)"
+                       (pr-str value)
+                       (.getName (class value))))))
     (when (empty? value)
       (throw (IllegalArgumentException.
-               "Cannot encode empty strings")))
+               "StringLexicoder cannot encode empty strings")))
     (.getBytes (str value) ^Charset (.charset this)))
 
   (decode*
     [this data offset len]
     (when (empty? data)
       (throw (IllegalArgumentException.
-               "Cannot decode empty byte arrays")))
+               "StringLexicoder cannot decode empty byte arrays")))
     (String. ^bytes data (long offset) (long len) ^Charset (.charset this))))
 
 
@@ -447,6 +457,11 @@
 
   (encode*
     [_ value]
+    (when-not (integer? value)
+      (throw (IllegalArgumentException.
+               (format "LongLexicoder cannot encode non-integer value: %s (%s)"
+                       (pr-str value)
+                       (.getName (class value))))))
     ; Flip sign bit so that positive values sort after negative values.
     (let [lexed (flip-long-sign (long value))
           data (byte-array 8)]
@@ -510,6 +525,11 @@
 
   (encode*
     [_ value]
+    (when-not (float? value)
+      (throw (IllegalArgumentException.
+               (format "DoubleLexicoder cannot encode non-floating-point value: %s (%s)"
+                       (pr-str value)
+                       (.getName (class value))))))
     (encode*
       long-lexicoder
       (let [bits (Double/doubleToRawLongBits
@@ -564,8 +584,9 @@
     [_ value]
     (when-not (instance? Instant value)
       (throw (IllegalArgumentException.
-               (str "Input to instant lexicoder must be an Instant, got: "
-                    (pr-str value)))))
+               (format "InstantLexicoder cannot encode non-instant value: %s (%s)"
+                       (pr-str value)
+                       (.getName (class value))))))
     (encode* long-lexicoder (.toEpochMilli ^Instant value)))
 
   (decode*
@@ -615,6 +636,11 @@
 
   (encode*
     [this value]
+    (when-not (sequential? value)
+      (throw (IllegalArgumentException.
+               (format "SequenceLexicoder cannot encode non-sequential value: %s (%s)"
+                       (pr-str value)
+                       (.getName (class value))))))
     (->> value
          (map #(escape-bytes (encode* (.element-coder this) %)))
          (join-bytes)))
@@ -674,9 +700,14 @@
 
   (encode*
     [this value]
+    (when-not (sequential? value)
+      (throw (IllegalArgumentException.
+               (format "TupleLexicoder cannot encode non-sequential value: %s (%s)"
+                       (pr-str value)
+                       (.getName (class value))))))
     (when (not= (count (.coders this)) (count value))
       (throw (IllegalArgumentException.
-               (format "Cannot encode tuple which does not match lexicoder count %d: %s"
+               (format "TupleLexicoder cannot encode tuple which does not match lexicoder count %d: %s"
                        (count (.coders this)) (pr-str value)))))
     (join-bytes (mapv #(escape-bytes (encode* %1 %2)) (.coders this) value)))
 

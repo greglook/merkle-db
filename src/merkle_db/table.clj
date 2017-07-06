@@ -138,8 +138,8 @@
 
 ;; ## Utility Functions
 
-; (merge-patch patch-tablet patch-data) => patch-tablet
-; (apply-patch data-tree patch-data) => data-link
+; (merge-patch patch-tablet pending) => patch-tablet
+; (apply-patch data-tree pending) => data-link
 
 
 
@@ -152,14 +152,14 @@
 ;; - `table-info` map of higher-level table properties such as table-name,
 ;;   node-id, and recursive size.
 ;; - `root-data` map of data stored in the table root.
-;; - `patch-data` sorted map of loaded patch record data.
+;; - `pending` sorted map of keys to pending record updates.
 ;; - `dirty` flag to indicate whether the table data has been changed since
 ;;   the node was loaded.
 (deftype Table
   [store
    table-info
    root-data
-   patch-data
+   pending
    dirty
    _meta]
 
@@ -178,12 +178,12 @@
       (or (identical? this that)
           (when (identical? (class this) (class that))
             (and (= root-data (.root-data ^Table that))
-                 (= patch-data (.patch-data ^Table that)))))))
+                 (= pending (.pending ^Table that)))))))
 
 
   (hashCode
     [this]
-    (hash-combine (hash root-data) (hash patch-data)))
+    (hash-combine (hash root-data) (hash pending)))
 
 
   clojure.lang.IObj
@@ -195,7 +195,7 @@
 
   (withMeta
     [this meta-map]
-    (Table. store table-info root-data patch-data dirty meta-map))
+    (Table. store table-info root-data pending dirty meta-map))
 
 
   clojure.lang.ILookup
@@ -227,7 +227,7 @@
       store
       (dissoc table-info ::node/id)
       {::data/count 0}
-      (empty patch-data)
+      (empty pending)
       true
       _meta))
 
@@ -290,7 +290,7 @@
             store
             (dissoc table-info ::node/id)
             root'
-            patch-data
+            pending
             true
             _meta)))))
 
@@ -308,7 +308,7 @@
             store
             (dissoc table-info ::node/id)
             root'
-            patch-data
+            pending
             true
             _meta))))))
 
@@ -354,17 +354,17 @@
     store
     {::name table-name}
     (.root-data table)
-    (.patch-data table)
+    (.pending table)
     (.dirty table)
     (._meta table)))
 
 
-(defn- update-patch
+(defn- update-pending
   "Returns a new `Table` value with the given function applied to update its
-  patch data."
+  pending data."
   [^Table table f & args]
-  (let [patch' (apply f (.patch-data table) args)]
-    (if (= patch' (.patch-data table))
+  (let [patch' (apply f (.pending table) args)]
+    (if (= patch' (.pending table))
       table
       (->Table
         (.store table)
@@ -375,6 +375,7 @@
         (._meta table)))))
 
 
+; TODO: put this in protocol?
 (defn dirty?
   "Return true if the table has local non-persisted modifications."
   [^Table table]
@@ -390,11 +391,11 @@
   ([^Table table apply-patches?]
    (if (dirty? table)
      (let [[patch-link data-link]
-             (if (or (seq? (.patch-data table)) (::patch table))
+             (if (or (seq? (.pending table)) (::patch table))
                (if apply-patches?
-                 ; Combine patch-data and patch tablet and update data tree.
+                 ; Combine pending changes and patch tablet and update data tree.
                  [nil (throw (UnsupportedOperationException. "updated data-tree link"))]
-                 ; flush any patch-data to the patch tablet
+                 ; flush any pending changes to the patch tablet
                  ; if patch tablet overflows, update main data tree
                  (throw (UnsupportedOperationException. "NYI")))
                ; No patch data or tablet.
@@ -501,7 +502,11 @@
     (->>
       (patch-seq
         ; Merged patch data to apply to the records.
-        (prepare-patch (.patch-data table) opts) ; TODO: merge ::patch
+        (prepare-patch
+          (.pending table) ; TODO: merge ::patch
+          {:fields (:fields opts)
+           :start-key start-key
+           :end-key end-key})
         ; Lazy sequence of matching records from the index tree.
         (when-let [data-node (mdag/get-data
                                (.store table)
@@ -525,7 +530,7 @@
   [^Table table id-keys opts]
   (let [lexicoder (table-lexicoder table)
         id-keys (into #{} (map (partial key/encode lexicoder)) id-keys)
-        patch-map (.patch-data table) ; TODO: merge ::patch
+        patch-map (.pending table) ; TODO: merge ::patch
         patch-entries (select-keys patch-map id-keys)
         extra-keys (apply disj id-keys (keys patch-entries))
         patch-entries (cond->> (remove-tombstones patch-entries)
@@ -573,9 +578,9 @@
                         [(key/encode lexicoder k)
                          (update-record k (get extant k) data)])
                       records)]
-    ; Add new data maps to patch-data.
+    ; Add new data maps to pending changes.
     ; TODO: adjust ::data/count based on extant keys
-    (update-patch table into new-records)))
+    (update-pending table into new-records)))
 
 
 (defn- -delete
@@ -583,7 +588,7 @@
   (let [lexicoder (key/lexicoder (::key/lexicoder table :bytes))]
     ; TODO: need to look up whether the keys exist;
     ; don't add tombstones for absent keys, adjust ::data/count
-    (update-patch
+    (update-pending
       table into
       (map (fn [k] [(key/encode lexicoder k) tombstone])
            id-keys))))

@@ -13,8 +13,7 @@
       [table :as table])
     [multihash.core :as multihash])
   (:import
-    java.time.Instant
-    merkle_db.table.Table))
+    java.time.Instant))
 
 
 ;; ## Data Specifications

@@ -178,7 +178,8 @@
       ; Load database.
       (db/load-database (.store conn) (ref-version-info version))
       ; No version found.
-      (throw (ex-info (str "No version found for database " db-name " with " opts)
+      (throw (ex-info (str "No version found for database " db-name
+                           " with options " (pr-str opts))
                       {:type ::no-database-version
                        :db-name db-name
                        :opts opts})))))
@@ -213,9 +214,9 @@
 
   (list-dbs
     ([this]
-     (-list-dbs nil))
+     (-list-dbs this nil))
     ([this opts]
-     (-list-dbs opts)))
+     (-list-dbs this opts)))
 
 
   (get-db-history

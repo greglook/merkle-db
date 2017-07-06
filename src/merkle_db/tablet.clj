@@ -8,6 +8,10 @@
 
 ;; ## Specs
 
+(def data-type
+  "Value of `:data/type` that indicates a tablet node."
+  :merkle-db/tablet)
+
 ;; Records are stored as a key/data pair.
 (s/def ::record-entry
   (s/tuple key/bytes? map?))

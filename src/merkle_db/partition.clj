@@ -15,6 +15,10 @@
 
 ;; ## Specs
 
+(def data-type
+  "Value of `:data/type` that indicates a partition node."
+  :merkle-db/partition)
+
 ;; Maximum number of records to allow in each partition.
 (s/def ::limit pos-int?)
 

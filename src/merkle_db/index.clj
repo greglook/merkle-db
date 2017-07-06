@@ -21,6 +21,10 @@
 
 ;; ## Specs
 
+(def data-type
+  "Value of `:data/type` that indicates an index tree node."
+  :merkle-db/index)
+
 (def default-branching-factor
   "The default number of children to limit each index node to."
   256)
@@ -160,14 +164,10 @@
                     {:data/type (:data/type node)}))))
 
 
-; TODO: read-slice
-; narrow children by which could contain the range, recurse in order
-
-
 
 ;; ## Update Functions
 
-; TODO: update-records!
+; TODO: update-records
 
 
 

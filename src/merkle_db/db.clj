@@ -19,6 +19,10 @@
 
 ;; ## Data Specifications
 
+(def data-type
+  "Value of `:data/type` that indicates a database root node."
+  :merkle-db/database)
+
 ;; Database name.
 ;; TODO: disallow certain characters like '/'
 (s/def ::name (s/and string? #(<= 1 (count %) 512)))
@@ -298,6 +302,7 @@
       (contains? info-keys k)
         (throw (IllegalArgumentException.
                  (str "Cannot change database info field " k)))
+      ; TODO: :data/type should not be settable
       :else
         (Database. store db-info (assoc root-data k v) tables _meta)))
 
@@ -311,6 +316,7 @@
       (contains? info-keys k)
         (throw (IllegalArgumentException.
                  (str "Cannot remove database info field " k)))
+      ; TODO: :data/type should not be unsettable
       :else
         (Database.
           store
@@ -350,98 +356,123 @@
 
 ;; ## Protocol Implementation
 
+(defn- -list-tables
+  [^Database db opts]
+  (cond->> (map link-or-table->info (.tables db))
+    (:named opts)
+      (filter #(if (string? (:named opts))
+                 (str/starts-with? (::table/name %) (:named opts))
+                 (re-seq (:named opts) (::table/name %))))
+    (:offset opts)
+      (drop (:offset opts))
+    (:limit opts)
+      (take (:limit opts))))
+
+
+(defn- -get-table
+  [^Database db table-name]
+  (when-let [value (get (.tables db) table-name)]
+    (if (link/merkle-link? value)
+      ; Resolve link to stored table root.
+      (table/load-table (.store db) table-name value)
+      ; Dirty table value.
+      value)))
+
+
+(defn- -set-table
+  [^Database db table-name value]
+  (when-not (s/valid? ::table/node-data (.root-data value))
+    (throw (ex-info
+             "Updated table is not valid"
+             {:type ::invalid-table
+              :errors (s/explain-data ::table/node-data
+                                      (.root-data value))})))
+  (let [table (if (table/dirty? value)
+                (table/set-backing
+                  value
+                  (.store db)
+                  table-name)
+                (link/create
+                  (str "table:" table-name)
+                  (::node/id value)
+                  (::data/size value)))]
+    (->Database
+      (.store db)
+      (.db-info db)
+      (.root-data db)
+      (assoc (.tables db) table-name table)
+      (._meta db))))
+
+
+(defn- -drop-table
+  [^Database db table-name]
+  (->Database
+    (.store db)
+    (.db-info db)
+    (.root-data db)
+    (dissoc (.tables db) table-name)
+    (._meta db)))
+
+
+(defn- -flush!
+  [^Database db]
+  (let [tables (reduce-kv
+                 (fn [acc table-name value]
+                   (assoc
+                     acc table-name
+                     (if (link/merkle-link? value)
+                       value
+                       (let [table (table/flush! value false)]
+                         (link/create
+                           (str "table:" table-name)
+                           (::node/id table)
+                           (::data/size table))))))
+                 {} (.tables db))
+        node (mdag/store-node!
+               (.store db)
+               nil
+               (assoc (.root-data db)
+                      :data/type :merkle-db/db
+                      ::tables tables))]
+    (->Database
+      (.store db)
+      (assoc (.db-info db)
+             ::node/id (::node/id node)
+             ::data/size (node/reachable-size node))
+      (dissoc (::node/data node)
+              :data/type
+              ::tables)
+      tables
+      (assoc (._meta db)
+             ::node/links (::node/links node)))))
+
+
 (extend-type Database
 
   IDatabase
 
   (list-tables
     ([this]
-     (list-tables this nil))
+     (-list-tables this nil))
     ([this opts]
-     (cond->> (map link-or-table->info (.tables this))
-       (:named opts)
-         (filter #(if (string? (:named opts))
-                    (str/starts-with? (::table/name %) (:named opts))
-                    (re-seq (:named opts) (::table/name %))))
-       (:offset opts)
-         (drop (:offset opts))
-       (:limit opts)
-         (take (:limit opts)))))
+     (-list-tables this opts)))
 
 
   (get-table
     [this table-name]
-    (when-let [value (get (.tables this) table-name)]
-      (if (link/merkle-link? value)
-        ; Resolve link to stored table root.
-        (table/load-table (.store this) table-name value)
-        ; Dirty table value.
-        value)))
+    (-get-table this table-name))
 
 
   (set-table
     [this table-name value]
-    (when-not (s/valid? ::table/node-data (.root-data value))
-      (throw (ex-info
-               "Updated table is not valid"
-               {:type ::invalid-table
-                :errors (s/explain-data ::table/node-data
-                                        (.root-data value))})))
-    (let [table (if (table/dirty? value)
-                  (table/set-backing
-                    value
-                    (.store this)
-                    table-name)
-                  (link/create
-                    (str "table:" table-name)
-                    (::node/id value)
-                    (::data/size value)))]
-      (->Database
-        (.store this)
-        (.db-info this)
-        (.root-data this)
-        (assoc (.tables this) table-name table)
-        (._meta this))))
+    (-set-table this table-name value))
 
 
   (drop-table
     [this table-name]
-    (->Database
-      (.store this)
-      (.db-info this)
-      (.root-data this)
-      (dissoc (.tables this) table-name)
-      (._meta this)))
+    (-drop-table this table-name))
 
 
   (flush!
     [this]
-    (let [tables (reduce-kv
-                   (fn [acc table-name value]
-                     (assoc
-                       acc table-name
-                       (if (link/merkle-link? value)
-                         value
-                         (let [table (table/flush! value false)]
-                           (link/create
-                             (str "table:" table-name)
-                             (::node/id table)
-                             (::data/size table))))))
-                   {} (.tables this))
-          node (mdag/store-node!
-                 (.store this)
-                 nil
-                 (assoc (.root-data this)
-                        :data/type :merkle-db/db
-                        ::tables tables))]
-      (->Database
-        (.store this)
-        (assoc (.db-info this)
-               ::node/id (::node/id node)
-               ::data/size (node/reachable-size node))
-        (dissoc (::node/data node)
-                :data/type
-                ::tables)
-        tables
-        (assoc (._meta this)
-               ::node/links (::node/links node))))))
+    (-flush! this)))

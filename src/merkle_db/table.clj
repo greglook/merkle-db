@@ -20,6 +20,10 @@
 
 ;; ## Data Specifications
 
+(def data-type
+  "Value of `:data/type` that indicates a table root node."
+  :merkle-db/table)
+
 ;; Table names are non-empty strings.
 ;; TODO: disallow certain characters like '/'
 (s/def ::name (s/and string? #(<= 1 (count %) 127)))
@@ -278,6 +282,7 @@
     (if (contains? info-keys k)
       (throw (IllegalArgumentException.
                (str "Cannot change table info field " k)))
+      ; TODO: :data/type should not be settable
       (let [root' (assoc root-data k v)]
         (if (= root-data root')
           this
@@ -295,6 +300,7 @@
     (if (contains? info-keys k)
       (throw (IllegalArgumentException.
                (str "Cannot remove table info field " k)))
+      ; TODO: :data/type should not be unsettable
       (let [root' (dissoc root-data k)]
         (if (= root-data root')
           this
@@ -487,7 +493,7 @@
   (fn [[k r]] [(key/decode lexicoder k) r]))
 
 
-(defn- scan*
+(defn- -scan
   [^Table table opts]
   (let [lexicoder (table-lexicoder table)
         start-key (some->> (:start-key opts) (key/encode lexicoder))
@@ -515,7 +521,7 @@
       (map (key-decoder lexicoder)))))
 
 
-(defn- get-records*
+(defn- -get-records
   [^Table table id-keys opts]
   (let [lexicoder (table-lexicoder table)
         id-keys (into #{} (map (partial key/encode lexicoder)) id-keys)
@@ -538,7 +544,7 @@
          (map (key-decoder lexicoder)))))
 
 
-(defn- insert*
+(defn- -insert
   [table records opts]
   (let [{:keys [merge-record merge-field]} opts
         lexicoder (table-lexicoder table)
@@ -572,7 +578,7 @@
     (update-patch table into new-records)))
 
 
-(defn- delete*
+(defn- -delete
   [table id-keys]
   (let [lexicoder (key/lexicoder (::key/lexicoder table :bytes))]
     ; TODO: need to look up whether the keys exist;
@@ -591,25 +597,25 @@
 
   (scan
     ([this]
-     (scan* this nil))
+     (-scan this nil))
     ([this opts]
-     (scan* this opts)))
+     (-scan this opts)))
 
 
   (get-records
     ([this id-keys]
-     (get-records* this id-keys nil))
+     (-get-records this id-keys nil))
     ([this id-keys opts]
-     (get-records* this id-keys opts)))
+     (-get-records this id-keys opts)))
 
 
   (insert
     ([this records]
-     (insert* this records nil))
+     (-insert this records nil))
     ([this records opts]
-     (insert* this records opts)))
+     (-insert this records opts)))
 
 
   (delete
     [this id-keys]
-    (delete* this id-keys)))
+    (-delete this id-keys)))

@@ -23,6 +23,7 @@
 
   :dependencies
   [[org.clojure/clojure "1.8.0"]
+   [org.clojure/tools.logging "0.4.0"]
    [clojure-future-spec "1.9.0-alpha14"]
    [bigml/sketchy "0.4.1"]
    [mvxcvi/merkledag-core "0.2.0"]
@@ -60,7 +61,8 @@
   {:dev
    {:dependencies
     [[org.clojure/test.check "0.9.0"]
-     [com.gfredericks/test.chuck "0.2.7"]]}
+     [com.gfredericks/test.chuck "0.2.7"]
+     [riddley "0.1.14"]]}
 
    :repl
    {:source-paths ["dev"]

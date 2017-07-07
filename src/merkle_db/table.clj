@@ -5,6 +5,7 @@
   (:require
     [clojure.future :refer [pos-int?]]
     [clojure.spec :as s]
+    [clojure.string :as str]
     (merkledag
       [core :as mdag]
       [link :as link]
@@ -24,9 +25,15 @@
   "Value of `:data/type` that indicates a table root node."
   :merkle-db/table)
 
-;; Table names are non-empty strings.
-;; TODO: disallow certain characters like '/'
-(s/def ::name (s/and string? #(<= 1 (count %) 127)))
+(def ^:no-doc info-keys
+  "Set of keys which may appear in the table info map."
+  #{::node/id ::name ::data/size})
+
+;; Table names are strings which conform to some restrictions.
+(s/def ::name
+  (s/and string?
+         #(not (str/includes? % "/"))
+         #(<= 1 (count %) 127)))
 
 ;; Table data is a link to the root of the data tree.
 (s/def ::data link/merkle-link?)
@@ -44,10 +51,6 @@
                 ::data/families
                 ::key/lexicoder
                 :time/updated-at]))
-
-(def ^:no-doc info-keys
-  "Set of keys which may appear in the table info map."
-  #{::node/id ::name ::data/size})
 
 (s/def ::table-info
   (s/keys :req [::node/id

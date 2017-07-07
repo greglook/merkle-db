@@ -13,7 +13,8 @@
       [table :as table])
     [multihash.core :as multihash])
   (:import
-    java.time.Instant))
+    java.time.Instant
+    merkle_db.table.Table))
 
 
 ;; ## Data Specifications
@@ -22,9 +23,15 @@
   "Value of `:data/type` that indicates a database root node."
   :merkle-db/database)
 
+(def ^:no-doc info-keys
+  "Set of keys which may appear in the database info map."
+  #{::node/id ::name ::version ::committed-at ::data/size})
+
 ;; Database name.
-;; TODO: disallow certain characters like '/'
-(s/def ::name (s/and string? #(<= 1 (count %) 512)))
+(s/def ::name
+  (s/and string?
+         #(not (str/includes? % "/"))
+         #(<= 1 (count %) 255)))
 
 ;; Database version.
 (s/def ::version nat-int?)
@@ -39,10 +46,6 @@
 (s/def ::node-data
   (s/keys :req [::tables]
           :opt [:time/updated-at]))
-
-(def ^:no-doc info-keys
-  "Set of keys which may appear in the database info map."
-  #{::node/id ::name ::version ::committed-at ::data/size})
 
 ;; Information from the database version.
 (s/def ::db-info

@@ -10,9 +10,7 @@
       [ref :as ref])
     (merkle-db
       [data :as data]
-      [db :as db]))
-  (:import
-    merkle_db.db.Database))
+      [db :as db])))
 
 
 ;; ## Connection Protocols
@@ -186,7 +184,7 @@
 
 
 (defn- -commit!
-  [^Connection conn db-name ^Database db opts]
+  [^Connection conn db-name db opts]
   ; TODO: validate spec
   (when-not (string? db-name)
     (throw (IllegalArgumentException.

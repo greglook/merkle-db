@@ -14,7 +14,8 @@
       [data :as data]
       [index :as index]
       [key :as key]
-      [partition :as part]))
+      [partition :as part]
+      [patch :as patch]))
   (:import
     java.time.Instant))
 
@@ -136,13 +137,6 @@
   (read-partition
     [table partition-id opts]
     "Read all the records in the identified partition."))
-
-
-
-;; ## Utility Functions
-
-; (merge-patch patch-tablet pending) => patch-tablet
-; (apply-patch data-tree pending) => data-link
 
 
 
@@ -435,62 +429,6 @@
 
 ;; ## Protocol Implementation
 
-; TODO: put this somewhere else
-(def tombstone ::tombstone)
-
-
-; TODO: put this somewhere else
-(defn- tombstone?
-  "Returns true if the value x is a tombstone."
-  [x]
-  (identical? ::tombstone x))
-
-
-(defn- remove-tombstones
-  "Returns a lazy sequence with tombstoned records removed."
-  [rs]
-  (remove (comp tombstone? second) rs))
-
-
-(defn- prepare-patch
-  "Takes a full set of patch data and returns a cleaned sequence based on the
-  given options."
-  [patch opts]
-  (when (seq patch)
-    (cond->> patch
-      (:start-key opts)
-        (drop-while #(neg? (key/compare (first %) (:start-key opts))))
-      (:end-key opts)
-        (take-while #(not (neg? (key/compare (:end-key opts) (first %)))))
-      (:fields opts)
-        (map (fn [[k r]]
-               [k (if (map? r) (select-keys r (:fields opts)) r)])))))
-
-
-(defn- patch-seq
-  "Combines an ordered sequence of patch data with a lazy sequence of record
-  keys and data. Any records present in the patch will appear in the output
-  sequence, replacing any equivalent keys from the sequence."
-  [patch records]
-  (lazy-seq
-    (cond
-      ; No more patch data, return records directly.
-      (empty? patch)
-        records
-      ; No more records, return patch with tombstones removed.
-      (empty? records)
-        (remove (comp tombstone? second) patch)
-      ; Next key is in both patch and records.
-      (= (ffirst patch) (ffirst records))
-        (cons (first patch) (patch-seq (next patch) (next records)))
-      ; Next key is in patch, not in records.
-      (key/before? (ffirst patch) (ffirst records))
-        (cons (first patch) (patch-seq (next patch) records))
-      ; Next key is in records, not in patch.
-      :else
-        (cons (first records) (patch-seq patch (next records))))))
-
-
 (defn- table-lexicoder
   "Construct a lexicoder for the keys in a table."
   [table]
@@ -510,9 +448,9 @@
         start-key (some->> (:start-key opts) (key/encode lexicoder))
         end-key (some->> (:end-key opts) (key/encode lexicoder))]
     (->>
-      (patch-seq
+      (patch/patch-seq
         ; Merged patch data to apply to the records.
-        (prepare-patch
+        (patch/filter-patch
           (.pending table) ; TODO: merge ::patch
           {:fields (:fields opts)
            :start-key start-key
@@ -532,7 +470,7 @@
               (.store table)
               data-node
               (:fields opts)))))
-      (remove-tombstones)
+      (patch/remove-tombstones)
       (map (key-decoder lexicoder)))))
 
 
@@ -543,9 +481,7 @@
         patch-map (.pending table) ; TODO: merge ::patch
         patch-entries (select-keys patch-map id-keys)
         extra-keys (apply disj id-keys (keys patch-entries))
-        patch-entries (cond->> (remove-tombstones patch-entries)
-                        (seq (:fields opts))
-                          (map (fn [[k r]] [k (select-keys r (:fields opts))])))
+        patch-entries (patch/filter-patch patch-entries {:fields (:fields opts)})
         data-entries (when-let [data-node (and (seq extra-keys)
                                                (mdag/get-data
                                                  (.store table)
@@ -556,6 +492,7 @@
                          (:fields opts)
                          extra-keys))]
     (->> (concat patch-entries data-entries)
+         (patch/remove-tombstones)
          (map (key-decoder lexicoder)))))
 
 
@@ -603,7 +540,7 @@
           into
           (comp
             (map first)
-            (map (fn [k] [(key/encode lexicoder k) tombstone])))
+            (map (fn [k] [(key/encode lexicoder k) patch/tombstone])))
           extant)
         (update ::data/count - (count extant)))))
 

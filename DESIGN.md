@@ -66,7 +66,7 @@ The root of a database is a block which contains database-wide settings and
 maps table names to _table root nodes_.
 
 ```clojure
-{:data/type :merkle-db/db-root
+{:data/type :merkle-db/database
  :merkle-db.db/tables {String MerkleLink}
  :time/updated-at Instant
  ,,,}

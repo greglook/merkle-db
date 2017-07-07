@@ -279,38 +279,42 @@
 
   (assoc
     [this k v]
-    (if (contains? info-keys k)
+    (when (= k :data/type)
       (throw (IllegalArgumentException.
-               (str "Cannot change table info field " k)))
-      ; TODO: :data/type should not be settable
-      (let [root' (assoc root-data k v)]
-        (if (= root-data root')
-          this
-          (Table.
-            store
-            (dissoc table-info ::node/id)
-            root'
-            pending
-            true
-            _meta)))))
+               (str "Cannot change table :data/type from " data-type))))
+    (when (contains? info-keys k)
+      (throw (IllegalArgumentException.
+               (str "Cannot change table info field " k))))
+    (let [root' (assoc root-data k v)]
+      (if (= root-data root')
+        this
+        (Table.
+          store
+          (dissoc table-info ::node/id)
+          root'
+          pending
+          true
+          _meta))))
 
 
   (without
     [this k]
-    (if (contains? info-keys k)
+    (when (= k :data/type)
       (throw (IllegalArgumentException.
-               (str "Cannot remove table info field " k)))
-      ; TODO: :data/type should not be unsettable
-      (let [root' (dissoc root-data k)]
-        (if (= root-data root')
-          this
-          (Table.
-            store
-            (dissoc table-info ::node/id)
-            root'
-            pending
-            true
-            _meta))))))
+               "Cannot remove table :data/type")))
+    (when (contains? info-keys k)
+      (throw (IllegalArgumentException.
+               (str "Cannot remove table info field " k))))
+    (let [root' (dissoc root-data k)]
+      (if (= root-data root')
+        this
+        (Table.
+          store
+          (dissoc table-info ::node/id)
+          root'
+          pending
+          true
+          _meta)))))
 
 
 (alter-meta! #'->Table assoc :private true)

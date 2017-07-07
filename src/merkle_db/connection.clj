@@ -148,9 +148,9 @@
                     {:type ::db-conflict
                      :db-name db-name})))
   (->>
-    (if (::db/tables root-data)
-      root-data
-      (assoc root-data ::db/tables nil))
+    (merge {::db/tables {}}
+           root-data
+           {:data/type db/data-type})
     (hash-map ::node/data)
     (mdag/store-node! (.store conn))
     (::node/id)

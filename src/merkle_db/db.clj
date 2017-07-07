@@ -295,13 +295,15 @@
   (assoc
     [this k v]
     (cond
+      (= k :data/type)
+        (throw (IllegalArgumentException.
+                 (str "Cannot change database :data/type from " data-type)))
       (= k ::tables)
         (throw (IllegalArgumentException.
                  (str "Cannot directly set database tables field " k)))
       (contains? info-keys k)
         (throw (IllegalArgumentException.
                  (str "Cannot change database info field " k)))
-      ; TODO: :data/type should not be settable
       :else
         (Database. store db-info (assoc root-data k v) tables _meta)))
 
@@ -309,13 +311,15 @@
   (without
     [this k]
     (cond
+      (= k :data/type)
+        (throw (IllegalArgumentException.
+                 "Cannot remove database :data/type"))
       (= k ::tables)
         (throw (IllegalArgumentException.
                  (str "Cannot remove database tables field " k)))
       (contains? info-keys k)
         (throw (IllegalArgumentException.
                  (str "Cannot remove database info field " k)))
-      ; TODO: :data/type should not be unsettable
       :else
         (Database.
           store
@@ -336,7 +340,7 @@
       store
       (assoc version
              ::data/size (node/reachable-size node))
-      (dissoc (::node/data node) :data/type ::tables)
+      (dissoc (::node/data node) ::tables)
       (::tables (::node/data node))
       nil)))
 
@@ -431,16 +435,14 @@
                (.store db)
                nil
                (assoc (.root-data db)
-                      :data/type :merkle-db/db
+                      :data/type data-type
                       ::tables tables))]
     (->Database
       (.store db)
       (assoc (.db-info db)
              ::node/id (::node/id node)
              ::data/size (node/reachable-size node))
-      (dissoc (::node/data node)
-              :data/type
-              ::tables)
+      (dissoc (::node/data node) ::tables)
       tables
       (assoc (._meta db)
              ::node/links (::node/links node)))))

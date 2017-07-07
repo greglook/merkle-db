@@ -398,7 +398,7 @@
   ([^Table table apply-patches?]
    (if (dirty? table)
      (let [[patch-link data-link]
-             (if (or (seq? (.pending table)) (::patch table))
+             (if (or (seq (.pending table)) (::patch table))
                (if apply-patches?
                  ; Combine pending changes and patch tablet and update data tree.
                  [nil (throw (UnsupportedOperationException. "updated data-tree link"))]
@@ -582,26 +582,30 @@
                           (into {}
                                 (filter (comp some? val))
                                 (merge old-data new-data))))
-        extant (into {} (get-records table (map first records) nil))
+        extant (into {} (get-records table (map first records)))
         new-records (map
                       (fn [[k data]]
                         [(key/encode lexicoder k)
                          (update-record k (get extant k) data)])
                       records)]
     ; Add new data maps to pending changes.
-    ; TODO: adjust ::data/count based on extant keys
-    (update-pending table into new-records)))
+    (-> table
+        (update-pending into new-records)
+        (update ::data/count + (- (count records) (count extant))))))
 
 
 (defn- -delete
   [table id-keys]
-  (let [lexicoder (key/lexicoder (::key/lexicoder table :bytes))]
-    ; TODO: need to look up whether the keys exist;
-    ; don't add tombstones for absent keys, adjust ::data/count
-    (update-pending
-      table into
-      (map (fn [k] [(key/encode lexicoder k) tombstone])
-           id-keys))))
+  (let [lexicoder (key/lexicoder (::key/lexicoder table :bytes))
+        extant (get-records table id-keys {:fields {}})]
+    (-> table
+        (update-pending
+          into
+          (comp
+            (map first)
+            (map (fn [k] [(key/encode lexicoder k) tombstone])))
+          extant)
+        (update ::data/count - (count extant)))))
 
 
 (extend-type Table

@@ -80,6 +80,7 @@
   [store family-key tablet]
   (let [node (mdag/store-node!
                store
+               nil
                (cond-> tablet
                  (not= family-key :base)
                  (tablet/prune-records)))]
@@ -310,7 +311,7 @@
     (map
       (fn make-partition
         [partition-records]
-        {:data/type :merkle-db/partition
+        {:data/type data-type
          ::data/families families
          ::data/count (count partition-records)
          ::limit limit

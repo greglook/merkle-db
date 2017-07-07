@@ -6,12 +6,13 @@
     [clojure.test.check.generators :as gen]
     [com.gfredericks.test.chuck.clojure-test :refer [checking]]
     [merkledag.core :as mdag]
-    [merkle-db.data :as data]
-    [merkle-db.generators :as mdgen]
-    [merkle-db.key :as key]
-    [merkle-db.partition :as part]
-    [merkle-db.tablet :as tablet]
-    [merkle-db.test-utils]))
+    (merkle-db
+      [data :as data]
+      [generators :as mdgen]
+      [key :as key]
+      [partition :as part]
+      [tablet :as tablet]
+      [test-utils])))
 
 
 ;; ## Unit Tests
@@ -56,7 +57,7 @@
 
 
 (deftest partition-logic
-  (let [store (mdag/init-store)
+  (let [store (mdag/init-store :types data/codec-types)
         k0 (key/create [0 1 2])
         k1 (key/create [1 2 3])
         k2 (key/create [2 3 4])
@@ -94,7 +95,7 @@
   (checking "valid properties" 20
     [[field-keys families records] mdgen/data-context]
     (is (valid? ::data/families families))
-    (let [store (mdag/init-store)
+    (let [store (mdag/init-store :types data/codec-types)
           [part] (part/from-records store {::data/families families} tablet/merge-fields records)
           tablets (into {}
                         (map (juxt key #(mdag/get-data store (val %))))

@@ -18,6 +18,7 @@
     (merkle-db
       [bloom :as bloom]
       [connection :as conn]
+      [data :as data]
       [db :as db]
       [generators :as mdgen]
       [key :as key]
@@ -25,10 +26,7 @@
       [table :as table]
       [tablet :as tablet])
     [multihash.core :as multihash]
-    [multihash.digest :as digest])
-  (:import
-    java.time.Instant
-    java.time.format.DateTimeFormatter))
+    [multihash.digest :as digest]))
 
 
 ; TODO: replace this with reloaded repl
@@ -37,9 +35,7 @@
     (mdag/init-store
       :store (file-block-store "var/db/blocks")
       :cache {:total-size-limit (* 32 1024)}
-      :types {'inst
-              {:reader #(Instant/parse ^String %)
-               :writers {Instant #(.format DateTimeFormatter/ISO_INSTANT ^Instant %)}}})
+      :types data/codec-types)
     (doto (mrf/file-ref-tracker "var/db/refs.tsv")
       (mrf/load-history!))))
 

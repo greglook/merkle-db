@@ -407,24 +407,27 @@
                  (throw (UnsupportedOperationException. "NYI")))
                ; No patch data or tablet.
                [nil (::data table)])
-           node (mdag/store-node!
-                  (.store table)
-                  nil
-                  (-> (.root-data table)
-                      (assoc :data/type :merkle-db/table)
-                      (dissoc ::patch ::data)
-                      (cond->
-                        patch-link (assoc ::patch patch-link)
-                        data-link (assoc ::data data-link))))]
-       (->Table
-         (.store table)
-         (assoc (.table-info table)
-                ::node/id (::node/id node)
-                ::data/size (node/reachable-size node))
-         (dissoc (::node/data node) :data/type)
-         nil
-         false
-         (._meta table)))
+           root-data (-> (.root-data table)
+                         (assoc :data/type data-type)
+                         (dissoc ::patch ::data)
+                         (cond->
+                           patch-link (assoc ::patch patch-link)
+                           data-link (assoc ::data data-link)))]
+       (when-not (s/valid? ::node-data root-data)
+         (throw (ex-info
+                  "Cannot serialize invalid root data"
+                  {:type ::invalid-root
+                   :errors (s/explain-data ::node-data root-data)})))
+       (let [node (mdag/store-node! (.store table) nil root-data)]
+         (->Table
+           (.store table)
+           (assoc (.table-info table)
+                  ::node/id (::node/id node)
+                  ::data/size (node/reachable-size node))
+           (::node/data node)
+           nil
+           false
+           (._meta table))))
      ; Table is clean, return directly.
      table)))
 

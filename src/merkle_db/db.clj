@@ -387,12 +387,6 @@
 
 (defn- -set-table
   [^Database db table-name value]
-  (when-not (s/valid? ::table/node-data (.root-data value))
-    (throw (ex-info
-             "Updated table is not valid"
-             {:type ::invalid-table
-              :errors (s/explain-data ::table/node-data
-                                      (.root-data value))})))
   (let [table (if (table/dirty? value)
                 (table/set-backing
                   value

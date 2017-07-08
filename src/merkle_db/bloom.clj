@@ -115,6 +115,19 @@
      (->BloomFilter bins bits k nil))))
 
 
+(defn filter->form
+  "Build a serializable form for the bloom filter."
+  [^BloomFilter x]
+  (with-meta [(.k x) (.bits x) (.bins x)] (._meta x)))
+
+
+(defn form->filter
+  "Build a bloom filter from a serialized form."
+  [form]
+  (let [[k bits bins] form]
+    (->BloomFilter bins bits k (meta form))))
+
+
 (defn filter?
   "Predicate which tests whether the value is a BloomFilter."
   [x]

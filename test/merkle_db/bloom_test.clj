@@ -30,3 +30,11 @@
     (is (false? (ab 3))))
   (is (thrown? IllegalArgumentException
         (bloom/merge (bloom/create 1000) (bloom/create 10000)))))
+
+
+(deftest forming
+  (let [bf (into (bloom/create 1000) (range 100))
+        form (bloom/filter->form bf)]
+    (is (vector? form))
+    (is (= 3 (count form)))
+    (is (= bf (bloom/form->filter form)))))

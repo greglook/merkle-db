@@ -3,11 +3,13 @@
     [clojure.future :refer [any? nat-int?]]
     [clojure.spec :as s]
     [clojure.string :as str]
-    [merkledag.link :as link])
+    [merkledag.link :as link]
+    [merkle-db.bloom :as bloom])
   (:import
     blocks.data.PersistentBytes
     java.time.Instant
-    java.time.format.DateTimeFormatter))
+    java.time.format.DateTimeFormatter
+    merkle_db.bloom.BloomFilter))
 
 
 ;; Count of the records contained under a node.
@@ -53,4 +55,9 @@
     :reader #(PersistentBytes/wrap (javax.xml.bind.DatatypeConverter/parseHexBinary %))
     :writers {PersistentBytes #(-> (.toByteArray ^PersistentBytes %)
                                    (javax.xml.bind.DatatypeConverter/printHexBinary)
-                                   (str/lower-case))}}})
+                                   (str/lower-case))}}
+
+   'merkle-db/bloom-filter
+   {:description "Probablistic Bloom filter."
+    :reader bloom/form->filter
+    :writers {BloomFilter bloom/filter->form}}})

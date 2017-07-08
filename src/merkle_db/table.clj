@@ -454,6 +454,19 @@
   (fn decode-entry [[k r]] [(key/decode lexicoder k) r]))
 
 
+(defn- load-changes
+  "Return the table's patch changes as a map from keys to records or
+  tombstones. This will load the table's patch tablet if present and merge in
+  any locally pending changes."
+  [^Table table]
+  (->>
+    (when-let [patch (some->> (::patch table)
+                              (mdag/get-data (.store table)))]
+      (::patch/changes patch))
+    (into (or (.pending table) (sorted-map)))
+    (not-empty)))
+
+
 (defn- -scan
   ([table]
    (-scan table nil))
@@ -465,7 +478,7 @@
        (patch/patch-seq
          ; Merged patch data to apply to the records.
          (patch/filter-patch
-           (.pending table) ; TODO: merge ::patch
+           (load-changes table)
            {:fields (:fields opts)
             :start-key start-key
             :end-key end-key})
@@ -494,7 +507,7 @@
   ([^Table table id-keys opts]
    (let [lexicoder (table-lexicoder table)
          id-keys (into #{} (map (partial key/encode lexicoder)) id-keys)
-         patch-map (.pending table) ; TODO: merge ::patch
+         patch-map (load-changes table)
          patch-entries (select-keys patch-map id-keys)
          extra-keys (apply disj id-keys (keys patch-entries))
          patch-entries (patch/filter-patch patch-entries {:fields (:fields opts)})

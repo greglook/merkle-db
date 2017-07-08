@@ -103,7 +103,7 @@
 
   (toString
     [this]
-    (str "key:" data))
+    (str "key:" (DatatypeConverter/printHexBinary data)))
 
 
   (equals

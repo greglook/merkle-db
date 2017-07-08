@@ -449,7 +449,7 @@
   "Return a function which will decode the keys in record entries with the
   given lexicoder."
   [lexicoder]
-  (fn [[k r]] [(key/decode lexicoder k) r]))
+  (fn decode-entry [[k r]] [(key/decode lexicoder k) r]))
 
 
 (defn- -scan

@@ -362,6 +362,15 @@
 
 ;; ## Protocol Implementation
 
+(defn- table-link
+  "Build a link to a clean table node."
+  [table-name table]
+  (link/create
+    (str "table:" table-name)
+    (::node/id table)
+    (::data/size table)))
+
+
 (defn- -list-tables
   [^Database db opts]
   (cond->> (map link-or-table->info (.tables db))
@@ -381,21 +390,15 @@
     (if (link/merkle-link? value)
       ; Resolve link to stored table root.
       (table/load-table (.store db) table-name value)
-      ; Dirty table value.
+      ; Loaded table value.
       value)))
 
 
 (defn- -set-table
   [^Database db table-name value]
   (let [table (if (table/dirty? value)
-                (table/set-backing
-                  value
-                  (.store db)
-                  table-name)
-                (link/create
-                  (str "table:" table-name)
-                  (::node/id value)
-                  (::data/size value)))]
+                (table/set-backing value (.store db) table-name)
+                (table-link table-name value))]
     (->Database
       (.store db)
       (.db-info db)
@@ -414,35 +417,42 @@
     (._meta db)))
 
 
+(defn- flush-tables!
+  "Takes a map of tables and flushes any pending changes. Returns a map of
+  table names to node links."
+  [tables]
+  (reduce-kv
+    (fn [acc table-name value]
+      (assoc
+        acc table-name
+        (if (link/merkle-link? value)
+          value
+          (table-link table-name (table/flush! value false)))))
+    {} tables))
+
+
 (defn- -flush!
   [^Database db]
-  (let [tables (reduce-kv
-                 (fn [acc table-name value]
-                   (assoc
-                     acc table-name
-                     (if (link/merkle-link? value)
-                       value
-                       (let [table (table/flush! value false)]
-                         (link/create
-                           (str "table:" table-name)
-                           (::node/id table)
-                           (::data/size table))))))
-                 {} (.tables db))
-        node (mdag/store-node!
-               (.store db)
-               nil
-               (assoc (.root-data db)
-                      :data/type data-type
-                      ::tables tables))]
-    (->Database
-      (.store db)
-      (assoc (.db-info db)
-             ::node/id (::node/id node)
-             ::data/size (node/reachable-size node))
-      (dissoc (::node/data node) ::tables)
-      tables
-      (assoc (._meta db)
-             ::node/links (::node/links node)))))
+  (let [tables (flush-tables! (.tables db))
+        root-data (assoc (.root-data db)
+                         :data/type data-type
+                         ::tables tables)]
+    (when-not (s/valid? ::node-data root-data)
+      (throw (ex-info (str "Cannot write invalid database root node: "
+                           (s/explain-str ::node-data root-data))
+                      {:type ::invalid-node})))
+    (let [node (mdag/store-node! (.store db) nil root-data)
+          db-info (assoc (.db-info db)
+                         ::node/id (::node/id node)
+                         ::data/size (node/reachable-size node))
+          db-meta (assoc (._meta db)
+                         ::node/links (::node/links node))]
+      (->Database
+        (.store db)
+        db-info
+        (dissoc (::node/data node) ::tables)
+        tables
+        db-meta))))
 
 
 (extend-type Database

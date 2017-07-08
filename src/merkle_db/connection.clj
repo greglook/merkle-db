@@ -47,7 +47,6 @@
       Return at most this many results.")
 
   (create-db!
-    [conn db-name]
     [conn db-name attrs]
     "Initialize a new database. Optional attributes may be provided to merge
     into the root node data.")
@@ -106,38 +105,42 @@
 
 
 (defn- -list-dbs
-  [^Connection conn opts]
-  (->
-    opts
-    (->>
-      (ref/list-refs (.tracker conn))
-      (map ref-version-info))
-    (cond->>
-      (:named opts)
-        (filter #(if (string? (:named opts))
-                   (str/starts-with? (::db/name %) (:named opts))
-                   (re-seq (:named opts) (::db/name %))))
-      (:offset opts)
-        (drop (:offset opts))
-      (:limit opts)
-        (take (:limit opts)))))
+  ([conn]
+   (-list-dbs conn nil))
+  ([^Connection conn opts]
+   (->
+     opts
+     (->>
+       (ref/list-refs (.tracker conn))
+       (map ref-version-info))
+     (cond->>
+       (:named opts)
+         (filter #(if (string? (:named opts))
+                    (str/starts-with? (::db/name %) (:named opts))
+                    (re-seq (:named opts) (::db/name %))))
+       (:offset opts)
+         (drop (:offset opts))
+       (:limit opts)
+         (take (:limit opts))))))
 
 
 (defn- -get-db-history
-  [^Connection conn db-name opts]
-  (->
-    (->>
-      (ref/get-history (.tracker conn) db-name)
-      (map ref-version-info))
-    (cond->>
-      (:offset opts)
-        (drop (:offset opts))
-      (:limit opts)
-        (take (:limit opts)))))
+  ([conn db-name]
+   (-get-db-history conn db-name nil))
+  ([^Connection conn db-name opts]
+   (->
+     (->>
+       (ref/get-history (.tracker conn) db-name)
+       (map ref-version-info))
+     (cond->>
+       (:offset opts)
+         (drop (:offset opts))
+       (:limit opts)
+         (take (:limit opts))))))
 
 
 (defn- -create-db!
-  [^Connection conn db-name root-data]
+  [^Connection conn db-name attrs]
   ; TODO: lock db
   (when (::ref/value (ref/get-ref (.tracker conn) db-name))
     (throw (ex-info (str "Cannot create new database: " db-name
@@ -146,8 +149,9 @@
                      :db-name db-name})))
   (->>
     (merge {::db/tables {}}
-           root-data
+           attrs
            {:data/type db/data-type})
+    ; TODO: validate schema
     (hash-map ::node/data)
     (mdag/store-node! (.store conn))
     (::node/id)
@@ -183,69 +187,39 @@
 
 
 (defn- -commit!
-  [^Connection conn db-name db opts]
-  ; TODO: validate spec
-  (when-not (string? db-name)
-    (throw (IllegalArgumentException.
-             (str "Cannot commit database without string name: "
-                  (pr-str db-name)))))
-  (when-not db
-    (throw (IllegalArgumentException. "Cannot commit nil database.")))
-  ; TODO: lock db
-  ; TODO: check if current version is the same as the version opened at?
-  (let [db (db/flush! db)
-        root-id (::node/id db)
-        current-version (ref/get-ref (.tracker conn) db-name)]
-    (if (and (= root-id (::node/id current-version))
-             (= db-name (::db/name db)))
-      ; No data has changed, return current database.
-      db
-      ; Otherwise, update version.
-      (let [version (ref/set-ref! (.tracker conn) db-name root-id)]
-        (db/update-backing db (.store conn) (ref-version-info version))))))
+  ([conn db]
+   (-commit! conn (::db/name db) db nil))
+  ([conn db-name db]
+   (-commit! conn db-name db nil))
+  ([^Connection conn db-name db opts]
+   (when-not (string? db-name)
+     (throw (IllegalArgumentException.
+              (str "Cannot commit database without string name: "
+                   (pr-str db-name)))))
+   (when-not db
+     (throw (IllegalArgumentException. "Cannot commit nil database.")))
+   ; TODO: validate spec
+   ; TODO: lock db
+   ; TODO: check if current version is the same as the version opened at?
+   (let [db (db/flush! db)
+         root-id (::node/id db)
+         current-version (ref/get-ref (.tracker conn) db-name)]
+     (if (and (= root-id (::node/id current-version))
+              (= db-name (::db/name db)))
+       ; No data has changed, return current database.
+       db
+       ; Otherwise, update version.
+       (let [version (ref/set-ref! (.tracker conn) db-name root-id)]
+         (db/update-backing db (.store conn) (ref-version-info version)))))))
 
 
-(extend-type Connection
+(extend Connection
 
   IConnection
 
-  (list-dbs
-    ([this]
-     (-list-dbs this nil))
-    ([this opts]
-     (-list-dbs this opts)))
-
-
-  (get-db-history
-    ([this db-name]
-     (-get-db-history this db-name nil))
-    ([this db-name opts]
-     (-get-db-history this db-name opts)))
-
-
-  (create-db!
-    ([this db-name]
-     (-create-db! this db-name nil))
-    ([this db-name root-data]
-     (-create-db! this db-name root-data)))
-
-
-  (drop-db!
-    [this db-name]
-    (-drop-db! this db-name))
-
-
-  (open-db
-    ([this db-name]
-     (-open-db this db-name nil))
-    ([this db-name opts]
-     (-open-db this db-name opts)))
-
-
-  (commit!
-    ([this db]
-     (-commit! this (::db/name db) db nil))
-    ([this db-name db]
-     (-commit! this db-name db nil))
-    ([this db-name db opts]
-     (-commit! this db-name db opts))))
+  {:list-dbs -list-dbs
+   :get-db-history -get-db-history
+   :create-db! -create-db!
+   :drop-db! -drop-db!
+   :open-db -open-db
+   :commit! -commit!})

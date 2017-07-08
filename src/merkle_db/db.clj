@@ -376,16 +376,18 @@
 
 
 (defn- -list-tables
-  [^Database db opts]
-  (cond->> (map link-or-table->info (.tables db))
-    (:named opts)
-      (filter #(if (string? (:named opts))
-                 (str/starts-with? (::table/name %) (:named opts))
-                 (re-seq (:named opts) (::table/name %))))
-    (:offset opts)
-      (drop (:offset opts))
-    (:limit opts)
-      (take (:limit opts))))
+  ([db]
+   (-list-tables db nil))
+  ([^Database db opts]
+   (cond->> (map link-or-table->info (.tables db))
+     (:named opts)
+       (filter #(if (string? (:named opts))
+                  (str/starts-with? (::table/name %) (:named opts))
+                  (re-seq (:named opts) (::table/name %))))
+     (:offset opts)
+       (drop (:offset opts))
+     (:limit opts)
+       (take (:limit opts)))))
 
 
 (defn- -get-table
@@ -459,32 +461,12 @@
         db-meta))))
 
 
-(extend-type Database
+(extend Database
 
   IDatabase
 
-  (list-tables
-    ([this]
-     (-list-tables this nil))
-    ([this opts]
-     (-list-tables this opts)))
-
-
-  (get-table
-    [this table-name]
-    (-get-table this table-name))
-
-
-  (set-table
-    [this table-name value]
-    (-set-table this table-name value))
-
-
-  (drop-table
-    [this table-name]
-    (-drop-table this table-name))
-
-
-  (flush!
-    [this]
-    (-flush! this)))
+  {:list-tables -list-tables
+   :get-table -get-table
+   :set-table -set-table
+   :drop-table -drop-table
+   :flush! -flush!})

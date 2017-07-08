@@ -45,10 +45,9 @@
 ;; Database root node.
 (s/def ::node-data
   (s/and
-    (s/keys :req [:data/type
-                  ::tables]
+    (s/keys :req [::tables]
             :opt [:time/updated-at])
-    (comp #{data-type} :data/type)))
+    #(= data-type (:data/type %))))
 
 ;; Information from the database version.
 (s/def ::db-info

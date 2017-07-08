@@ -44,14 +44,16 @@
 
 ;; Table root node.
 (s/def ::node-data
-  (s/keys :req [::data/count
-                ::index/branching-factor
-                ::part/limit]
-          :opt [::data
-                ::patch
-                ::data/families
-                ::key/lexicoder
-                :time/updated-at]))
+  (s/and
+    (s/keys :req [::data/count
+                  ::index/branching-factor
+                  ::part/limit]
+            :opt [::data
+                  ::patch
+                  ::data/families
+                  ::key/lexicoder
+                  :time/updated-at])
+    #(= data-type (:data/type %))))
 
 (s/def ::table-info
   (s/keys :req [::node/id

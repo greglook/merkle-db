@@ -394,50 +394,6 @@
   (.dirty table))
 
 
-(defn- -flush!
-  "Ensure that all local state has been persisted to the storage backend and
-  return an updated non-dirty table."
-  ([table]
-   (-flush! table false))
-  ([^Table table apply-patches?]
-   (if (dirty? table)
-     (let [[patch-link data-link]
-             (if (or (seq (.pending table)) (::patch table))
-               (if apply-patches?
-                 ; Combine pending changes and patch tablet and update data tree.
-                 [nil (throw (UnsupportedOperationException. "NYI: merge pending changes and patch tablet into data tree"))]
-                 ; flush any pending changes to the patch tablet
-                 ; if patch tablet overflows, update main data tree
-                 (throw (UnsupportedOperationException. "NYI: flush pending changes to patch tablet, overflow to data tree")))
-               ; No patch data or tablet.
-               [nil (::data table)])
-           root-data (-> (.root-data table)
-                         (assoc :data/type data-type)
-                         (dissoc ::patch ::data)
-                         (cond->
-                           patch-link (assoc ::patch patch-link)
-                           data-link (assoc ::data data-link)))]
-       (when-not (s/valid? ::node-data root-data)
-         (throw (ex-info (str "Cannot write invalid table root node: "
-                              (s/explain-str ::node-data root-data))
-                         {:type ::invalid-root})))
-       (let [node (mdag/store-node! (.store table) nil root-data)
-             table-info (assoc (.table-info table)
-                               ::node/id (::node/id node)
-                               ::data/size (node/reachable-size node))
-             table-meta (assoc (._meta table)
-                               ::node/links (::node/links node))]
-         (->Table
-           (.store table)
-           table-info
-           (::node/data node)
-           (sorted-map)
-           false
-           table-meta)))
-     ; Table is clean, return directly.
-     table)))
-
-
 
 ;; ## Protocol Implementation
 
@@ -550,7 +506,7 @@
                            (into {}
                                  (filter (comp some? val))
                                  (merge old-data new-data))))
-         extant (into {} (get-records table (map first records)))
+         extant (into {} (-get-records table (map first records)))
          new-records (map
                        (fn [[k data]]
                          [(key/encode lexicoder k)
@@ -565,7 +521,7 @@
 (defn- -delete
   [table id-keys]
   (let [lexicoder (key/lexicoder (::key/lexicoder table :bytes))
-        extant (get-records table id-keys {:fields {}})]
+        extant (-get-records table id-keys {:fields {}})]
     (-> table
         (update-pending
           into
@@ -574,6 +530,65 @@
             (map (fn [k] [(key/encode lexicoder k) patch/tombstone])))
           extant)
         (update ::data/count - (count extant)))))
+
+
+(defn- update-index-tree
+  [store link changes]
+  ; TODO: implement
+  (throw (UnsupportedOperationException. "NYI: update data index tree")))
+
+
+(defn- flush-changes
+  "Returns a vector containing a link to a patch tablet and an index tree."
+  [^Table table full?]
+  (let [changes (load-changes table)]
+    (if (seq changes)
+      ; Check for force or limit overflow.
+      (if (or full? (< (::patch/limit table 0) (count changes)))
+        ; Combine pending changes and patch tablet and update data tree.
+        [nil (update-index-tree (.store table) (::data table) changes)]
+        ; Flush any pending changes to the patch tablet.
+        [(->> (patch/from-changes changes)
+              (mdag/store-node! (.store table) nil)
+              (mdag/link "patch"))
+         (::data table)])
+      ; No patch data or tablet.
+      [nil (::data table)])))
+
+
+(defn- -flush!
+  "Ensure that all local state has been persisted to the storage backend and
+  return an updated non-dirty table."
+  ([table]
+   (-flush! table false))
+  ([^Table table apply-patches?]
+   (if (dirty? table)
+     (let [[patch-link data-link] (flush-changes table apply-patches?)
+           root-data (-> (.root-data table)
+                         (assoc :data/type data-type)
+                         (dissoc ::patch ::data)
+                         (cond->
+                           patch-link (assoc ::patch patch-link)
+                           data-link (assoc ::data data-link)))]
+       (when-not (s/valid? ::node-data root-data)
+         (throw (ex-info (str "Cannot write invalid table root node: "
+                              (s/explain-str ::node-data root-data))
+                         {:type ::invalid-root})))
+       (let [node (mdag/store-node! (.store table) nil root-data)
+             table-info (assoc (.table-info table)
+                               ::node/id (::node/id node)
+                               ::data/size (node/reachable-size node))
+             table-meta (assoc (._meta table)
+                               ::node/links (::node/links node))]
+         (->Table
+           (.store table)
+           table-info
+           (::node/data node)
+           (sorted-map)
+           false
+           table-meta)))
+     ; Table is clean, return directly.
+     table)))
 
 
 (extend Table

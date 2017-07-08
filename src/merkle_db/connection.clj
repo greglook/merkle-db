@@ -170,20 +170,22 @@
 
 
 (defn- -open-db
-  [^Connection conn db-name opts]
-  (let [version (if-let [^java.time.Instant at-inst (:at-inst opts)]
-                  (first (drop-while #(.isBefore at-inst (::ref/time %))
-                                     (ref/get-history (.tracker conn) db-name)))
-                  (ref/get-ref (.tracker conn) db-name))]
-    (if (::ref/value version)
-      ; Load database.
-      (db/load-database (.store conn) (ref-version-info version))
-      ; No version found.
-      (throw (ex-info (str "No version found for database " db-name
-                           " with options " (pr-str opts))
-                      {:type ::no-database-version
-                       :db-name db-name
-                       :opts opts})))))
+  ([conn db-name]
+   (-open-db conn db-name nil))
+  ([^Connection conn db-name opts]
+   (let [version (if-let [^java.time.Instant at-inst (:at-inst opts)]
+                   (first (drop-while #(.isBefore at-inst (::ref/time %))
+                                      (ref/get-history (.tracker conn) db-name)))
+                   (ref/get-ref (.tracker conn) db-name))]
+     (if (::ref/value version)
+       ; Load database.
+       (db/load-database (.store conn) (ref-version-info version))
+       ; No version found.
+       (throw (ex-info (str "No version found for database " db-name
+                            " with options " (pr-str opts))
+                       {:type ::no-database-version
+                        :db-name db-name
+                        :opts opts}))))))
 
 
 (defn- -commit!

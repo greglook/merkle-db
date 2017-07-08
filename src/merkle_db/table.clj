@@ -127,6 +127,15 @@
     "Remove some records from the table, identified by a collection of id keys.
     Returns an updated table.")
 
+  (flush!
+    [table]
+    [table apply-patches?]
+    "Ensure that all local state has been persisted to the storage backend and
+    return an updated persisted table.
+
+    If `apply-patches?` is true, the current patch data will be merged into the
+    main data tree and the returned table will have no patch link.")
+
   ;; Partitions
 
   (list-partitions
@@ -383,22 +392,21 @@
   (.dirty table))
 
 
-; TODO: put this in protocol?
-(defn flush!
+(defn- -flush!
   "Ensure that all local state has been persisted to the storage backend and
   return an updated non-dirty table."
   ([table]
-   (flush! table false))
+   (-flush! table false))
   ([^Table table apply-patches?]
    (if (dirty? table)
      (let [[patch-link data-link]
              (if (or (seq (.pending table)) (::patch table))
                (if apply-patches?
                  ; Combine pending changes and patch tablet and update data tree.
-                 [nil (throw (UnsupportedOperationException. "updated data-tree link"))]
+                 [nil (throw (UnsupportedOperationException. "NYI: merge pending changes and patch tablet into data tree"))]
                  ; flush any pending changes to the patch tablet
                  ; if patch tablet overflows, update main data tree
-                 (throw (UnsupportedOperationException. "NYI")))
+                 (throw (UnsupportedOperationException. "NYI: flush pending changes to patch tablet, overflow to data tree")))
                ; No patch data or tablet.
                [nil (::data table)])
            root-data (-> (.root-data table)
@@ -408,20 +416,22 @@
                            patch-link (assoc ::patch patch-link)
                            data-link (assoc ::data data-link)))]
        (when-not (s/valid? ::node-data root-data)
-         (throw (ex-info
-                  "Cannot serialize invalid root data"
-                  {:type ::invalid-root
-                   :errors (s/explain-data ::node-data root-data)})))
-       (let [node (mdag/store-node! (.store table) nil root-data)]
+         (throw (ex-info (str "Cannot write invalid table root node: "
+                              (s/explain-str ::node-data root-data))
+                         {:type ::invalid-root})))
+       (let [node (mdag/store-node! (.store table) nil root-data)
+             table-info (assoc (.table-info table)
+                               ::node/id (::node/id node)
+                               ::data/size (node/reachable-size node))
+             table-meta (assoc (._meta table)
+                               ::node/links (::node/links node))]
          (->Table
            (.store table)
-           (assoc (.table-info table)
-                  ::node/id (::node/id node)
-                  ::data/size (node/reachable-size node))
+           table-info
            (::node/data node)
-           nil
+           (sorted-map-by key/compare)
            false
-           (._meta table))))
+           table-meta)))
      ; Table is clean, return directly.
      table)))
 
@@ -443,92 +453,98 @@
 
 
 (defn- -scan
-  [^Table table opts]
-  (let [lexicoder (table-lexicoder table)
-        start-key (some->> (:start-key opts) (key/encode lexicoder))
-        end-key (some->> (:end-key opts) (key/encode lexicoder))]
-    (->>
-      (patch/patch-seq
-        ; Merged patch data to apply to the records.
-        (patch/filter-patch
-          (.pending table) ; TODO: merge ::patch
-          {:fields (:fields opts)
-           :start-key start-key
-           :end-key end-key})
-        ; Lazy sequence of matching records from the index tree.
-        (when-let [data-node (mdag/get-data
-                               (.store table)
-                               (::data (.root-data table)))]
-          (if (or start-key end-key)
-            (index/read-range
-              (.store table)
-              data-node
-              (:fields opts)
-              start-key
-              end-key)
-            (index/read-all
-              (.store table)
-              data-node
-              (:fields opts)))))
-      (patch/remove-tombstones)
-      (map (key-decoder lexicoder)))))
+  ([table]
+   (-scan table nil))
+  ([^Table table opts]
+   (let [lexicoder (table-lexicoder table)
+         start-key (some->> (:start-key opts) (key/encode lexicoder))
+         end-key (some->> (:end-key opts) (key/encode lexicoder))]
+     (->>
+       (patch/patch-seq
+         ; Merged patch data to apply to the records.
+         (patch/filter-patch
+           (.pending table) ; TODO: merge ::patch
+           {:fields (:fields opts)
+            :start-key start-key
+            :end-key end-key})
+         ; Lazy sequence of matching records from the index tree.
+         (when-let [data-node (mdag/get-data
+                                (.store table)
+                                (::data (.root-data table)))]
+           (if (or start-key end-key)
+             (index/read-range
+               (.store table)
+               data-node
+               (:fields opts)
+               start-key
+               end-key)
+             (index/read-all
+               (.store table)
+               data-node
+               (:fields opts)))))
+       (patch/remove-tombstones)
+       (map (key-decoder lexicoder))))))
 
 
 (defn- -get-records
-  [^Table table id-keys opts]
-  (let [lexicoder (table-lexicoder table)
-        id-keys (into #{} (map (partial key/encode lexicoder)) id-keys)
-        patch-map (.pending table) ; TODO: merge ::patch
-        patch-entries (select-keys patch-map id-keys)
-        extra-keys (apply disj id-keys (keys patch-entries))
-        patch-entries (patch/filter-patch patch-entries {:fields (:fields opts)})
-        data-entries (when-let [data-node (and (seq extra-keys)
-                                               (mdag/get-data
-                                                 (.store table)
-                                                 (::data (.root-data table))))]
-                       (index/read-batch
-                         (.store table)
-                         data-node
-                         (:fields opts)
-                         extra-keys))]
-    (->> (concat patch-entries data-entries)
-         (patch/remove-tombstones)
-         (map (key-decoder lexicoder)))))
+  ([table id-keys]
+   (-get-records table id-keys nil))
+  ([^Table table id-keys opts]
+   (let [lexicoder (table-lexicoder table)
+         id-keys (into #{} (map (partial key/encode lexicoder)) id-keys)
+         patch-map (.pending table) ; TODO: merge ::patch
+         patch-entries (select-keys patch-map id-keys)
+         extra-keys (apply disj id-keys (keys patch-entries))
+         patch-entries (patch/filter-patch patch-entries {:fields (:fields opts)})
+         data-entries (when-let [data-node (and (seq extra-keys)
+                                                (mdag/get-data
+                                                  (.store table)
+                                                  (::data (.root-data table))))]
+                        (index/read-batch
+                          (.store table)
+                          data-node
+                          (:fields opts)
+                          extra-keys))]
+     (->> (concat patch-entries data-entries)
+          (patch/remove-tombstones)
+          (map (key-decoder lexicoder))))))
 
 
 (defn- -insert
-  [table records opts]
-  (let [{:keys [merge-record merge-field]} opts
-        lexicoder (table-lexicoder table)
-        update-record (cond
-                        merge-record merge-record
-                        merge-field
-                        (fn merge-fields
-                          [_ old-data new-data]
-                          (reduce
-                            (fn [data field-key]
-                              (assoc data
-                                     field-key
-                                     (merge-field field-key
-                                                  (get old-data field-key)
-                                                  (get new-data field-key))))
-                            {} (distinct (concat (keys old-data) (keys new-data)))))
-                        :else
-                        (fn merge-simple
-                          [_ old-data new-data]
-                          (into {}
-                                (filter (comp some? val))
-                                (merge old-data new-data))))
-        extant (into {} (get-records table (map first records)))
-        new-records (map
-                      (fn [[k data]]
-                        [(key/encode lexicoder k)
-                         (update-record k (get extant k) data)])
-                      records)]
-    ; Add new data maps to pending changes.
-    (-> table
-        (update-pending into new-records)
-        (update ::data/count + (- (count records) (count extant))))))
+  ([table records]
+   (-insert table records nil))
+  ([table records opts]
+   (let [{:keys [merge-record merge-field]} opts
+         lexicoder (table-lexicoder table)
+         update-record (cond
+                         merge-record merge-record
+                         merge-field
+                         (fn merge-fields
+                           [_ old-data new-data]
+                           (reduce
+                             (fn [data field-key]
+                               (assoc data
+                                      field-key
+                                      (merge-field field-key
+                                                   (get old-data field-key)
+                                                   (get new-data field-key))))
+                             {} (distinct (concat (keys old-data) (keys new-data)))))
+                         :else
+                         (fn merge-simple
+                           [_ old-data new-data]
+                           (into {}
+                                 (filter (comp some? val))
+                                 (merge old-data new-data))))
+         extant (into {} (get-records table (map first records)))
+         new-records (map
+                       (fn [[k data]]
+                         [(key/encode lexicoder k)
+                          (update-record k (get extant k) data)])
+                       records)]
+     ; Add new data maps to pending changes.
+     (-> table
+         (update-pending into new-records)
+         (update ::data/count + (- (count records) (count extant)))))))
 
 
 (defn- -delete
@@ -545,33 +561,12 @@
         (update ::data/count - (count extant)))))
 
 
-(extend-type Table
+(extend Table
 
   ITable
 
-  ;; Records
-
-  (scan
-    ([this]
-     (-scan this nil))
-    ([this opts]
-     (-scan this opts)))
-
-
-  (get-records
-    ([this id-keys]
-     (-get-records this id-keys nil))
-    ([this id-keys opts]
-     (-get-records this id-keys opts)))
-
-
-  (insert
-    ([this records]
-     (-insert this records nil))
-    ([this records opts]
-     (-insert this records opts)))
-
-
-  (delete
-    [this id-keys]
-    (-delete this id-keys)))
+  {:scan -scan
+   :get-records -get-records
+   :insert -insert
+   :delete -delete
+   :flush! -flush!})

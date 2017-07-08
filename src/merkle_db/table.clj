@@ -415,12 +415,13 @@
   tombstones. This will load the table's patch tablet if present and merge in
   any locally pending changes."
   [^Table table]
-  (->>
-    (when-let [patch (some->> (::patch table)
-                              (mdag/get-data (.store table)))]
-      (::patch/changes patch))
-    (into (or (.pending table) (sorted-map)))
-    (not-empty)))
+  (into
+    (sorted-map)
+    (concat
+      (when-let [patch (some->> (::patch table)
+                                (mdag/get-data (.store table)))]
+        (::patch/changes patch))
+      (.pending table))))
 
 
 (defn- -scan

@@ -8,9 +8,7 @@
       [key :as key])))
 
 
-(def ^:const data-type
-  "Value of `:data/type` that indicates a tablet node."
-  :merkle-db/patch)
+;; ## Tombstones
 
 (def tombstone
   "Value which marks the deletion of a record."
@@ -18,13 +16,17 @@
 
 
 (defn tombstone?
-  "Returns true if the value x is a tombstone."
+  "Returns true if the value is a tombstone."
   [x]
   (identical? ::tombstone x))
 
 
 
 ;; ## Specs
+
+(def ^:const data-type
+  "Value of `:data/type` that indicates a patch tablet node."
+  :merkle-db/patch)
 
 ;; Maximum number of changes to allow in a patch tablet.
 (s/def ::limit pos-int?)
@@ -37,17 +39,25 @@
 (s/def ::changes
   (s/coll-of ::change-entry :kind vector?))
 
-;; Tablet node.
-(s/def :merkle-db/patch
-  (s/keys :req [::changes]))
+;; Patch tablet node data.
+(s/def ::node-data
+  (s/and
+    (s/keys :req [::changes])
+    #(= data-type (:data/type %))))
+
+
+
+;; ## Construction
+
+(defn from-changes
+  "Construct a patch tablet node data from a map of change data."
+  [changes]
+  {:data/type data-type
+   ::changes (vec changes)})
 
 
 
 ;; ## Utility Functions
-
-; (merge-patch patch-tablet pending) => patch-tablet
-; (apply-patch data-tree pending) => data-link
-
 
 (defn remove-tombstones
   "Returns a lazy sequence of record entries with tombstoned records removed."
@@ -56,7 +66,7 @@
 
 
 (defn filter-patch
-  "Takes a full set of patch data and returns a cleaned sequence based on the
+  "Takes a full set of patch data and returns a filtered sequence based on the
   given options."
   [patch opts]
   (when (seq patch)

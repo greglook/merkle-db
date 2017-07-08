@@ -21,7 +21,7 @@
 
 ;; ## Specs
 
-(def data-type
+(def ^:const data-type
   "Value of `:data/type` that indicates an index tree node."
   :merkle-db/index)
 

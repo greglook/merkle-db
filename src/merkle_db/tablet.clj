@@ -8,7 +8,7 @@
 
 ;; ## Specs
 
-(def data-type
+(def ^:const data-type
   "Value of `:data/type` that indicates a tablet node."
   :merkle-db/tablet)
 

@@ -19,7 +19,7 @@
 
 ;; ## Data Specifications
 
-(def data-type
+(def ^:const data-type
   "Value of `:data/type` that indicates a database root node."
   :merkle-db/database)
 

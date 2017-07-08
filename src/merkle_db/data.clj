@@ -4,12 +4,13 @@
     [clojure.spec :as s]
     [clojure.string :as str]
     [merkledag.link :as link]
-    [merkle-db.bloom :as bloom])
+    [merkle-db.bloom :as bloom]
+    [merkle-db.key :as key])
   (:import
-    blocks.data.PersistentBytes
     java.time.Instant
     java.time.format.DateTimeFormatter
-    merkle_db.bloom.BloomFilter))
+    merkle_db.bloom.BloomFilter
+    merkle_db.key.Key))
 
 
 ;; Count of the records contained under a node.
@@ -50,12 +51,10 @@
     :reader #(Instant/parse ^String %)
     :writers {Instant #(.format DateTimeFormatter/ISO_INSTANT ^Instant %)}}
 
-   'data/bytes
-   {:description "Immutable byte sequence."
-    :reader #(PersistentBytes/wrap (javax.xml.bind.DatatypeConverter/parseHexBinary %))
-    :writers {PersistentBytes #(-> (.toByteArray ^PersistentBytes %)
-                                   (javax.xml.bind.DatatypeConverter/printHexBinary)
-                                   (str/lower-case))}}
+   'merkle-db/key
+   {:description "Record key byte data."
+    :reader key/parse
+    :writers {Key key/hex}}
 
    'merkle-db/bloom-filter
    {:description "Probablistic Bloom filter."

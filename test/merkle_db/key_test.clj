@@ -8,40 +8,44 @@
     [merkle-db.test-utils]))
 
 
+(deftest printing
+  (is (= "#merkle-db/key \"012345\"" (pr-str (key/create [0x01 0x23 0x45])))))
+
+
 (deftest key-predicate
-  (is (false? (key/bytes? nil)))
-  (is (false? (key/bytes? :foo)))
-  (is (false? (key/bytes? (byte-array [0 1 2]))))
-  (is (true? (key/bytes? (key/create [0]))))
-  (is (true? (key/bytes? (key/create [0 1 2 3 4])))))
+  (is (false? (key/key? nil)))
+  (is (false? (key/key? :foo)))
+  (is (false? (key/key? (byte-array [0 1 2]))))
+  (is (true? (key/key? (key/create [0]))))
+  (is (true? (key/key? (key/create [0 1 2 3 4])))))
 
 
 (deftest lexicographic-ordering
   (testing "equal arrays"
-    (is (zero? (key/compare (key/create []) (key/create []))))
-    (is (zero? (key/compare (key/create [1 2 3]) (key/create [1 2 3]))))
+    (is (zero? (compare (key/create []) (key/create []))))
+    (is (zero? (compare (key/create [1 2 3]) (key/create [1 2 3]))))
     (is (false? (key/before? (key/create [1]) (key/create [1]))))
     (is (false? (key/after? (key/create [1]) (key/create [1])))))
   (testing "equal prefixes"
-    (is (neg? (key/compare (key/create [1 2 3])
+    (is (neg? (compare (key/create [1 2 3])
                            (key/create [1 2 3 4]))))
-    (is (pos? (key/compare (key/create [1 2 3 4])
+    (is (pos? (compare (key/create [1 2 3 4])
                            (key/create [1 2 3])))))
   (testing "order-before"
-    (is (neg? (key/compare (key/create [1 2 3])
+    (is (neg? (compare (key/create [1 2 3])
                            (key/create [1 2 4]))))
-    (is (neg? (key/compare (key/create [1 2 3])
+    (is (neg? (compare (key/create [1 2 3])
                            (key/create [1 3 2]))))
-    (is (neg? (key/compare (key/create [0 2 3 4])
+    (is (neg? (compare (key/create [0 2 3 4])
                            (key/create [1 3 2 1]))))
     (is (true? (key/before? (key/create [0 1])
                             (key/create [0 2])))))
   (testing "order-after"
-    (is (pos? (key/compare (key/create [1 2 4])
+    (is (pos? (compare (key/create [1 2 4])
                            (key/create [1 2 3]))))
-    (is (pos? (key/compare (key/create [1 3 2])
+    (is (pos? (compare (key/create [1 3 2])
                            (key/create [1 2 3]))))
-    (is (pos? (key/compare (key/create [1 3 2 1])
+    (is (pos? (compare (key/create [1 3 2 1])
                            (key/create [0 2 3 4]))))
     (is (true? (key/after? (key/create [0 1 2])
                            (key/create [0 1 0]))))))
@@ -73,7 +77,7 @@
       x arg-gen]
      (let [decoded (key/decode coder (key/encode coder x))]
        (if (bytes? x)
-         (is (zero? (key/compare x decoded)))
+         (is (zero? (cmp x decoded)))
          (is (= x decoded)))))
    (checking "sort order" 100
      [[coder arg-gen] generator
@@ -84,11 +88,11 @@
            kb (key/encode coder b)]
        (cond
          (zero? rrank)
-           (is (zero? (key/compare ka kb)))
+           (is (zero? (compare ka kb)))
          (pos? rrank)
-           (is (pos? (key/compare ka kb)))
+           (is (pos? (compare ka kb)))
          :else
-           (is (neg? (key/compare ka kb))))))))
+           (is (neg? (compare ka kb))))))))
 
 
 (defn- lexi-comparator
@@ -154,7 +158,7 @@
   (check-lexicoder
     (gen/return [key/bytes-lexicoder
                  (gen/such-that not-empty gen/bytes)])
-    key/compare))
+    @#'key/compare-bytes))
 
 
 (deftest string-lexicoder

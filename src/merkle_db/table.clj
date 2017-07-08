@@ -337,7 +337,7 @@
        ::part/limit part/default-limit}
       (dissoc opts ::data ::patch)
       {::data/count 0})
-    (sorted-map-by key/compare)
+    (sorted-map)
     true
     nil))
 
@@ -352,7 +352,7 @@
        ::node/id (::node/id node)
        ::data/size (node/reachable-size node)}
       (::node/data node)
-      (sorted-map-by key/compare)
+      (sorted-map)
       false
       {::node/links (::node/links node)})))
 
@@ -429,7 +429,7 @@
            (.store table)
            table-info
            (::node/data node)
-           (sorted-map-by key/compare)
+           (sorted-map)
            false
            table-meta)))
      ; Table is clean, return directly.

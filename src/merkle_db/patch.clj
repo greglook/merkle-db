@@ -31,7 +31,7 @@
 
 ;; Records are stored as a key/data-or-tombstone pair.
 (s/def ::change-entry
-  (s/tuple key/bytes? (s/or :record map? :tombstone tombstone?)))
+  (s/tuple key/key? (s/or :record map? :tombstone tombstone?)))
 
 ;; Sorted vector of record entries.
 (s/def ::changes
@@ -62,9 +62,9 @@
   (when (seq patch)
     (cond->> patch
       (:start-key opts)
-        (drop-while #(neg? (key/compare (first %) (:start-key opts))))
+        (drop-while #(key/before? (first %) (:start-key opts)))
       (:end-key opts)
-        (take-while #(not (neg? (key/compare (:end-key opts) (first %)))))
+        (take-while #(not (key/after? (first %) (:end-key opts))))
       (:fields opts)
         (map (fn [[k r]]
                [k (if (map? r) (select-keys r (:fields opts)) r)])))))

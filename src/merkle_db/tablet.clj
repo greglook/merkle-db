@@ -14,7 +14,7 @@
 
 ;; Records are stored as a key/data pair.
 (s/def ::record-entry
-  (s/tuple key/bytes? map?))
+  (s/tuple key/key? map?))
 
 ;; Sorted vector of record entries.
 (s/def ::records
@@ -81,15 +81,9 @@
                       {:split-key split-key
                        :first-key fkey
                        :last-key lkey}))))
-  (let [before-split? #(neg? (key/compare (first %) split-key))]
-    [(->>
-       (::records tablet)
-       (take-while before-split?)
-       (from-records*))
-     (->>
-       (::records tablet)
-       (drop-while before-split?)
-       (from-records*))]))
+  (->> (::records tablet)
+       (split-with #(key/before? (first %) split-key))
+       (mapv from-records*)))
 
 
 (defn join
@@ -132,9 +126,9 @@
   ; OPTIMIZE: binary-search to the starting point and then iterate.
   (cond->> (::records tablet)
     start-key
-      (drop-while #(neg? (key/compare (first %) start-key)))
+      (drop-while #(key/before? (first %) start-key))
     end-key
-      (take-while #(not (neg? (key/compare end-key (first %)))))))
+      (take-while #(not (key/after? (first %) end-key)))))
 
 
 
@@ -158,7 +152,7 @@
    (->>
      records
      (map (fn apply-f [[k v]] [k (or (f k nil v) {})]))
-     (sort-by first key/compare)
+     (sort-by first)
      (from-records*))))
 
 
@@ -180,7 +174,7 @@
                     (clojure.set/difference
                       (set (map first records))
                       (set (map first (::records tablet))))))
-       (sort-by first key/compare)
+       (sort-by first)
        (vec)
        (assoc tablet ::records)))
 
@@ -198,7 +192,7 @@
   "Update the tablet by removing certain record keys from it. Returns nil if
   the resulting tablet is empty."
   [tablet record-keys]
-  {:pre [(every? key/bytes? record-keys)]}
+  {:pre [(every? key/key? record-keys)]}
   (->
     (->>
       (::records tablet)

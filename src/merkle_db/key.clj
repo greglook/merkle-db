@@ -6,16 +6,18 @@
   The first byte that differs between two keys determines their sort order,
   with the lower byte value ranking first. If the prefix of the longer key
   matches all the bytes in the shorter key, the shorter key ranks first."
-  (:refer-clojure :exclude [bytes? compare min max])
+  (:refer-clojure :exclude [min max])
   (:require
-    [clojure.future :refer [any?]]
+    [clojure.future :refer [any? bytes?]]
     [clojure.spec :as s])
   (:import
-    blocks.data.PersistentBytes
+    clojure.lang.Murmur3
     (java.nio.charset
       Charset
       StandardCharsets)
-    java.time.Instant))
+    java.time.Instant
+    java.util.Arrays
+    javax.xml.bind.DatatypeConverter))
 
 
 ;; Lexicoders can be specified either as a simple type keyword or a vector of
@@ -28,32 +30,9 @@
 
 
 
-;; ## Key Construction
-
-(defn create
-  "Construct a new `PersistentBytes` value containing the given byte data,
-  which should either be a byte array or a sequence of byte values."
-  [data]
-  (PersistentBytes/wrap (byte-array data)))
-
-
-(defn get-bytes
-  "Return a copy of the raw bytes inside a key."
-  ^bytes
-  [key]
-  (.toByteArray ^PersistentBytes key))
-
-
-(defn bytes?
-  "Predicate which returns true if `x` is a `PersistentBytes` value."
-  [x]
-  (instance? PersistentBytes x))
-
-
-
 ;; ## Comparators
 
-(defn compare
+(defn- compare-bytes
   "Lexicographically compares two byte-array keys for order. Returns a negative
   number, zero, or a positive number if `a` is less than, equal to, or greater
   than `b`, respectively.
@@ -111,6 +90,118 @@
 
 
 
+
+
+;; ## Key Construction
+
+(deftype Key
+  [^bytes data
+   _meta
+   ^:unsynchronized-mutable _hash]
+
+  Object
+
+  (toString
+    [this]
+    (str "key:" data))
+
+
+  (equals
+    [this that]
+    (boolean
+      (or (identical? this that)
+          (and (identical? (class this) (class that))
+               (= (count data) (count that))
+               (zero? (compare-bytes data (.data ^Key that)))))))
+
+
+  clojure.lang.IHashEq
+
+  (hashCode
+    [this]
+    (let [hc _hash]
+      (if (zero? hc)
+        (let [hc (int (bit-xor (hash :merkle-db/key)
+                               (Murmur3/hashOrdered (seq data))))]
+          (set! _hash hc)
+          hc)
+        hc)))
+
+
+  (hasheq
+    [this]
+    (.hashCode this))
+
+
+  clojure.lang.IObj
+
+  (meta
+    [this]
+    _meta)
+
+
+  (withMeta
+    [this meta-map]
+    (Key. data meta-map _hash))
+
+
+  clojure.lang.Counted
+
+  (count
+    [this]
+    (count data))
+
+
+  Comparable
+
+  (compareTo
+    [this that]
+    (when-not (instance? Key that)
+      (throw (RuntimeException. "Keys can only be compared to keys")))
+    (compare-bytes data (.data ^Key that))))
+
+
+(alter-meta! #'->Key assoc :private true)
+
+
+(defn create
+  "Construct a new key value containing the given byte data, which should
+  either be a byte array or a sequence of byte values."
+  [data]
+  (->Key (byte-array data) nil 0))
+
+
+(defn get-bytes
+  "Return a copy of the raw bytes inside a key."
+  ^bytes
+  [^Key k]
+  (Arrays/copyOf ^bytes (.data k) (count k)))
+
+
+(defn key?
+  "Predicate which returns true if `x` is a key value."
+  [x]
+  (instance? Key x))
+
+
+(defn hex
+  "Return a hexadecimal string encoding the bytes in the key."
+  [^Key k]
+  (DatatypeConverter/printHexBinary (.data k)))
+
+
+(defn parse
+  "Parse a key from a hexadecimal string."
+  [s]
+  (create (DatatypeConverter/parseHexBinary s)))
+
+
+(defmethod print-method Key
+  [x w]
+  (print-method (tagged-literal 'merkle-db/key (hex x)) w))
+
+
+
 ;; ## Lexicoder Protocol
 
 (defprotocol Lexicoder
@@ -133,7 +224,7 @@
 (defn encode
   "Encodes the given value and returns persistent key bytes."
   [coder value]
-  (PersistentBytes/wrap (encode* coder value)))
+  (create (encode* coder value)))
 
 
 (defn decode
@@ -141,7 +232,7 @@
   ([coder data]
    (decode coder data 0 (count data)))
   ([coder data offset len]
-   (let [byte-data (if (bytes? data)
+   (let [byte-data (if (key? data)
                      (get-bytes data)
                      (byte-array data))]
      (decode* coder byte-data offset len))))
@@ -166,7 +257,7 @@
 
 ;; ## Lexicoder Utilities
 
-(defn ^:no-doc config-params
+(defn- config-params
   "Returns the parameters given to a lexicoder spec. For simple keyword, this
   function returns nil; for the vector form, it returns a sequence of the
   values following the lexicoder type key."
@@ -175,7 +266,7 @@
     (next config)))
 
 
-(defn ^:no-doc escape-bytes
+(defn- escape-bytes
   "Escape the given byte sequence, replacing any 0x00 bytes with 0x0101 and any
   0x01 bytes with 0x0102."
   ^bytes
@@ -205,7 +296,7 @@
                     (recur (inc i) (inc o)))))))))))
 
 
-(defn ^:no-doc unescape-bytes
+(defn- unescape-bytes
   "Unescape the given byte sequence, replacing escaped 0x00 and 0x01 bytes with
   their original values."
   ^bytes
@@ -233,7 +324,7 @@
                     (recur (inc i) (inc o)))))))))))
 
 
-(defn ^:no-doc join-bytes
+(defn- join-bytes
   "Join a sequence of byte arrays together with 0x00 bytes."
   [byte-arrays]
   (if (empty? byte-arrays)
@@ -252,7 +343,7 @@
           data)))))
 
 
-(defn ^:no-doc split-bytes
+(defn- split-bytes
   "Split a byte array into sections separated by 0x00 bytes."
   [^bytes data offset length]
   (if (empty? data)
@@ -313,12 +404,12 @@
 
   (encode*
     [_ value]
-    (when-not (clojure.future/bytes? value)
+    (when-not (bytes? value)
       (throw (IllegalArgumentException.
                (format "BytesLexicoder cannot encode non-byte-array value: %s (%s)"
                        (pr-str value)
                        (.getName (class value))))))
-    (when (empty? value)
+    (when (zero? (count value))
       (throw (IllegalArgumentException.
                "BytesLexicoder cannot encode empty byte arrays")))
     value)

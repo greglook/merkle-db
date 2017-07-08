@@ -38,7 +38,7 @@
 (s/def ::height pos-int?)
 
 ;; Sorted vector of index keys.
-(s/def ::keys (s/coll-of key/bytes? :kind vector?))
+(s/def ::keys (s/coll-of key/key? :kind vector?))
 
 ;; Sorted vector of child links.
 (s/def ::children (s/coll-of link/merkle-link? :kind vector?))

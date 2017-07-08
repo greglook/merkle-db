@@ -27,10 +27,10 @@
 (s/def ::membership bloom/filter?)
 
 ;; First key present in the partition.
-(s/def ::first-key key/bytes?)
+(s/def ::first-key key/key?)
 
 ;; Last key present in the partition.
-(s/def ::last-key key/bytes?)
+(s/def ::last-key key/key?)
 
 ;; Map of family keys (and `:base`) to links to the corresponding tablets.
 (s/def ::tablets (s/map-of keyword? link/merkle-link?))
@@ -304,7 +304,7 @@
   "Constructs new partitions from the given map of record data. The records
   will be split into tablets matching the given families, if provided."
   [store parameters f records]
-  (let [records (sort-by first key/compare records)
+  (let [records (sort-by first records)
         limit (or (::limit parameters) default-limit)
         families (or (::data/families parameters) {})
         part-count (inc (int (/ (count records) limit)))]

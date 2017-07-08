@@ -1,20 +1,23 @@
 merkle-db.connection/connect
+
 merkle-db.connection/IConnection
-merkle-db.connection/list-dbs
-merkle-db.connection/get-db-history
-merkle-db.connection/create-db!
-merkle-db.connection/drop-db!
-merkle-db.connection/open-db
-merkle-db.connection/commit!
+merkle-db.connection/-list-dbs
+merkle-db.connection/-get-db-history
+merkle-db.connection/-create-db!
+merkle-db.connection/-drop-db!
+merkle-db.connection/-open-db
+merkle-db.connection/-commit!
 
 merkle-db.db/IDatabase
-merkle-db.db/list-tables
-merkle-db.db/get-table
+merkle-db.db/-list-tables
+merkle-db.db/-set-table
+merkle-db.db/-get-table
+merkle-db.db/-drop-table
+merkle-db.db/-flush!
+
 merkle-db.db/create-table
 merkle-db.db/update-table
 merkle-db.db/rename-table
-merkle-db.db/drop-table
-merkle-db.db/flush!
 
 merkle-db.table/ITable
 merkle-db.table/scan*

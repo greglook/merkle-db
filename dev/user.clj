@@ -24,7 +24,8 @@
       [key :as key]
       [partition :as part]
       [table :as table]
-      [tablet :as tablet])
+      [tablet :as tablet]
+      [viz :as viz])
     [multihash.core :as multihash]
     [multihash.digest :as digest]))
 

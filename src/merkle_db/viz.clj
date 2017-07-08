@@ -34,9 +34,8 @@
   function will be called with the source node `:data/type` and a link, and
   should determine whether to follow the link or not. Returns a map of
   multihash ids to loaded node maps."
-  [store root follow?]
-  ; TODO: would be cool to save the path
-  (loop [visited (hash-map (::node/id root) root)
+  [store visited root follow?]
+  (loop [visited (assoc visited (::node/id root) root)
          pending (enqueue-links (clojure.lang.PersistentQueue/EMPTY) root)]
     (if-let [[source-type link] (peek pending)]
       (if (visited (::link/target link))
@@ -63,8 +62,7 @@
   (str
     (when-let [title (get-in node [::node/data :data/title])]
       (str title \newline))
-    (get-in node [::node/data :data/type] "???")
-    \newline
+    ;(get-in node [::node/data :data/type] "???") \newline
     (some-> node ::node/id multihash/base58 (subs 0 8))
     (when-let [size (::node/size node)]
       (format " (%d B)" size))))
@@ -78,17 +76,27 @@
         {:shape :house
          :label (node-label node)}
       :merkle-db/table
+        ; idea: show short record count
         {:shape :ellipse
-         :label (node-label node)}
+         :label (str (node-label node)
+                     (when-let [rc (:merkle-db.data/count (::node/data node))]
+                       (format "\n%d records" rc)))}
       :merkle-db/patch
         {:shape :hexagon
-         :label (node-label node)}
+         :label (str (node-label node)
+                     (when-let [changes (:merkle-db.patch/changes (::node/data node))]
+                       (format "\n%d changes" (count changes))))}
       :merkle-db/index
+        ; idea: show start/end keys
         {:shape :trapezium
          :label (node-label node)}
       :merkle-db/partition
+        ; idea: show start/end keys
+        ; idea: show short record count
         {:shape :rect
-         :label (node-label node)}
+         :label (str (node-label node)
+                     (when-let [rc (:merkle-db.data/count (::node/data node))]
+                       (format "\n%d records" rc)))}
       :merkle-db/tablet
         {:shape :hexagon
          :label (node-label node)}
@@ -103,9 +111,11 @@
 
 (defn- link-label
   [from to]
-  (some #(when (= (::node/id to) (::link/target %))
-           (::link/name %))
-        (::node/links from)))
+  (or
+    (::link/name (meta to))
+    (some #(when (= (::node/id to) (::link/target %))
+             (::link/name %))
+          (::node/links from))))
 
 
 (defn- edge->descriptor
@@ -122,13 +132,16 @@
                   (pr-str db)))))
   (let [nodes (find-nodes
                 (.store db)
+                {}
                 (mdag/get-node (.store db) (::node/id db))
                 (constantly true))]
     (rhizome/view-graph
       (vals nodes)
       (fn adjacent
         [node]
-        (keep (comp nodes ::link/target) (::node/links node)))
+        (keep #(when-let [target (get nodes (::link/target %))]
+                 (vary-meta target assoc ::link/name (::link/name %)))
+              (::node/links node)))
       :node->descriptor node->descriptor
       :edge->descriptor edge->descriptor
       ; :options

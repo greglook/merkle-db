@@ -44,8 +44,11 @@
 
 ;; Database root node.
 (s/def ::node-data
-  (s/keys :req [::tables]
-          :opt [:time/updated-at]))
+  (s/and
+    (s/keys :req [:data/type
+                  ::tables]
+            :opt [:time/updated-at])
+    (comp #{data-type} :data/type)))
 
 ;; Information from the database version.
 (s/def ::db-info
@@ -99,16 +102,17 @@
 
 
 (defn create-table
-  "Create a new table with the given name and options. Returns an updated
-  database value, or throws an exception if the table already exists."
-  [db table-name opts]
+  "Create a new table with the given name and optional attributes to merge into
+  the root node data. Returns an updated database value, or throws an exception
+  if the table already exists."
+  [db table-name attrs]
   (when (get-table db table-name)
     (throw (ex-info
              (str "Cannot create table: database already has a table named "
                   table-name)
              {:type ::table-conflict
               :table-name table-name})))
-  (set-table db table-name (table/bare-table nil table-name opts)))
+  (set-table db table-name (table/bare-table nil table-name attrs)))
 
 
 (defn rename-table

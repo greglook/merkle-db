@@ -49,8 +49,8 @@
   (create-db!
     [conn db-name]
     [conn db-name attrs]
-    "Initialize a new database. Optional additional root attributes
-    will 'clone' the database at that state.")
+    "Initialize a new database. Optional attributes may be provided to merge
+    into the root node data.")
 
   (drop-db!
     [conn db-name]

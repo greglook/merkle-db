@@ -9,7 +9,6 @@
       [node :as node]
       [ref :as ref])
     (merkle-db
-      [data :as data]
       [db :as db])))
 
 

@@ -50,6 +50,7 @@
                   ::height
                   ::keys
                   ::children])
+    #(= data-type (:data/type %))
     #(= (count (::children %))
         (inc (count (::keys %))))))
 
@@ -85,7 +86,7 @@
   partitions."
   [store node fields]
   (case (:data/type node)
-    :merkle-db/index-node
+    data-type
     (mapcat
       (fn read-child
         [child-link]
@@ -97,7 +98,7 @@
                            :child child-link}))))
       (::children node))
 
-    :merkle-db/partition
+    part/data-type
     (part/read-all store node fields)
 
     (throw (ex-info (str "Unsupported data-tree node type: "
@@ -111,7 +112,7 @@
   both index nodes and partitions."
   [store node fields record-keys]
   (case (:data/type node)
-    :merkle-db/index-node
+    data-type
     (mapcat
       (fn read-child
         [[index child-keys]]
@@ -124,7 +125,7 @@
                              :child child-link})))))
       (assign-keys (::keys node) record-keys))
 
-    :merkle-db/partition
+    part/data-type
     (part/read-batch store node fields record-keys)
 
     (throw (ex-info (str "Unsupported data-tree node type: "
@@ -138,7 +139,7 @@
   all records in that range direction."
   [store node fields start-key end-key]
   (case (:data/type node)
-    :merkle-db/index-node
+    data-type
     (->
       (concat (map vector (::children node) (::keys node))
               [[(last (::children node))]])
@@ -156,7 +157,7 @@
       #_
       (read-tablets store part fields tablet/read-range start-key end-key))
 
-    :merkle-db/partition
+    part/data-type
     (part/read-range store node fields start-key end-key)
 
     (throw (ex-info (str "Unsupported data-tree node type: "
@@ -167,16 +168,14 @@
 
 ;; ## Update Functions
 
-; TODO: update-records
+(defn update-tree
+  "Apply a set of changes"
+  [store node changes]
+  (throw (UnsupportedOperationException. "NYI: update data index tree")))
 
 
 
 ;; ## Deletion Functions
 
 ; TODO: remove-batch
-
-
 ; TODO: remove-range
-
-
-; TODO: remove-slice

@@ -533,12 +533,6 @@
         (update ::data/count - (count extant)))))
 
 
-(defn- update-index-tree
-  [store link changes]
-  ; TODO: implement
-  (throw (UnsupportedOperationException. "NYI: update data index tree")))
-
-
 (defn- flush-changes
   "Returns a vector containing a link to a patch tablet and an index tree."
   [^Table table full?]
@@ -547,7 +541,9 @@
       ; Check for force or limit overflow.
       (if (or full? (< (::patch/limit table 0) (count changes)))
         ; Combine pending changes and patch tablet and update data tree.
-        [nil (update-index-tree (.store table) (::data table) changes)]
+        [nil (index/update-tree (.store table)
+                                (mdag/get-data (.store table) (::data table))
+                                changes)]
         ; Flush any pending changes to the patch tablet.
         [(->> (patch/from-changes changes)
               (mdag/store-node! (.store table) nil)

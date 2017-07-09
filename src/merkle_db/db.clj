@@ -114,6 +114,23 @@
   (set-table db table-name (table/bare-table nil table-name attrs)))
 
 
+(defn update-table
+  "Update the table by calling `f` with the current table value and the
+  remaining `args`. Returns an updated database value, or throws an
+  exception if the table does not exist."
+  [db table-name f & args]
+  (let [table (get-table db table-name)]
+    (when-not table
+      (throw (ex-info
+               (str "Cannot update table: database has no table named "
+                    table-name)
+               {:type ::no-table
+                :table-name table-name})))
+    ; TODO: validate table spec?
+    ; TODO: set :time/updated-at
+    (set-table db table-name (apply f table args))))
+
+
 (defn rename-table
   "Update the database by moving the table named `from` to the name `to`.
   Returns an updated database value, or throws an exception if table `from`
@@ -137,35 +154,6 @@
     (-> db
         (drop-table from)
         (set-table to table))))
-
-
-(defn update-table
-  "Update the table by calling `f` with the current table value and the
-  remaining `args`. Returns an updated database value, or throws an
-  exception if the table does not exist."
-  [db table-name f & args]
-  (let [table (get-table db table-name)]
-    (when-not table
-      (throw (ex-info
-               (str "Cannot update table: database has no table named "
-                    table-name)
-               {:type ::no-table
-                :table-name table-name})))
-    ; TODO: validate table spec?
-    ; TODO: set :time/updated-at
-    (set-table db table-name (apply f table args))))
-
-
-(defn- link-or-table->info
-  "Coerce either a link value or a table record to a map of information."
-  [[table-name value]]
-  (if (link/merkle-link? value)
-    {::node/id (::link/target value)
-     ::table/name table-name
-     ::data/size (::link/rsize value)}
-    (select-keys
-      value
-      [::node/id ::table/name ::data/size])))
 
 
 
@@ -372,6 +360,18 @@
     (str "table:" table-name)
     (::node/id table)
     (::data/size table)))
+
+
+(defn- link-or-table->info
+  "Coerce either a link value or a table record to a map of information."
+  [[table-name value]]
+  (if (link/merkle-link? value)
+    {::node/id (::link/target value)
+     ::table/name table-name
+     ::data/size (::link/rsize value)}
+    (select-keys
+      value
+      [::node/id ::table/name ::data/size])))
 
 
 (defn- -list-tables

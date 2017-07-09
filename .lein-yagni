@@ -10,8 +10,8 @@ merkle-db.connection/-commit!
 
 merkle-db.db/IDatabase
 merkle-db.db/-list-tables
-merkle-db.db/-set-table
 merkle-db.db/-get-table
+merkle-db.db/-set-table
 merkle-db.db/-drop-table
 merkle-db.db/-flush!
 
@@ -20,10 +20,11 @@ merkle-db.db/update-table
 merkle-db.db/rename-table
 
 merkle-db.table/ITable
-merkle-db.table/scan*
-merkle-db.table/get-records*
-merkle-db.table/insert*
-merkle-db.table/delete*
+merkle-db.table/-scan
+merkle-db.table/-get-records
+merkle-db.table/-insert
+merkle-db.table/-delete
+merkle-db.table/-flush!
 
 merkle-db.key/Lexicoder
 merkle-db.key/lexicoder

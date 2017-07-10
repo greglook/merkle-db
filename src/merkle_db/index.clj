@@ -169,10 +169,29 @@
 ;; ## Update Functions
 
 (defn update-tree
-  "Apply a set of changes"
-  [store node changes]
+  "Apply a set of changes to the index tree rooted in the given node. The
+  changes should be a sequence of record ids to either data maps or patch
+  tombstones. Parameters may include `:merkle-db.partition/limit` and
+  `:merkle-db.data/families`. Returns an updated persisted root node if any
+  records remain in the tree."
+  [store parameters root changes]
+  ; - If root is nil, divide up added records into a sequence of partitions and
+  ;   build an index over them.
+  ; - If root is a partition, apply changes to the partition. If the new
+  ;   partition is empty, return nil. If the partition exceeds the limit, split
+  ;   into smaller partitions and build an index over them.
+  ; - If root is an index node, divide up changes to match children and
+  ;   recurse for each child:
+  ;   - Apply changes by calling `update-tree*` which may return multiple nodes;
+  ;   - If result has one node, check that it is at least half-full.
+  ;     - If so, replace child link and continue.
+  ;     - If not, borrow from a sibling.
+  ;   - If multiple nodes, there is a _split_, so update the current root node.
+  ;   - If empty or nil, subtree became empty so remove child and key from node.
   (throw (UnsupportedOperationException. "NYI: update data index tree")))
 
+
+; TODO: build index from list of partitions
 
 
 ;; ## Deletion Functions

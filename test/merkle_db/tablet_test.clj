@@ -16,7 +16,7 @@
         r1 {:foo 123}
         k2 (key/create [4 5 6])
         r2 {:foo 456}
-        tablet (tablet/from-records tablet/merge-fields {k1 r1, k2 r2})]
+        tablet (tablet/from-records {k1 r1, k2 r2})]
     (is (= k2 (tablet/nth-key tablet 1)))
     (is (thrown? Exception
           (tablet/nth-key tablet -1)))
@@ -34,7 +34,7 @@
         r1 {:foo 123}
         k2 (key/create [4 5 6])
         r2 {:foo 456}
-        tablet (tablet/from-records tablet/merge-fields {k1 r1, k2 r2})]
+        tablet (tablet/from-records {k1 r1, k2 r2})]
     (is (empty? (tablet/read-batch empty-tablet nil)))
     (is (= [[k1 r1]]
            (tablet/read-batch tablet #{k1})))
@@ -69,25 +69,21 @@
            (tablet/read-all
              (tablet/update-records
                tablet
-               tablet/merge-fields
                {k1 {:foo 124}}))))
     (is (= [[k1 {:foo 123, :bar true}]]
            (tablet/read-all
              (tablet/update-records
                tablet
-               tablet/merge-fields
                {k1 {:bar true}}))))
     (is (= [[k1 r1] [k2 r2]]
            (tablet/read-all
              (tablet/update-records
                tablet
-               tablet/merge-fields
                {k2 r2}))))
     (is (= [[k1 {}] [k2 {}]]
            (tablet/read-all
              (tablet/update-records
                tablet
-               tablet/merge-fields
                {k1 {:foo nil, :bar nil}
                 k2 {:baz nil}})))
         "nil fields should be removed")))

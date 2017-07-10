@@ -66,7 +66,6 @@
         [part] (part/from-records
                  store
                  {::data/families {:ab #{:a :b}, :cd #{:c :d}}}
-                 tablet/merge-fields
                  {k0 {:x 0, :y 0, :a 0, :c 0}
                   k1 {:x 1, :c 1, :d 1, }
                   k2 {:b 2, :c 2}
@@ -96,7 +95,7 @@
     [[field-keys families records] mdgen/data-context]
     (is (valid? ::data/families families))
     (let [store (mdag/init-store :types data/codec-types)
-          [part] (part/from-records store {::data/families families} tablet/merge-fields records)
+          [part] (part/from-records store {::data/families families} records)
           tablets (into {}
                         (map (juxt key #(mdag/get-data store (val %))))
                         (::part/tablets part))]

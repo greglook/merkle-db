@@ -55,10 +55,10 @@
 
 ;; ## Utilities
 
-(defn from-records*
+(defn from-records
   "Constructs a new bare-bones tablet node."
   [records]
-  {:data/type :merkle-db/tablet
+  {:data/type data-type
    ::records (vec records)})
 
 
@@ -83,7 +83,7 @@
                        :last-key lkey}))))
   (->> (::records tablet)
        (split-with #(key/before? (first %) split-key))
-       (mapv from-records*)))
+       (mapv from-records)))
 
 
 (defn join
@@ -134,6 +134,7 @@
 
 ;; ## Update Functions
 
+#_
 (defn merge-fields
   "Merge updated fields from the `right` map into the `left` map, dropping any
   fields which are nil-valued."
@@ -144,18 +145,6 @@
        (not-empty)))
 
 
-(defn from-records
-  "Construct a tablet from a collection of record keys and field data."
-  ([records]
-   (from-records merge-fields records))
-  ([f records]
-   (->>
-     records
-     (map (fn apply-f [[k v]] [k (or (f k nil v) {})]))
-     (sort-by first)
-     (from-records*))))
-
-
 (defn update-records
   "Update a tablet by merging record data into it.
 
@@ -163,14 +152,11 @@
   the record key, the old data (or nil, if the key is absent), and the new
   data. The result will be used as the new data for that record. Nil results
   are promoted to empty record maps."
-  [tablet f records]
+  [tablet records]
   ; OPTIMIZE: do this in one pass instead of sorting
   (->> (::records tablet)
-       (map (fn [[k v]]
-              [k (if-let [updates (get records k)]
-                   (or (f k v updates) {})
-                   v)]))
-       (concat (map #(vector % (or (f % nil (get records %)) {}))
+       (map (fn [[k v]] [k (get records k v)]))
+       (concat (map (juxt identity records)
                     (clojure.set/difference
                       (set (map first records))
                       (set (map first (::records tablet))))))

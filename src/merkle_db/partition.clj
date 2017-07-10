@@ -285,7 +285,7 @@
 (defn- update-tablet!
   "Apply an updating function to the data contained in the given tablet.
   Returns an updated tablets map."
-  [store f tablets [family-key tablet-updates]]
+  [store tablets [family-key tablet-updates]]
   (->>
     (if-let [tablet-link (get tablets family-key)]
       ; Load existing tablet to update it.
@@ -295,9 +295,9 @@
                                     family-key)
                             {:family family-key
                              :link tablet-link})))
-        (tablet/update-records f tablet-updates))
+        (tablet/update-records tablet-updates))
       ; Create new tablet and store it.
-      (tablet/from-records f tablet-updates))
+      (tablet/from-records tablet-updates))
     (store-tablet! store family-key)
     (conj tablets)))
 
@@ -305,7 +305,7 @@
 (defn from-records
   "Constructs new partitions from the given map of record data. The records
   will be split into tablets matching the given families, if provided."
-  [store parameters f records]
+  [store parameters records]
   (let [records (sort-by first records)
         limit (or (::limit parameters) default-limit)
         families (or (::data/families parameters) {})
@@ -323,7 +323,7 @@
          ::tablets (->>
                      partition-records
                      (reduce (partial append-record-updates families) {})
-                     (map (juxt key #(tablet/from-records f (val %))))
+                     (map (juxt key #(tablet/from-records (val %))))
                      (map (partial apply store-tablet! store))
                      (into {}))})
       (partition-approx part-count records))))

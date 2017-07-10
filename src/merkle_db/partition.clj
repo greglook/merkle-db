@@ -37,13 +37,15 @@
 
 ;; Partition node.
 (s/def :merkle-db/partition
-  (s/keys :req [::data/count
-                ::data/families
-                ::limit
-                ::membership
-                ::first-key
-                ::last-key
-                ::tablets]))
+  (s/and
+    (s/keys :req [::data/count
+                  ::data/families
+                  ::limit
+                  ::membership
+                  ::first-key
+                  ::last-key
+                  ::tablets])
+    #(= data-type (:data/type %))))
 
 
 
@@ -150,7 +152,7 @@
   not overlap."
   [store left right]
   ; TODO: implement
-  (throw (UnsupportedOperationException. "NYI")))
+  (throw (UnsupportedOperationException. "NYI: join partitions")))
 
 
 

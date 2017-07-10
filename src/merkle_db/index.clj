@@ -85,7 +85,7 @@
   for every record in the subtree. This function works on both index nodes and
   partitions."
   [store node fields]
-  (case (:data/type node)
+  (condp = (:data/type node)
     data-type
     (mapcat
       (fn read-child
@@ -111,7 +111,7 @@
   for the records whose keys are in the given collection. This function works on
   both index nodes and partitions."
   [store node fields record-keys]
-  (case (:data/type node)
+  (condp = (:data/type node)
     data-type
     (mapcat
       (fn read-child
@@ -138,7 +138,7 @@
   records whose keys lie in the given range, inclusive. A nil boundary includes
   all records in that range direction."
   [store node fields start-key end-key]
-  (case (:data/type node)
+  (condp = (:data/type node)
     data-type
     (->
       (concat (map vector (::children node) (::keys node))

@@ -67,26 +67,19 @@
         tablet (tablet/from-records {k1 r1})]
     (is (= [[k1 {:foo 124}]]
            (tablet/read-all
-             (tablet/update-records
+             (tablet/insert-records
                tablet
                {k1 {:foo 124}}))))
-    (is (= [[k1 {:foo 123, :bar true}]]
+    (is (= [[k1 {:bar true}]]
            (tablet/read-all
-             (tablet/update-records
+             (tablet/insert-records
                tablet
                {k1 {:bar true}}))))
     (is (= [[k1 r1] [k2 r2]]
            (tablet/read-all
-             (tablet/update-records
+             (tablet/insert-records
                tablet
-               {k2 r2}))))
-    (is (= [[k1 {}] [k2 {}]]
-           (tablet/read-all
-             (tablet/update-records
-               tablet
-               {k1 {:foo nil, :bar nil}
-                k2 {:baz nil}})))
-        "nil fields should be removed")))
+               {k2 r2}))))))
 
 
 (deftest record-removal

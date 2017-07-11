@@ -22,7 +22,9 @@
 
 ;; Tablet node.
 (s/def :merkle-db/tablet
-  (s/keys :req [::records]))
+  (s/and
+    (s/keys :req [::records])
+    #(= data-type (:data/type %))))
 
 
 
@@ -56,7 +58,8 @@
 ;; ## Utilities
 
 (defn from-records
-  "Constructs a new bare-bones tablet node."
+  "Constructs a new bare-bones tablet node. Does not ensure that the records
+  are sorted."
   [records]
   {:data/type data-type
    ::records (vec records)})
@@ -92,7 +95,7 @@
   [left right]
   (let [left-bound (last-key left)
         right-bound (first-key right)]
-    (when (key/before? right-bound left-bound)
+    (when-not (key/before? left-bound right-bound)
       (throw (ex-info (format "Cannot join tablets with overlapping key ranges: %s > %s"
                               left-bound right-bound)
                       {:left-bound left-bound
@@ -134,39 +137,27 @@
 
 ;; ## Update Functions
 
-#_
-(defn merge-fields
-  "Merge updated fields from the `right` map into the `left` map, dropping any
-  fields which are nil-valued."
-  [_ left right]
-  (->> (merge left right)
-       (remove (comp nil? val))
-       (into {})
-       (not-empty)))
-
-
 (defn update-records
-  "Update a tablet by merging record data into it.
+  "Update a tablet by inserting the records in `additions` (a collection of
+  key/data map entries) and removing the records whose keys are in
+  `deletions` (a collection of record keys)."
+  [tablet additions deletions]
+  ; OPTIMIZE: do this in one pass instead of building maps.
+  (when-let [records (-> (sorted-map)
+                         (into (::records tablet))
+                         (into additions)
+                         (cond->
+                           (seq deletions)
+                             (as-> rs (apply dissoc rs deletions)))
+                         (seq))]
+    (assoc tablet ::records (vec records))))
 
-  For each record in the `records` map, the function `f` will be called with
-  the record key, the old data (or nil, if the key is absent), and the new
-  data. The result will be used as the new data for that record. Nil results
-  are promoted to empty record maps."
+
+(defn insert-records
+  "Update a tablet by inserting record data into it."
   [tablet records]
-  ; OPTIMIZE: do this in one pass instead of sorting
-  (->> (::records tablet)
-       (map (fn [[k v]] [k (get records k v)]))
-       (concat (map (juxt identity records)
-                    (clojure.set/difference
-                      (set (map first records))
-                      (set (map first (::records tablet))))))
-       (sort-by first)
-       (vec)
-       (assoc tablet ::records)))
+  (update-records tablet records nil))
 
-
-
-;; ## Deletion Functions
 
 (defn prune-records
   "Update a tablet by removing empty records from the data."
@@ -179,14 +170,7 @@
   the resulting tablet is empty."
   [tablet record-keys]
   {:pre [(every? key/key? record-keys)]}
-  (->
-    (->>
-      (::records tablet)
-      (remove (comp (set record-keys) first))
-      (vec))
-    (as-> records
-      (when (seq records)
-        (assoc tablet ::records records)))))
+  (update-records tablet nil record-keys))
 
 
 (defn remove-range

@@ -12,11 +12,16 @@
   (:require
     [clojure.future :refer [pos-int?]]
     [clojure.spec :as s]
-    [merkledag.core :as mdag]
-    [merkledag.link :as link]
-    [merkle-db.data :as data]
-    [merkle-db.key :as key]
-    [merkle-db.partition :as part]))
+    (merkledag
+      [core :as mdag]
+      [link :as link]
+      [node :as node])
+    (merkle-db
+      [data :as data]
+      [key :as key]
+      [partition :as part]
+      ; TODO: is patch needed?
+      [patch :as patch])))
 
 
 ;; ## Specs
@@ -101,7 +106,7 @@
     part/data-type
     (part/read-all store node fields)
 
-    (throw (ex-info (str "Unsupported data-tree node type: "
+    (throw (ex-info (str "Unsupported index-tree node type: "
                          (pr-str (:data/type node)))
                     {:data/type (:data/type node)}))))
 
@@ -128,7 +133,7 @@
     part/data-type
     (part/read-batch store node fields record-keys)
 
-    (throw (ex-info (str "Unsupported data-tree node type: "
+    (throw (ex-info (str "Unsupported index-tree node type: "
                          (pr-str (:data/type node)))
                     {:data/type (:data/type node)}))))
 
@@ -153,20 +158,56 @@
           (drop-while #(key/before? (nth % 2) start-key))
         end-key
           (take-while #(key/after? end-key (nth % 1))))
-      ,,,
+      ,,,  ; FIXME
       #_
       (read-tablets store part fields tablet/read-range start-key end-key))
 
     part/data-type
     (part/read-range store node fields start-key end-key)
 
-    (throw (ex-info (str "Unsupported data-tree node type: "
+    (throw (ex-info (str "Unsupported index-tree node type: "
                          (pr-str (:data/type node)))
                     {:data/type (:data/type node)}))))
 
 
 
 ;; ## Update Functions
+
+;; Insertion
+;;
+;; Perform a search to determine what bucket the new record should go into.
+;;
+;;     If the bucket is not full (at most b − 1 {\displaystyle b-1} b-1 entries after the insertion), add the record.
+;;     Otherwise, split the bucket.
+;;         Allocate new leaf and move half the bucket's elements to the new bucket.
+;;         Insert the new leaf's smallest key and address into the parent.
+;;         If the parent is full, split it too.
+;;             Add the middle key to the parent node.
+;;         Repeat until a parent is found that need not split.
+;;     If the root splits, create a new root which has one key and two pointers. (That is, the value that gets pushed to the new root gets removed from the original node)
+;;
+;; B-trees grow at the root and not at the leaves.[1]
+
+
+;; Deletion
+;;
+;;     Start at root, find leaf L where entry belongs.
+;;     Remove the entry.
+;;         If L is at least half-full, done!
+;;         If L has fewer entries than it should,
+;;             If sibling (adjacent node with same parent as L) is more than half-full, re-distribute, borrowing an entry from it.
+;;             Otherwise, sibling is exactly half-full, so we can merge L and sibling.
+;;     If merge occurred, must delete entry (pointing to L or sibling) from parent of L.
+;;     Merge could propagate to root, decreasing height.
+
+
+(defn build-index
+  "Given a sequence of partitions, builds an index tree with the given
+  parameters incorporating the partitions."
+  [parameters partitions]
+  ; TODO: implement
+  (throw (UnsupportedOperationException. "NYI: build-index over partition sequence")))
+
 
 (defn update-tree
   "Apply a set of changes to the index tree rooted in the given node. The
@@ -175,23 +216,34 @@
   `:merkle-db.data/families`. Returns an updated persisted root node if any
   records remain in the tree."
   [store parameters root changes]
-  ; - If root is nil, divide up added records into a sequence of partitions and
-  ;   build an index over them.
-  ; - If root is a partition, apply changes to the partition. If the new
-  ;   partition is empty, return nil. If the partition exceeds the limit, split
-  ;   into smaller partitions and build an index over them.
-  ; - If root is an index node, divide up changes to match children and
-  ;   recurse for each child:
-  ;   - Apply changes by calling `update-tree*` which may return multiple nodes;
-  ;   - If result has one node, check that it is at least half-full.
-  ;     - If so, replace child link and continue.
-  ;     - If not, borrow from a sibling.
-  ;   - If multiple nodes, there is a _split_, so update the current root node.
-  ;   - If empty or nil, subtree became empty so remove child and key from node.
-  (throw (UnsupportedOperationException. "NYI: update data index tree")))
+  (if (nil? root)
+    ; If root is nil, divide up added records into a sequence of partitions and
+    ; build an index over them.
+    (->> (patch/remove-tombstones changes)
+         (part/from-records store parameters)
+         (build-index parameters))
+    ; Check root node type.
+    (condp = (get-in root [::node/data :data/type])
+      ; If root is a partition, apply changes to the partition. If the new
+      ; partition is empty, return nil. If the partition exceeds the limit, split
+      ; into smaller partitions and build an index over them.
+      part/data-type
+        (throw (UnsupportedOperationException. "NYI: update data partition"))
+      ; If root is an index node, divide up changes to match children and
+      ; recurse for each child:
+      ; - Apply changes by calling `update-tree*` which may return multiple nodes;
+      ; - If result has one node, check that it is at least half-full.
+      ;   - If so, replace child link and continue.
+      ;   - If not, borrow from a sibling.
+      ; - If multiple nodes, there is a _split_, so update the current root node.
+      ; - If empty or nil, subtree became empty so remove child and key from node.
+      data-type
+        (throw (UnsupportedOperationException. "NYI: update data index tree"))
 
+      (throw (ex-info (str "Unsupported index-tree node type: "
+                           (pr-str (:data/type (::node/data root))))
+                      {:data/type (:data/type (::node/data root))})))))
 
-; TODO: build index from list of partitions
 
 
 ;; ## Deletion Functions

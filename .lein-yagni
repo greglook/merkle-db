@@ -26,6 +26,8 @@ merkle-db.table/-insert
 merkle-db.table/-delete
 merkle-db.table/-flush!
 
+merkle-db.tablet/fields-present
+
 merkle-db.key/Lexicoder
 merkle-db.key/lexicoder
 merkle-db.key/encode

@@ -5,12 +5,15 @@
   (:require
     [clojure.future :refer [pos-int?]]
     [clojure.spec :as s]
-    [merkledag.core :as mdag]
-    [merkledag.link :as link]
-    [merkle-db.bloom :as bloom]
-    [merkle-db.data :as data]
-    [merkle-db.key :as key]
-    [merkle-db.tablet :as tablet]))
+    (merkledag
+      [core :as mdag]
+      [link :as link])
+    (merkle-db
+      [bloom :as bloom]
+      [data :as data]
+      [key :as key]
+      [patch :as patch]
+      [tablet :as tablet])))
 
 
 ;; ## Specs
@@ -18,6 +21,10 @@
 (def ^:const data-type
   "Value of `:data/type` that indicates a partition node."
   :merkle-db/partition)
+
+(def default-limit
+  "The default number of records to build partitions up to."
+  100000)
 
 ;; Maximum number of records to allow in each partition.
 (s/def ::limit pos-int?)
@@ -50,11 +57,6 @@
 
 
 ;; ## Utilities
-
-(def default-limit
-  "The default number of records to build partitions up to."
-  100000)
-
 
 (defn- partition-approx
   "Returns a lazy sequence of `n` lists containing the elements of `coll` in
@@ -232,17 +234,6 @@
   (read-tablets store part fields tablet/read-range start-key end-key))
 
 
-(defn read-slice
-  "Read a lazy sequence of key/map tuples which contain the field data for the
-  records whose ranks lie in the given range, inclusive. A nil boundary includes
-  all records in that range direction."
-  [store part fields start-index end-index]
-  (let [base (mdag/get-data store (:base (::tablets part)))
-        start (and start-index (tablet/nth-key base start-index))
-        end (and end-index (tablet/nth-key base end-index))]
-    (read-tablets store part fields tablet/read-range start end)))
-
-
 
 ;; ## Update Functions
 
@@ -272,7 +263,8 @@
   to the `:base` family vector, to ensure the key is represented there."
   [families updates [record-key data]]
   (->
-    (group-families (map-field-families families) data)
+    (map-field-families families)
+    (group-families data)
     (update :base #(or % {}))
     (->>
       (reduce-kv
@@ -283,9 +275,9 @@
 
 
 (defn- update-tablet!
-  "Apply an updating function to the data contained in the given tablet.
-  Returns an updated tablets map."
-  [store tablets [family-key tablet-updates]]
+  "Apply inserts and tombstone deletions to the data contained in the given
+  tablet. Returns an updated map with a link to the new tablet."
+  [store deletions tablets [family-key additions]]
   (->>
     (if-let [tablet-link (get tablets family-key)]
       ; Load existing tablet to update it.
@@ -295,9 +287,9 @@
                                     family-key)
                             {:family family-key
                              :link tablet-link})))
-        (tablet/update-records tablet-updates))
+        (tablet/update-records additions deletions))
       ; Create new tablet and store it.
-      (tablet/from-records tablet-updates))
+      (tablet/from-records additions))
     (store-tablet! store family-key)
     (conj tablets)))
 
@@ -329,15 +321,21 @@
       (partition-approx part-count records))))
 
 
-(defn add-records!
+(defn apply-patch!
   "Performs an update across the tablets in the partition to merge in the given
-  record data. Returns a sequence of one or more partitions."
-  [store part f records]
+  patch changes. Returns a sequence of zero or more partitions."
+  [store part changes]
   (let [limit (or (::limit part) default-limit)
-        tablets (->> records
-                     (reduce (partial append-record-updates (::data/families part)) {})
-                     (reduce (partial update-tablet! store f) (::tablets part)))
-        record-keys (map first records)
+        additions (remove (comp patch/tombstone? second) changes)
+        deletions (set (map first (filter (comp patch/tombstone? second)
+                                          changes)))
+        tablets (->> additions
+                     (reduce (partial append-record-updates
+                                      (::data/families part))
+                             {})
+                     (reduce (partial update-tablet! store deletions)
+                             (::tablets part)))
+        added-keys (map first additions)
         record-count (count (tablet/read-all (mdag/get-data store (:base tablets))))
         part-count (inc (int (/ record-count limit)))]
     (if (< 1 part-count)
@@ -345,9 +343,9 @@
       [(assoc part
               ::data/count record-count
               ::tablets tablets
-              ::membership (into (::membership part) record-keys)
-              ::first-key (apply key/min (::first-key part) record-keys)
-              ::last-key (apply key/max (::last-key part) record-keys))]
+              ::membership (into (::membership part) added-keys)
+              ::first-key (apply key/min (::first-key part) added-keys)
+              ::last-key (apply key/max (::last-key part) added-keys))]
       ; Partition must be split into multiple.
       (->>
         (read-all store part nil)
@@ -357,19 +355,3 @@
             [partition-records]
             ; TODO: build partitions from records
             ))))))
-
-
-
-;; ## Deletion Functions
-
-#_
-(defn remove-records
-  [store part record-keys]
-  (let [update-tablet! (fn [tablet-id]
-                         (:id (mdag/update-data! store
-                                                 tablet-id
-                                                 tablet/remove-batch
-                                                 record-keys)))]
-    (->> (::tablets part)
-         (into {} (map (juxt key #(update (val %) :id update-tablet!))))
-         (assoc part ::tablets))))

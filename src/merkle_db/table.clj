@@ -3,7 +3,7 @@
   corresponds to a certain 'kind' of data. Tables also contain configuration
   determining how keys are encoded and records are stored."
   (:require
-    [clojure.future :refer [pos-int?]]
+    [clojure.future :refer [nat-int? pos-int?]]
     [clojure.spec :as s]
     [clojure.string :as str]
     (merkledag
@@ -431,7 +431,7 @@
    (let [lexicoder (table-lexicoder table)
          start-key (some->> (:start-key opts) (key/encode lexicoder))
          end-key (some->> (:end-key opts) (key/encode lexicoder))]
-     (->>
+     (->
        (patch/patch-seq
          ; Merged patch data to apply to the records.
          (patch/filter-patch
@@ -455,7 +455,13 @@
                data-node
                (:fields opts)))))
        (patch/remove-tombstones)
-       (map (key-decoder lexicoder))))))
+       (cond->>
+         (and (:offset opts) (pos? (:offset opts)))
+           (drop (:offset opts))
+         (and (:limit opts) (nat-int? (:offset opts)))
+           (take (:limit opts)))
+       (->>
+         (map (key-decoder lexicoder)))))))
 
 
 (defn- -get-records
@@ -542,6 +548,7 @@
       (if (or full? (< (::patch/limit table 0) (count changes)))
         ; Combine pending changes and patch tablet and update data tree.
         [nil (index/update-tree (.store table)
+                                table
                                 (mdag/get-data (.store table) (::data table))
                                 changes)]
         ; Flush any pending changes to the patch tablet.

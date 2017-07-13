@@ -83,16 +83,17 @@
 (defn patch-seq
   "Combines an ordered sequence of patch data with a lazy sequence of record
   keys and data. Any records present in the patch will appear in the output
-  sequence, replacing any equivalent keys from the sequence."
+  sequence, replacing any equivalent keys from the sequence. The result may
+  contain tombstones."
   [patch records]
   (lazy-seq
     (cond
       ; No more patch data, return records directly.
       (empty? patch)
         records
-      ; No more records, return patch with tombstones removed.
+      ; No more records, return remaining patch data.
       (empty? records)
-        (remove (comp tombstone? second) patch)
+        patch
       ; Next key is in both patch and records.
       (= (ffirst patch) (ffirst records))
         (cons (first patch) (patch-seq (next patch) (next records)))

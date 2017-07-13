@@ -1,10 +1,10 @@
 (ns merkle-db.index
-  "The data tree in a table is a B+ tree which orders the partitions into a
-  sorted branching structure.
+  "The data tree in a table is a B+ tree variant which orders the partitions
+  into a sorted branching structure.
 
   The branching factor determines the maximum number of children an index node
   in the data tree can have. Internal (non-root) index nodes with branching
-  factor `b` will have between `ceiling(b/2)` and `b` children.
+  factor `b` will have between `ceil(b/2)` and `b` children.
 
   An empty data tree is represented by a nil link from the table root. A data
   tree with fewer records than the partition limit is represented directly by a
@@ -36,7 +36,7 @@
 
 ;; The branching factor determines the number of children an index node in the
 ;; data tree can have.
-(s/def ::branching-factor (s/and pos-int? #(< 2 %)))
+(s/def ::branching-factor (s/and pos-int? #(<= 4 %)))
 
 ;; Height of the node in the tree. Partitions are the leaves and have an
 ;; implicit height of zero, so the first index node has a height of one.
@@ -173,6 +173,10 @@
 
 ;; ## Update Functions
 
+;; https://pdfs.semanticscholar.org/85eb/4cf8dfd51708418881e2b5356d6778645a1a.pdf
+;; Insight: instead of flushing all the updates, select a related subgroup that
+;; minimizes repeated changes to the same node path.
+
 ;; Insertion
 ;;
 ;; Perform a search to determine what bucket the new record should go into.
@@ -185,9 +189,6 @@
 ;;             Add the middle key to the parent node.
 ;;         Repeat until a parent is found that need not split.
 ;;     If the root splits, create a new root which has one key and two pointers. (That is, the value that gets pushed to the new root gets removed from the original node)
-;;
-;; B-trees grow at the root and not at the leaves.[1]
-
 
 ;; Deletion
 ;;
@@ -200,13 +201,25 @@
 ;;     If merge occurred, must delete entry (pointing to L or sibling) from parent of L.
 ;;     Merge could propagate to root, decreasing height.
 
+(defn- apply-updates
+  "Returns a collection of nodes representing the updated data:
+  - An empty sequence if the resulting data has no records.
+  - A single partition if the result has fewer than `:merkle-db.partition/limit`
+    records.
+  - ...
+  "
+  [store parameters node changes]
+  ,,,)
+
 
 (defn build-index
   "Given a sequence of partitions, builds an index tree with the given
   parameters incorporating the partitions."
-  [parameters partitions]
-  ; TODO: implement
-  (throw (UnsupportedOperationException. "NYI: build-index over partition sequence")))
+  [store parameters partitions]
+  (if (= 1 (count partitions))
+    (first partitions)
+    ; TODO: implement
+    (throw (UnsupportedOperationException. "NYI: build-index over partition sequence"))))
 
 
 (defn update-tree
@@ -221,7 +234,7 @@
     ; build an index over them.
     (->> (patch/remove-tombstones changes)
          (part/from-records store parameters)
-         (build-index parameters))
+         (build-index store parameters))
     ; Check root node type.
     (condp = (get-in root [::node/data :data/type])
       ; If root is a partition, apply changes to the partition. If the new
@@ -230,13 +243,17 @@
       part/data-type
         (throw (UnsupportedOperationException. "NYI: update data partition"))
       ; If root is an index node, divide up changes to match children and
-      ; recurse for each child:
-      ; - Apply changes by calling `update-tree*` which may return multiple nodes;
-      ; - If result has one node, check that it is at least half-full.
-      ;   - If so, replace child link and continue.
-      ;   - If not, borrow from a sibling.
-      ; - If multiple nodes, there is a _split_, so update the current root node.
-      ; - If empty or nil, subtree became empty so remove child and key from node.
+      ; recurse for each child by calling update* which returns a collection of
+      ; updated but **unserialized** index nodes, OR a single partition node.
+      ; - Use boundary keys to group changes by child node.
+      ; - For each child node with changes, apply updates:
+      ;   - If result is empty, remove child and key from node.
+      ;   - If result has one node, replace child link and continue.
+      ;   - If multiple nodes, there is a _split_, so update the current root node.
+      ; - If any child nodes are less than half full, try to resolve by
+      ;   borrowing or merging with siblings.
+      ; - Serialize resulting valid child set and update index node with links.
+      ; - If resulting node overflows, split into two nodes.
       data-type
         (throw (UnsupportedOperationException. "NYI: update data index tree"))
 

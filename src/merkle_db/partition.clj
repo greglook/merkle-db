@@ -290,6 +290,7 @@
         (tablet/update-records additions deletions))
       ; Create new tablet and store it.
       (tablet/from-records additions))
+    ; TODO: if this returns nil we need to remove the link
     (store-tablet! store family-key)
     (conj tablets)))
 

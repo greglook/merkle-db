@@ -3,7 +3,6 @@
     [clojure.spec :as s]
     [clojure.test :refer :all]
     [merkle-db.key :as key]
-    [merkle-db.key-test]
     [merkle-db.tablet :as tablet]))
 
 

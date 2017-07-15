@@ -488,31 +488,61 @@
           (map (key-decoder lexicoder))))))
 
 
+(defn- record-updater
+  "Construct a new record updating function from the given options. The
+  resulting function accepts three arguments, the record key, the existing
+  record data (or nil), and the new record data map."
+  [{:keys [merge-record merge-field]}]
+  (cond
+    (and merge-record merge-field)
+      (throw (IllegalArgumentException.
+               "Record updates cannot make use of both :merge-field and :merge-record at the same time."))
+
+    (fn? merge-record)
+      merge-record
+
+    merge-record
+      (throw (IllegalArgumentException.
+               (str "Record update :merge-record must be a function: "
+                    (pr-str merge-record))))
+
+    (or (map? merge-field) (fn? merge-field))
+      (fn merge-fields
+        [_ old-data new-data]
+        (let [merger (if (map? merge-field)
+                       (fn [fk l r]
+                         (if-let [f (get merge-field fk)]
+                           (f l r)
+                           r))
+                       merge-field)]
+          (reduce
+            (fn [data field-key]
+              (let [left (get old-data field-key)
+                    right (get new-data field-key)
+                    value (merger field-key left right)]
+                (if (some? value)
+                  (assoc data field-key value)
+                  data)))
+            {} (distinct (concat (keys old-data) (keys new-data))))))
+
+    merge-field
+      (throw (IllegalArgumentException.
+               (str "Record update :merge-field must be a function or map of field functions: "
+                    (pr-str merge-field))))
+
+    :else
+      (fn merge-simple
+        [_ old-data new-data]
+        (into {} (filter (comp some? val)) (merge old-data new-data)))))
+
+
 (defn- -insert
   ([table records]
    (-insert table records nil))
   ([table records opts]
    (let [{:keys [merge-record merge-field]} opts
          lexicoder (table-lexicoder table)
-         update-record (cond
-                         merge-record merge-record
-                         merge-field
-                         (fn merge-fields
-                           [_ old-data new-data]
-                           (reduce
-                             (fn [data field-key]
-                               (assoc data
-                                      field-key
-                                      (merge-field field-key
-                                                   (get old-data field-key)
-                                                   (get new-data field-key))))
-                             {} (distinct (concat (keys old-data) (keys new-data)))))
-                         :else
-                         (fn merge-simple
-                           [_ old-data new-data]
-                           (into {}
-                                 (filter (comp some? val))
-                                 (merge old-data new-data))))
+         update-record (record-updater opts)
          extant (into {} (-get-records table (map first records)))
          new-records (map
                        (fn [[k data]]

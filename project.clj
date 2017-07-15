@@ -29,8 +29,7 @@
    [mvxcvi/merkledag-core "0.2.0"]
    [mvxcvi/merkledag-ref "0.1.0"]
    [mvxcvi/blocks "0.9.1"]
-   #_[mvxcvi/baton "0.1.0-SNAPSHOT"]
-   [rhizome "0.2.7" :scope "provided"]]
+   #_[mvxcvi/baton "0.1.0-SNAPSHOT"]]
 
   :test-selectors
   {:default (complement :generative)
@@ -68,4 +67,5 @@
    {:source-paths ["dev"]
     :dependencies
     [[clj-stacktrace "0.2.8"]
-     [org.clojure/tools.namespace "0.2.11"]]}})
+     [org.clojure/tools.namespace "0.2.11"]
+     [rhizome "0.2.7"]]}})

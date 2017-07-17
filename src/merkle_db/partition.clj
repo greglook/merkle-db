@@ -7,7 +7,8 @@
     [clojure.spec :as s]
     (merkledag
       [core :as mdag]
-      [link :as link])
+      [link :as link]
+      [node :as node])
     (merkle-db
       [bloom :as bloom]
       [data :as data]
@@ -58,6 +59,7 @@
 
 ;; ## Utilities
 
+; TODO: ensure that if `coll` is empty, the resulting sequence is empty.
 (defn- partition-approx
   "Returns a lazy sequence of `n` lists containing the elements of `coll` in
   order, where each list is approximately the same size."
@@ -237,48 +239,11 @@
 
 ;; ## Update Functions
 
-(defn- map-field-families
-  "Build a map from field keys to the family the field belongs to."
-  [families]
-  (into {}
-        (mapcat #(map vector (second %) (repeat (first %))))
-        families))
-
-
-(defn- group-families
-  "Build a map from family keys to maps which contain the field data for the
-  corresponding family. Fields not grouped in a family will be added to
-  `:base`."
-  [field->family data]
-  (reduce-kv
-    (fn split-data
-      [groups field value]
-      (update groups (field->family field :base) assoc field value))
-    {} data))
-
-
-(defn- append-record-updates
-  "Add record data to a map of `updates` from family keys to vectors of pairs
-  of record keys and family-specific data. The function _always_ appends a pair
-  to the `:base` family vector, to ensure the key is represented there."
-  [families updates [record-key data]]
-  (->
-    (map-field-families families)
-    (group-families data)
-    (update :base #(or % {}))
-    (->>
-      (reduce-kv
-        (fn assign-updates
-          [updates family fdata]
-          (update updates family (fnil conj []) [record-key fdata]))
-        updates))))
-
-
 (defn- update-tablet!
   "Apply inserts and tombstone deletions to the data contained in the given
   tablet. Returns an updated map with a link to the new tablet."
   [store deletions tablets [family-key additions]]
-  (->>
+  (->
     (if-let [tablet-link (get tablets family-key)]
       ; Load existing tablet to update it.
       (->
@@ -290,36 +255,43 @@
         (tablet/update-records additions deletions))
       ; Create new tablet and store it.
       (tablet/from-records additions))
-    ; TODO: if this returns nil we need to remove the link
-    (store-tablet! store family-key)
-    (conj tablets)))
+    (as-> tablet'
+      (if (seq (tablet/read-all tablet'))
+        (conj tablets (store-tablet! store family-key tablet'))
+        (dissoc tablets family-key)))))
 
 
 (defn from-records
   "Constructs new partitions from the given map of record data. The records
-  will be split into tablets matching the given families, if provided."
+  will be split into tablets matching the given families, if provided. Returns
+  a sequence of persisted partitions."
   [store parameters records]
-  (let [records (sort-by first records)
+  (let [records (sort-by first (patch/remove-tombstones records))
         limit (or (::limit parameters) default-limit)
         families (or (::data/families parameters) {})
         part-count (inc (int (/ (count records) limit)))]
-    (map
-      (fn make-partition
-        [partition-records]
-        {:data/type data-type
-         ::data/families families
-         ::data/count (count partition-records)
-         ::limit limit
-         ::membership (into (bloom/create limit) (map first partition-records))
-         ::first-key (first (first partition-records))
-         ::last-key (first (last partition-records))
-         ::tablets (->>
-                     partition-records
-                     (reduce (partial append-record-updates families) {})
-                     (map (juxt key #(tablet/from-records (val %))))
-                     (map (partial apply store-tablet! store))
-                     (into {}))})
-      (partition-approx part-count records))))
+    (->>
+      (partition-approx part-count records)
+      (map
+        (fn make-partition
+          [partition-records]
+          {:data/type data-type
+           ::data/families families
+           ::data/count (count partition-records)
+           ::limit limit
+           ::membership (into (bloom/create limit) (map first partition-records))
+           ::first-key (first (first partition-records))
+           ::last-key (first (last partition-records))
+           ::tablets (->>
+                       partition-records
+                       (data/split-records families)
+                       (map (juxt key #(tablet/from-records (val %))))
+                       (map (partial apply store-tablet! store))
+                       (into {}))}))
+      (mapv
+        (fn store-partition
+          [part]
+          (::node/data (mdag/store-node! store nil part)))))))
 
 
 (defn apply-patch!
@@ -330,29 +302,24 @@
         additions (remove (comp patch/tombstone? second) changes)
         deletions (set (map first (filter (comp patch/tombstone? second)
                                           changes)))
-        tablets (->> additions
-                     (reduce (partial append-record-updates
-                                      (::data/families part))
-                             {})
-                     (reduce (partial update-tablet! store deletions)
-                             (::tablets part)))
+        family-updates (data/split-records (::data/families part) additions)
+        tablets (reduce (partial update-tablet! store deletions)
+                        (::tablets part)
+                        family-updates)
         added-keys (map first additions)
         record-count (count (tablet/read-all (mdag/get-data store (:base tablets))))
         part-count (inc (int (/ record-count limit)))]
-    (if (< 1 part-count)
-      ; Records still fit into one partition
-      [(assoc part
-              ::data/count record-count
-              ::tablets tablets
-              ::membership (into (::membership part) added-keys)
-              ::first-key (apply key/min (::first-key part) added-keys)
-              ::last-key (apply key/max (::last-key part) added-keys))]
-      ; Partition must be split into multiple.
-      (->>
-        (read-all store part nil)
-        (partition-approx part-count)
-        (map
-          (fn make-partition
-            [partition-records]
-            ; TODO: build partitions from records
-            ))))))
+    (when (pos? record-count)
+      (if (< 1 part-count)
+        ; Records still fit into one partition
+        [(assoc part
+                ::data/count record-count
+                ::tablets tablets
+                ::membership (into (::membership part) added-keys)
+                ::first-key (apply key/min (::first-key part) added-keys)
+                ::last-key (apply key/max (::last-key part) added-keys))]
+        ; Partition must be split into multiple.
+        ; OPTIMIZE: split overflows without storing invalid tablets
+        (->>
+          (read-all store part nil)
+          (from-records store part))))))

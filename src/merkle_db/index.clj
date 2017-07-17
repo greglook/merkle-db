@@ -19,9 +19,7 @@
     (merkle-db
       [data :as data]
       [key :as key]
-      [partition :as part]
-      ; TODO: is patch needed?
-      [patch :as patch])))
+      [partition :as part])))
 
 
 ;; ## Specs
@@ -173,9 +171,76 @@
 
 ;; ## Update Functions
 
+;; Updating an index tree starts with the root node and a batch of changes to
+;; apply to it. The _leaves_ of the tree are partitions, and all other nodes
+;; are index nodes. In a tree with branching factor `b`, every index node
+;; except the root must have between `ceiling(b/2)` and `b` children. The root
+;; is allowed to have between 2 and `b` children. If the tree has more than
+;; `::partition/limit` records, then each partition in the tree will be at
+;; least half full.
+;;
+;; The root node may be:
+;; - nil, indicating an empty tree.
+;; - A partition, indicating that the tree has only a single node and fewer
+;;   than `::partition/limit` records.
+;; - An index, which is treated as the root node of the tree.
+;;
+;; References
+;;
 ;; https://pdfs.semanticscholar.org/85eb/4cf8dfd51708418881e2b5356d6778645a1a.pdf
 ;; Insight: instead of flushing all the updates, select a related subgroup that
 ;; minimizes repeated changes to the same node path.
+
+(defn build-index
+  "Given a sequence of partitions, builds an index tree with the given
+  parameters incorporating the partitions."
+  [store parameters partitions]
+  (cond
+    (empty? partitions) nil
+    (= 1 (count partitions)) (first partitions)
+    :else
+    ; TODO: implement
+    (throw (UnsupportedOperationException. "NYI: build-index over partition sequence"))))
+
+
+(defn- update-empty
+  "Apply changes to an empty tree, returning an updated root node data."
+  [store parameters changes]
+  ; Divide up added records into a sequence of partitions and build an index
+  ; over them.
+  (->> (part/from-records store parameters)
+       (build-index store parameters)))
+
+
+(defn- update-partition
+  "Apply changes to a partition root, returning an updated root node data."
+  [store parameters part changes]
+  ; Apply changes directly to the partition. If the result is empty, return
+  ; nil. If the partition exceeds the limit, split into smaller partitions and
+  ; build an index over them.
+  ; TODO: implement
+  (throw (UnsupportedOperationException. "NYI: update partition data")))
+
+
+(defn- update-index
+  "Apply changes to an index subtree, returning a ..."
+  [store parameters index changes]
+  ; If root is an index node, divide up changes to match children and
+  ; recurse for each child by calling update* which returns a collection of
+  ; updated but **unserialized** index nodes, OR a single partition node.
+  ; - Use boundary keys to group changes by child node.
+  ; - For each child node with changes, apply updates:
+  ;   - If result is empty, remove child and key from node.
+  ;   - If result has one node, replace child link and continue.
+  ;   - If multiple nodes, there is a _split_, so update the current root node.
+  ; - If any child nodes are less than half full, try to resolve by
+  ;   borrowing or merging with siblings.
+  ; - Serialize resulting valid child set and update index node with links.
+  ; - If resulting node overflows, split into two nodes.
+  ; TODO: implement
+  (throw (UnsupportedOperationException. "NYI: update data index tree")))
+
+
 
 ;; Insertion
 ;;
@@ -201,27 +266,6 @@
 ;;     If merge occurred, must delete entry (pointing to L or sibling) from parent of L.
 ;;     Merge could propagate to root, decreasing height.
 
-(defn- apply-updates
-  "Returns a collection of nodes representing the updated data:
-  - An empty sequence if the resulting data has no records.
-  - A single partition if the result has fewer than `:merkle-db.partition/limit`
-    records.
-  - ...
-  "
-  [store parameters node changes]
-  ,,,)
-
-
-(defn build-index
-  "Given a sequence of partitions, builds an index tree with the given
-  parameters incorporating the partitions."
-  [store parameters partitions]
-  (if (= 1 (count partitions))
-    (first partitions)
-    ; TODO: implement
-    (throw (UnsupportedOperationException. "NYI: build-index over partition sequence"))))
-
-
 (defn update-tree
   "Apply a set of changes to the index tree rooted in the given node. The
   changes should be a sequence of record ids to either data maps or patch
@@ -230,33 +274,14 @@
   records remain in the tree."
   [store parameters root changes]
   (if (nil? root)
-    ; If root is nil, divide up added records into a sequence of partitions and
-    ; build an index over them.
-    (->> (patch/remove-tombstones changes)
-         (part/from-records store parameters)
-         (build-index store parameters))
+    ; Empty tree.
+    (update-empty store parameters changes)
     ; Check root node type.
     (condp = (get-in root [::node/data :data/type])
-      ; If root is a partition, apply changes to the partition. If the new
-      ; partition is empty, return nil. If the partition exceeds the limit, split
-      ; into smaller partitions and build an index over them.
       part/data-type
-        (throw (UnsupportedOperationException. "NYI: update data partition"))
-      ; If root is an index node, divide up changes to match children and
-      ; recurse for each child by calling update* which returns a collection of
-      ; updated but **unserialized** index nodes, OR a single partition node.
-      ; - Use boundary keys to group changes by child node.
-      ; - For each child node with changes, apply updates:
-      ;   - If result is empty, remove child and key from node.
-      ;   - If result has one node, replace child link and continue.
-      ;   - If multiple nodes, there is a _split_, so update the current root node.
-      ; - If any child nodes are less than half full, try to resolve by
-      ;   borrowing or merging with siblings.
-      ; - Serialize resulting valid child set and update index node with links.
-      ; - If resulting node overflows, split into two nodes.
+        (update-partition store parameters root changes)
       data-type
-        (throw (UnsupportedOperationException. "NYI: update data index tree"))
-
+        (update-index store parameters root changes)
       (throw (ex-info (str "Unsupported index-tree node type: "
                            (pr-str (:data/type (::node/data root))))
                       {:data/type (:data/type (::node/data root))})))))
@@ -265,5 +290,5 @@
 
 ;; ## Deletion Functions
 
-; TODO: remove-batch
-; TODO: remove-range
+; TODO: remove-range?
+; TODO: drop-partition?

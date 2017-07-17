@@ -20,10 +20,11 @@
     javax.xml.bind.DatatypeConverter))
 
 
+;; ## Specs
+
 ;; Lexicoders can be specified either as a simple type keyword or a vector of
 ;; a type keyword and some parameters.
 (s/def ::lexicoder
-  ; TODO: multi-spec?
   (s/or :simple keyword?
         :params (s/and vector? (s/cat :type keyword?
                                       :args (s/* any?)))))

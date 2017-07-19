@@ -185,6 +185,40 @@
 ;;   than `::partition/limit` records.
 ;; - An index, which is treated as the root node of the tree.
 ;;
+;; In the first "downward" phase, changes are grouped by the child which links
+;; to the subtree containing the updated keys. Once the changes reach the leaf
+;; partitions, apply them to produce some result partitions, in order.
+;; - If zero partitions (all deleted), remove the original child link and key
+;;   from the parent node.
+;; - If one partition, update the original child link and key.
+;; - If multiple partitions (split), insert the additional child links and keys into the parent node
+;; - If any partitions (across the tree) underflowed, merge with or borrow from siblings.
+
+;; Insertion
+;;
+;; - Perform a search to determine what partition the new record should go into.
+;; - If the partition is not full (at most p entries after the insertion), add the record.
+;; - Otherwise, split the partition.
+;;     - Split half the partition's elements into a new partition.
+;;     - Insert the new partition's smallest key and link into the parent.
+;;     - If the parent is full, split it too.
+;;         - Add the middle key to the parent node.
+;;     - Repeat until a parent is found that need not split.
+;; - If the root splits, create a new root which has one key and two links.
+;;   (That is, the value that gets pushed to the new root gets removed from
+;;   the original node)
+
+;; Deletion
+;;
+;; - Start at root, find partition P where record belongs.
+;; - Remove the record.
+;;     - If P is at least half-full, done!
+;;     - If P has fewer entries than it should,
+;;         - If sibling (adjacent node with same parent as P) is more than half-full, re-distribute, borrowing an record from it.
+;;         - Otherwise, sibling is exactly half-full, so we can merge P and sibling.
+;; - If merge occurred, must delete record (pointing to P or sibling) from parent of P.
+;; - Merge could propagate to root, decreasing height.
+
 ;; References
 ;;
 ;; https://pdfs.semanticscholar.org/85eb/4cf8dfd51708418881e2b5356d6778645a1a.pdf
@@ -193,7 +227,8 @@
 
 (defn build-index
   "Given a sequence of partitions, builds an index tree with the given
-  parameters incorporating the partitions."
+  parameters incorporating the partitions. Returns ???"
+  ; TODO: document return type
   [store parameters partitions]
   (cond
     (empty? partitions) nil
@@ -215,56 +250,17 @@
 (defn- update-partition
   "Apply changes to a partition root, returning an updated root node data."
   [store parameters part changes]
-  ; Apply changes directly to the partition. If the result is empty, return
-  ; nil. If the partition exceeds the limit, split into smaller partitions and
-  ; build an index over them.
-  ; TODO: implement
-  (throw (UnsupportedOperationException. "NYI: update partition data")))
+  (when-let [parts (seq (part/apply-patch! store (merge part parameters) changes))]
+    (build-index store parameters parts)))
 
 
 (defn- update-index
   "Apply changes to an index subtree, returning a ..."
+  ; TODO: document return type
   [store parameters index changes]
-  ; If root is an index node, divide up changes to match children and
-  ; recurse for each child by calling update* which returns a collection of
-  ; updated but **unserialized** index nodes, OR a single partition node.
-  ; - Use boundary keys to group changes by child node.
-  ; - For each child node with changes, apply updates:
-  ;   - If result is empty, remove child and key from node.
-  ;   - If result has one node, replace child link and continue.
-  ;   - If multiple nodes, there is a _split_, so update the current root node.
-  ; - If any child nodes are less than half full, try to resolve by
-  ;   borrowing or merging with siblings.
-  ; - Serialize resulting valid child set and update index node with links.
-  ; - If resulting node overflows, split into two nodes.
   ; TODO: implement
   (throw (UnsupportedOperationException. "NYI: update data index tree")))
 
-
-
-;; Insertion
-;;
-;; Perform a search to determine what bucket the new record should go into.
-;;
-;;     If the bucket is not full (at most b − 1 {\displaystyle b-1} b-1 entries after the insertion), add the record.
-;;     Otherwise, split the bucket.
-;;         Allocate new leaf and move half the bucket's elements to the new bucket.
-;;         Insert the new leaf's smallest key and address into the parent.
-;;         If the parent is full, split it too.
-;;             Add the middle key to the parent node.
-;;         Repeat until a parent is found that need not split.
-;;     If the root splits, create a new root which has one key and two pointers. (That is, the value that gets pushed to the new root gets removed from the original node)
-
-;; Deletion
-;;
-;;     Start at root, find leaf L where entry belongs.
-;;     Remove the entry.
-;;         If L is at least half-full, done!
-;;         If L has fewer entries than it should,
-;;             If sibling (adjacent node with same parent as L) is more than half-full, re-distribute, borrowing an entry from it.
-;;             Otherwise, sibling is exactly half-full, so we can merge L and sibling.
-;;     If merge occurred, must delete entry (pointing to L or sibling) from parent of L.
-;;     Merge could propagate to root, decreasing height.
 
 (defn update-tree
   "Apply a set of changes to the index tree rooted in the given node. The

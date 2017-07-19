@@ -51,6 +51,10 @@
 
   clojure.lang.IPersistentCollection
 
+  (seq
+    [this]
+    nil)
+
   (count
     [this]
     (throw (RuntimeException.

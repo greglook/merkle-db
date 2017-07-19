@@ -270,28 +270,28 @@
         limit (or (::limit parameters) default-limit)
         families (or (::data/families parameters) {})
         part-count (inc (int (/ (count records) limit)))]
-    (->>
-      (partition-approx part-count records)
+    (into
+      []
       (map
         (fn make-partition
           [partition-records]
-          {:data/type data-type
-           ::data/families families
-           ::data/count (count partition-records)
-           ::limit limit
-           ::membership (into (bloom/create limit) (map first partition-records))
-           ::first-key (first (first partition-records))
-           ::last-key (first (last partition-records))
-           ::tablets (->>
-                       partition-records
-                       (data/split-records families)
-                       (map (juxt key #(tablet/from-records (val %))))
-                       (map (partial apply store-tablet! store))
-                       (into {}))}))
-      (mapv
-        (fn store-partition
-          [part]
-          (::node/data (mdag/store-node! store nil part)))))))
+          (->>
+            {:data/type data-type
+             ::data/families families
+             ::data/count (count partition-records)
+             ::limit limit
+             ::membership (into (bloom/create limit) (map first partition-records))
+             ::first-key (first (first partition-records))
+             ::last-key (first (last partition-records))
+             ::tablets (->>
+                         partition-records
+                         (data/split-records families)
+                         (map (juxt key #(tablet/from-records (val %))))
+                         (map (partial apply store-tablet! store))
+                         (into {}))}
+            (mdag/store-node! store nil)
+            (::node/data))))
+      (partition-approx part-count records))))
 
 
 (defn apply-patch!

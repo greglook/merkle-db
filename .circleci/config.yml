@@ -1,0 +1,7 @@
+version: 2
+jobs:
+  build:
+    working_directory: ~/merkle-db
+    branches:
+      ignore:
+        - gh-pages

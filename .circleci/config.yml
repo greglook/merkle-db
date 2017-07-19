@@ -1,0 +1,27 @@
+version: 2
+jobs:
+  build:
+    working_directory: ~/merkle-db
+    docker:
+      - image: circleci/clojure:lein-2.7.1
+    environment:
+      JVM_OPTS: -Xmx3200m
+      LEIN_ROOT: nbd
+    steps:
+      - checkout
+      - restore_cache:
+          key: merkle-db-{{ checksum "project.clj" }}
+      - run: lein deps
+      - save_cache:
+          paths:
+            - ~/.m2
+          key: merkle-db-{{ checksum "project.clj" }}
+      - run: lein check
+      - run: lein test
+      - run: lein coverage --codecov
+      - store_artifacts:
+          path: target/coverage
+          destination: coverage
+      - run:
+          name: Publish Coverage
+          command: "<(curl -s https://codecov.io/bash) -f target/coverage/codecov.json"

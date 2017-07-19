@@ -1,6 +1,8 @@
 MerkleDB
 ========
 
+[![CircleCI](https://circleci.com/gh/greglook/merkle-db/tree/master.svg?style=shield&circle-token=e55e37284e553afef82aa79235cdfe201bd87b6f)](https://circleci.com/gh/greglook/merkle-db/tree/master)
+[![codecov](https://codecov.io/gh/greglook/merkle-db/branch/develop/graph/badge.svg)](https://codecov.io/gh/greglook/merkle-db)
 [![API codox](https://img.shields.io/badge/doc-API-blue.svg)](https://greglook.github.io/merkle-db/api/)
 [![marginalia docs](https://img.shields.io/badge/doc-marginalia-blue.svg)](https://greglook.github.io/merkle-db/marginalia/uberdoc.html)
 

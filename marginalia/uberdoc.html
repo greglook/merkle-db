@@ -2866,219 +2866,751 @@ net.brehaut.ClojureTools = (function (SH) {
   };
 })(SyntaxHighlighter);
 </script><title>mvxcvi/merkle-db -- Marginalia</title></head><body><table><tr><td class="docs"><div class="header"><h1 class="project-name"><a href="https://github.com/greglook/merkle-db">mvxcvi/merkle-db</a></h1><h2 class="project-version">0.1.0-SNAPSHOT</h2><br /><p>Hybrid data store built on merkle trees.</p>
-</div><div class="dependencies"><h3>dependencies</h3><table><tr><td class="dep-name">org.clojure/clojure</td><td class="dotted"><hr /></td><td class="dep-version">1.8.0</td></tr><tr><td class="dep-name">clojure-future-spec</td><td class="dotted"><hr /></td><td class="dep-version">1.9.0-alpha14</td></tr><tr><td class="dep-name">bigml/sketchy</td><td class="dotted"><hr /></td><td class="dep-version">0.4.1</td></tr><tr><td class="dep-name">mvxcvi/blocks</td><td class="dotted"><hr /></td><td class="dep-version">0.10.0-SNAPSHOT</td></tr><tr><td class="dep-name">mvxcvi/merkledag</td><td class="dotted"><hr /></td><td class="dep-version">0.2.0-SNAPSHOT</td></tr></table></div></td><td class="codes" style="text-align: center; vertical-align: middle;color: #666;padding-right:20px"><br /><br /><br />(this space intentionally left almost blank)</td></tr><tr><td class="docs"><div class="toc"><a name="toc"><h3>namespaces</h3></a><ul><li><a href="#merkle-db.connection">merkle-db.connection</a></li><li><a href="#merkle-db.db">merkle-db.db</a></li><li><a href="#merkle-db.table">merkle-db.table</a></li><li><a href="#merkle-db.index">merkle-db.index</a></li><li><a href="#merkle-db.partition">merkle-db.partition</a></li><li><a href="#merkle-db.tablet">merkle-db.tablet</a></li><li><a href="#merkle-db.key">merkle-db.key</a></li><li><a href="#merkle-db.bloom">merkle-db.bloom</a></li><li><a href="#merkle-db.data">merkle-db.data</a></li></ul></div></td><td class="codes">&nbsp;</td></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.connection" name="merkle-db.connection"><h1 class="project-name">merkle-db.connection</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs">
+</div><div class="dependencies"><h3>dependencies</h3><table><tr><td class="dep-name">org.clojure/clojure</td><td class="dotted"><hr /></td><td class="dep-version">1.8.0</td></tr><tr><td class="dep-name">org.clojure/tools.logging</td><td class="dotted"><hr /></td><td class="dep-version">0.4.0</td></tr><tr><td class="dep-name">clojure-future-spec</td><td class="dotted"><hr /></td><td class="dep-version">1.9.0-alpha14</td></tr><tr><td class="dep-name">bigml/sketchy</td><td class="dotted"><hr /></td><td class="dep-version">0.4.1</td></tr><tr><td class="dep-name">mvxcvi/merkledag-core</td><td class="dotted"><hr /></td><td class="dep-version">0.2.0</td></tr><tr><td class="dep-name">mvxcvi/merkledag-ref</td><td class="dotted"><hr /></td><td class="dep-version">0.1.0</td></tr><tr><td class="dep-name">mvxcvi/blocks</td><td class="dotted"><hr /></td><td class="dep-version">0.9.1</td></tr></table></div></td><td class="codes" style="text-align: center; vertical-align: middle;color: #666;padding-right:20px"><br /><br /><br />(this space intentionally left almost blank)</td></tr><tr><td class="docs"><div class="toc"><a name="toc"><h3>namespaces</h3></a><ul><li><a href="#merkle-db.bloom">merkle-db.bloom</a></li><li><a href="#merkle-db.connection">merkle-db.connection</a></li><li><a href="#merkle-db.data">merkle-db.data</a></li><li><a href="#merkle-db.db">merkle-db.db</a></li><li><a href="#merkle-db.index">merkle-db.index</a></li><li><a href="#merkle-db.key">merkle-db.key</a></li><li><a href="#merkle-db.partition">merkle-db.partition</a></li><li><a href="#merkle-db.patch">merkle-db.patch</a></li><li><a href="#merkle-db.table">merkle-db.table</a></li><li><a href="#merkle-db.tablet">merkle-db.tablet</a></li></ul></div></td><td class="codes">&nbsp;</td></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.bloom" name="merkle-db.bloom"><h1 class="project-name">merkle-db.bloom</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Bloom filters provide a probablistic way to test for membership in a set
+  using a fixed amount of space. This is useful for reducing work when the test
+  definitively rules out the existence of a record.</p>
+</td><td class="codes"><pre class="brush: clojure">(ns merkle-db.bloom
+  (:refer-clojure :exclude [merge])
+  (:require
+    [bigml.sketchy.bits :as bits]
+    [bigml.sketchy.bloom :as bloom]
+    [bigml.sketchy.murmur :as murmur]))</pre></td></tr><tr><td class="docs"><p>The filter type wraps the bigml.sketchy bloom-filter implementation and
+provides some extra features:</p>
+
+<ul>
+<li>Better printing than the basic map representation.</li>
+<li>Collection semantics supporting <code>conj</code>, <code>into</code>, <code>empty</code>, <code>merge</code>, etc.</li>
+<li>Filters can be invoked on elements to test membership, similar to regular
+set types.</li>
+</ul>
+</td><td class="codes"><pre class="brush: clojure">(deftype BloomFilter
+  [bins bits k _meta]
+  java.lang.Object
+  (toString
+    [this]
+    (format &quot;#{2^%d bits, %d hashes}&quot; bits k))
+  (equals
+    [this that]
+    (boolean
+      (or (identical? this that)
+          (when (identical? (class this) (class that))
+            (let [that ^BloomFilter that]
+              (= bins (.bins that))
+              (= bits (.bits that))
+              (= k    (.k that)))))))
+  (hashCode
+    [this]
+    (hash [(class this) bins bits k]))
+  clojure.lang.IObj
+  (meta [this] _meta)
+  (withMeta
+    [this meta-map]
+    (BloomFilter. bins bits k meta-map))
+  clojure.lang.IPersistentCollection
+  (seq
+    [this]
+    nil)
+  (count
+    [this]
+    (throw (RuntimeException.
+             &quot;Bloom filters are not countable&quot;)))
+  (cons
+    [this x]
+    (BloomFilter.
+      (apply bits/set bins (take k (murmur/hash-seq x bits)))
+      bits k _meta))
+  (empty
+    [this]
+    (BloomFilter.
+      (bits/create (bit-shift-left 1 bits))
+      bits k _meta))
+  (equiv
+    [this that]
+    (.equals this that))
+  clojure.lang.ILookup
+  (valAt
+    [this key]
+    (.valAt this key nil))
+  (valAt
+    [this key not-found]
+    (case key
+      :bins bins
+      :bits bits
+      :k k
+      not-found))
+  clojure.lang.IFn
+  (invoke
+    [this x]
+    (bloom/contains? this x)))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(alter-meta! #'-&gt;BloomFilter assoc :private true)</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defmethod print-method BloomFilter
+  [x w]
+  (print-method
+    (tagged-literal 'merkle-db/bloom-filter [(:bits x) (:k x)])
+    w))</pre></td></tr><tr><td class="docs"><p>Constructs a new bloom filter with the given expected population size and
+  desired error (false positive) rate.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn create
+  ([expected-size]
+   (create expected-size 0.01))
+  ([expected-size error-rate]
+   (let [{:keys [bins bits k]} (bloom/create expected-size error-rate)]
+     (-&gt;BloomFilter bins bits k nil))))</pre></td></tr><tr><td class="docs"><p>Build a serializable form for the bloom filter.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn filter-&gt;form
+  [^BloomFilter x]
+  (with-meta [(.k x) (.bits x) (.bins x)] (._meta x)))</pre></td></tr><tr><td class="docs"><p>Build a bloom filter from a serialized form.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn form-&gt;filter
+  [form]
+  (let [[k bits bins] form]
+    (-&gt;BloomFilter bins bits k (meta form))))</pre></td></tr><tr><td class="docs"><p>Predicate which tests whether the value is a BloomFilter.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn filter?
+  [x]
+  (instance? BloomFilter x))</pre></td></tr><tr><td class="docs"><p>Returns true if the two bloom filters can be merged together.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn mergeable?
+  [a b]
+  (and (= (:bits a) (:bits b))
+       (= (:k a) (:k b))))</pre></td></tr><tr><td class="docs"><p>Merge the bloom filters together. Only works if <code>bits</code> and <code>k</code> match.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn merge
+  [a b]
+  (when-not (mergeable? a b)
+    (throw (IllegalArgumentException.
+             (format &quot;Bloom filters with different sizes cannot be merged: %s != %s&quot; a b))))
+  (-&gt;BloomFilter
+    (bits/or (:bins a) (:bins b))
+    (:bits a)
+    (:k a)
+    (clojure.core/merge (meta a) (meta b))))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.connection" name="merkle-db.connection"><h1 class="project-name">merkle-db.connection</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Connections are stateful components which manage database locking and
+  updating. A connection is backed by a node store, a ref tracker, and a lock
+  manager.</p>
 </td><td class="codes"><pre class="brush: clojure">(ns merkle-db.connection
   (:require
-    [merkledag.refs :as refs]
-    [merkle-db.data :as data]
-    [merkle-db.db :as db]
-    [merkle-db.node :as node]))</pre></td></tr><tr><td class="docs"><p>Protocol for interacting with backing connection resources to work with one
+    [clojure.string :as str]
+    (merkledag
+      [core :as mdag]
+      [node :as node]
+      [ref :as ref])
+    (merkle-db
+      [db :as db])))</pre></td></tr><tr><td class="docs"><h2>Connection Protocols</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Protocol for interacting with backing connection resources to work with one
   or more databases.</p>
 </td><td class="codes"><pre class="brush: clojure">(defprotocol IConnection
   (list-dbs
+    [conn]
     [conn opts]
-    &quot;List information about the available databases.&quot;)
+    &quot;List information about the available databases.
+    Options may include:
+    - `:named`
+      If set to a string, return databases whose names are prefixed by the
+      value. This may also be a regular expression to match database names
+      against.
+    - `:offset`
+      Skip this many matching results.
+    - `:limit`
+      Return at most this many results.&quot;)
   (get-db-history
+    [conn db-name]
     [conn db-name opts]
-    &quot;Retrieve a history of the versions of the database.&quot;)
+    &quot;Retrieve a history of the versions of the database.
+    Options may include:
+    - `:offset`
+      Skip this many matching results.
+    - `:limit`
+      Return at most this many results.&quot;)
   (create-db!
-    [conn db-name parameters]
-    &quot;Initialize a new database. An initial `:root-id` may be provided, which
-    will 'clone' the database at that state.&quot;)
+    [conn db-name attrs]
+    &quot;Initialize a new database. Optional attributes may be provided to merge
+    into the root node data.&quot;)
   (drop-db!
     [conn db-name]
     &quot;Drop a database reference. Note that this will not remove block data, as
     it may be shared.&quot;)
   (open-db
-    [conn db-name opts]
-    &quot;Open a database for use. An optional instant argument may be provided,
-    which will return the last committed database version occurring before that
-    time.&quot;))</pre></td></tr><tr><td class="docs"><p>A lock manager handles aquiring, refreshing, and releasing a lock on
-  databases for updating.</p>
-</td><td class="codes"><pre class="brush: clojure">(defprotocol ILockManager
-  (lock-info
     [conn db-name]
-    &quot;Returns information about the currently-held lock on the database. Returns
-    nil if the database is not currently locked.&quot;)
-  (lock!
-    [conn db-name client-id duration]
-    &quot;Attempt to acquire a lock to update the database. The provided client-id
-    is treated opaquely but should be a useful identifier. The duration is a
-    requested period in seconds which the lock will expire after.
-    Returns a lock info map on success, or throws an exception on failure with
-    details about the current lock holder.&quot;)
-  (renew-lock!
-    [conn db-name lock-key duration]
-    &quot;Renew a currently-held lock on the database by providing the key and a new
-    requested duration. Returns a lock info map on success. Throws an exception
-    if the lock is not held by this process.&quot;)
-  (unlock!
-    [conn db-name lock-id]
-    &quot;Release the lock held on the named database. Throws an exception if the
-    lock is not held by this process.&quot;))</pre></td></tr><tr><td class="docs"><h2>Connection Type</h2>
+    [conn db-name opts]
+    &quot;Open a database for use.
+    - `:version` open a specific version of the database
+    - `:lock` acquire a lock for updating the database&quot;)
+  (commit!
+    [conn db]
+    [conn db-name db]
+    [conn db-name db opts]
+    &quot;Ensure all data has been written to the backing block store and update the
+    database's root value in the ref manager.
+    - `:force` commit even if the versions don't match
+    - `:unlock` release the database lock, if held&quot;))</pre></td></tr><tr><td class="docs"><h2>Connection Type</h2>
 </td><td class="codes"></td></tr><tr><td class="docs">
 </td><td class="codes"><pre class="brush: clojure">(deftype Connection
+  [store tracker])</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(alter-meta! #'-&gt;Connection assoc :private true)</pre></td></tr><tr><td class="docs"><p>Create a new connection to some backing storage and ref tracker.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn connect
   [store tracker]
+  (-&gt;Connection store tracker))</pre></td></tr><tr><td class="docs"><h2>Protocol Implementation</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Convert a ref version map into a database version info map.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- ref-version-info
+  [info]
+  {::node/id (::ref/value info)
+   ::db/name (::ref/name info)
+   ::db/version (::ref/version info)
+   ::db/committed-at (::ref/time info)})</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn- -list-dbs
+  ([conn]
+   (-list-dbs conn nil))
+  ([^Connection conn opts]
+   (-&gt;
+     opts
+     (-&gt;&gt;
+       (ref/list-refs (.tracker conn))
+       (map ref-version-info))
+     (cond-&gt;&gt;
+       (:named opts)
+         (filter #(if (string? (:named opts))
+                    (str/starts-with? (::db/name %) (:named opts))
+                    (re-seq (:named opts) (::db/name %))))
+       (:offset opts)
+         (drop (:offset opts))
+       (:limit opts)
+         (take (:limit opts))))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn- -get-db-history
+  ([conn db-name]
+   (-get-db-history conn db-name nil))
+  ([^Connection conn db-name opts]
+   (-&gt;
+     (-&gt;&gt;
+       (ref/get-history (.tracker conn) db-name)
+       (map ref-version-info))
+     (cond-&gt;&gt;
+       (:offset opts)
+         (drop (:offset opts))
+       (:limit opts)
+         (take (:limit opts))))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn- -create-db!
+  [^Connection conn db-name attrs]
+  ; TODO: lock db
+  (when (::ref/value (ref/get-ref (.tracker conn) db-name))
+    (throw (ex-info (str &quot;Cannot create new database: &quot; db-name
+                         &quot; already exists&quot;)
+                    {:type ::db-conflict
+                     :db-name db-name})))
+  (-&gt;&gt;
+    (merge {::db/tables {}}
+           attrs
+           {:data/type db/data-type})
+    ; TODO: validate schema
+    (hash-map ::node/data)
+    (mdag/store-node! (.store conn))
+    (::node/id)
+    (ref/set-ref! (.tracker conn) db-name)
+    (ref-version-info)
+    (db/load-database (.store conn))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn- -drop-db!
+  [^Connection conn db-name]
+  ; TODO: lock db
+  (-&gt;&gt;
+    nil
+    (ref/set-ref! (.tracker conn) db-name)
+    (ref-version-info)))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn- -open-db
+  ([conn db-name]
+   (-open-db conn db-name nil))
+  ([^Connection conn db-name opts]
+   (let [version (if-let [^java.time.Instant at-inst (:at-inst opts)]
+                   (first (drop-while #(.isBefore at-inst (::ref/time %))
+                                      (ref/get-history (.tracker conn) db-name)))
+                   (ref/get-ref (.tracker conn) db-name))]
+     (if (::ref/value version)
+       ; Load database.
+       (db/load-database (.store conn) (ref-version-info version))
+       ; No version found.
+       (throw (ex-info (str &quot;No version found for database &quot; db-name
+                            &quot; with options &quot; (pr-str opts))
+                       {:type ::no-database-version
+                        :db-name db-name
+                        :opts opts}))))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn- -commit!
+  ([conn db]
+   (-commit! conn (::db/name db) db nil))
+  ([conn db-name db]
+   (-commit! conn db-name db nil))
+  ([^Connection conn db-name db opts]
+   (when-not (string? db-name)
+     (throw (IllegalArgumentException.
+              (str &quot;Cannot commit database without string name: &quot;
+                   (pr-str db-name)))))
+   (when-not db
+     (throw (IllegalArgumentException. &quot;Cannot commit nil database.&quot;)))
+   ; TODO: validate spec
+   ; TODO: lock db
+   ; TODO: check if current version is the same as the version opened at?
+   (let [db (db/flush! db)
+         root-id (::node/id db)
+         current-version (ref/get-ref (.tracker conn) db-name)]
+     (if (and (= root-id (::node/id current-version))
+              (= db-name (::db/name db)))
+       ; No data has changed, return current database.
+       db
+       ; Otherwise, update version.
+       (let [version (ref/set-ref! (.tracker conn) db-name root-id)]
+         (db/update-backing db (.store conn) (ref-version-info version)))))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(extend Connection
+
   IConnection
-  (list-dbs
-    [conn opts]
-    (refs/list-refs tracker {}))
-  (create-db!
-    [conn db-name params]
-    ; TODO: lock db
-    (refs/set-ref!
-      tracker
-      db-name
-      (or (:root-id params)
-          (-&gt; params
-              (select-keys [:data/title :data/description ::data/metadata])
-              (assoc :data/type :merkle-db/db-root
-                     ::db/tables {})
-              (-&gt;&gt; (node/store-node! store))
-              (:id)))))
-  (drop-db!
-    [conn db-name]
-    ; TODO: lock db
-    (refs/set-ref! tracker db-name nil))
-  (open-db
-    [conn db-name opts]
-    (let [version (if-let [^java.time.Instant at-inst (:at-inst opts)]
-                    (first (drop-while #(.isBefore at-inst (:time %))
-                                       (refs/get-history tracker db-name)))
-                    (refs/get-ref tracker db-name))]
-      (if (:value version)
-        ; Build database.
-        (merkle_db.db.Database. store tracker db-name (:value version) nil)
-        ; No version found.
-        (throw (ex-info (str &quot;No version found for database &quot; db-name &quot; with &quot; opts)
-                        {:type ::no-database-version
-                         :db-name db-name
-                         :opts opts}))))))</pre></td></tr><tr><td class="docs">
-</td><td class="codes"><pre class="brush: clojure">(alter-meta! #'-&gt;Connection assoc :private true)</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.db" name="merkle-db.db"><h1 class="project-name">merkle-db.db</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs">
+
+  {:list-dbs -list-dbs
+   :get-db-history -get-db-history
+   :create-db! -create-db!
+   :drop-db! -drop-db!
+   :open-db -open-db
+   :commit! -commit!})</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.data" name="merkle-db.data"><h1 class="project-name">merkle-db.data</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(ns merkle-db.data
+  (:require
+    [clojure.future :refer [any? nat-int?]]
+    [clojure.spec :as s]
+    [clojure.string :as str]
+    [merkledag.link :as link]
+    [merkle-db.bloom :as bloom]
+    [merkle-db.key :as key])
+  (:import
+    java.time.Instant
+    java.time.format.DateTimeFormatter
+    merkle_db.bloom.BloomFilter
+    merkle_db.key.Key))</pre></td></tr><tr><td class="docs"><p>Count of the records contained under a node.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::count nat-int?)</pre></td></tr><tr><td class="docs"><p>Data size in bytes.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::size nat-int?)</pre></td></tr><tr><td class="docs"><p>Valid field key values.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::field-key any?)</pre></td></tr><tr><td class="docs"><p>Valid family keys.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::family-key keyword?)</pre></td></tr><tr><td class="docs"><p>Map of family keywords to sets of contained fields.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::families
+  (s/and
+    (s/map-of
+      ::family-key
+      (s/coll-of ::field-key :kind set?))
+    #(= (reduce + (map count (vals %)))
+        (count (distinct (apply concat (vals %)))))))</pre></td></tr><tr><td class="docs"><p>Instant point in time.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def :time/instant #(instance? Instant %))</pre></td></tr><tr><td class="docs"><p>Time an entity was last modified.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def :time/updated-at :time/instant)</pre></td></tr><tr><td class="docs"><h2>Family Functions</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Build a lookup function for field families. Takes a map from family keys to
+  collections of field keys in that family. Returns a function which accepts a
+  field key and returns either the corresponding family or <code>:base</code> if it is not
+  assigned one.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- family-lookup
+  [families]
+  (let [lookup (into {}
+                     (mapcat #(map vector (second %) (repeat (first %))))
+                     families)]
+    (fn [field-key] (lookup field-key :base))))</pre></td></tr><tr><td class="docs"><p>Build a map from family keys to maps which contain the field data for the
+  corresponding family. Fields not grouped in a family will be added to
+  <code>:base</code>. Families which had no data will have an entry with a <code>nil</code> value,
+  except <code>:base</code> which will be an empty map.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn group-families
+  [families data]
+  (let [field-&gt;family (family-lookup families)
+        init (assoc (zipmap (keys families) (repeat nil))
+                    :base {})]
+    (reduce-kv
+      (fn split-data
+        [groups field value]
+        (update groups (field-&gt;family field) assoc field value))
+      init data)))</pre></td></tr><tr><td class="docs"><p>Split new record values into collections grouped by family. Each configured
+  family and <code>:base</code> will have an entry in the resulting map, containing a
+  sorted map of record keys to new values. The values may be <code>nil</code> if the
+  record had no data for that family, an empty map if the family is <code>:base</code> and
+  all the record's data is in other families, or a map of field data belonging
+  to that family.</p>
+
+<p>  ```
+  {:base {#merkle-db/key "00" {:a 123}, ...}
+   :bc {#merkle-db/key "00" {:b true, :c "cat"}, ...}
+   ...}
+  ```</p>
+</td><td class="codes"><pre class="brush: clojure">(defn split-records
+  [families records]
+  (reduce
+    (fn append-updates
+      [updates [record-key data]]
+      (reduce-kv
+        (fn assign-updates
+          [updates family fdata]
+          (update updates family (fnil assoc (sorted-map)) record-key fdata))
+        updates
+        (group-families families data)))
+    {} records))</pre></td></tr><tr><td class="docs"><h2>Codecs</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Map of codec type information that can be used with MerkleDAG stores.</p>
+</td><td class="codes"><pre class="brush: clojure">(def codec-types
+  {'inst
+   {:description &quot;An instant in time.&quot;
+    :reader #(Instant/parse ^String %)
+    :writers {Instant #(.format DateTimeFormatter/ISO_INSTANT ^Instant %)}}
+   'merkle-db/key
+   {:description &quot;Record key byte data.&quot;
+    :reader key/parse
+    :writers {Key key/hex}}
+   'merkle-db/bloom-filter
+   {:description &quot;Probablistic Bloom filter.&quot;
+    :reader bloom/form-&gt;filter
+    :writers {BloomFilter bloom/filter-&gt;form}}})</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.db" name="merkle-db.db"><h1 class="project-name">merkle-db.db</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Core database functions.</p>
 </td><td class="codes"><pre class="brush: clojure">(ns merkle-db.db
   (:require
+    [clojure.future :refer [inst? nat-int?]]
     [clojure.spec :as s]
-    [merkledag.link :as link]
-    [merkledag.refs :as refs]
-    [merkle-db.data :as data]
-    [merkle-db.node :as node]
-    [merkle-db.table :as table]))</pre></td></tr><tr><td class="docs"><p>Database name.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::name (s/and string? #(&lt;= 1 (count %) 512)))</pre></td></tr><tr><td class="docs"><p>Map of table names to node links.</p>
+    [clojure.string :as str]
+    (merkledag
+      [core :as mdag]
+      [link :as link]
+      [node :as node])
+    (merkle-db
+      [data :as data]
+      [table :as table])
+    [multihash.core :as multihash])
+  (:import
+    java.time.Instant
+    merkle_db.table.Table))</pre></td></tr><tr><td class="docs"><h2>Data Specifications</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Value of <code>:data/type</code> that indicates a database root node.</p>
+</td><td class="codes"><pre class="brush: clojure">(def ^:const data-type
+  :merkle-db/database)</pre></td></tr><tr><td class="docs"><p>Set of keys which may appear in the database info map.</p>
+</td><td class="codes"><pre class="brush: clojure">(def ^:no-doc info-keys
+  #{::node/id ::name ::version ::committed-at ::data/size})</pre></td></tr><tr><td class="docs"><p>Database name.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::name
+  (s/and string?
+         #(not (str/includes? % &quot;/&quot;))
+         #(&lt;= 1 (count %) 255)))</pre></td></tr><tr><td class="docs"><p>Database version.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::version nat-int?)</pre></td></tr><tr><td class="docs"><p>When the database version was committed.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::committed-at inst?)</pre></td></tr><tr><td class="docs"><p>Map of table names to node links.</p>
 </td><td class="codes"><pre class="brush: clojure">(s/def ::tables (s/map-of ::table/name link/merkle-link?))</pre></td></tr><tr><td class="docs"><p>Database root node.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def :merkle-db/db-root
-  (s/keys :req [::tables]
-          :opt [:data/title
-                :data/description
-                ::data/metadata
-                :time/updated-at]))</pre></td></tr><tr><td class="docs"><h2>Database Protocols</h2>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::node-data
+  (s/and
+    (s/keys :req [::tables]
+            :opt [:time/updated-at])
+    #(= data-type (:data/type %))))</pre></td></tr><tr><td class="docs"><p>Information from the database version.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::db-info
+  (s/keys :req [::node/id
+                ::name
+                ::version
+                ::committed-at]
+          :opt [::data/size]))</pre></td></tr><tr><td class="docs"><h2>Database API</h2>
 </td><td class="codes"></td></tr><tr><td class="docs"><p>Protocol for interacting with a database at a specific version.</p>
 </td><td class="codes"><pre class="brush: clojure">(defprotocol IDatabase
-  (describe-db
+  (list-tables
     [db]
-    &quot;Retrieve descriptive information about a database, including any user-set
-    metadata.&quot;)
-  (alter-db-meta
-    [db f]
-    &quot;Update the user metadata attached to a database. The function `f` will be
-    called with the current value of the metadata, and the result will be used
-    as the new metadata.&quot;)
-  (commit!
-    [db]
-    &quot;Ensure all data has been written to the backing block store and update the
-    database's root value in the ref manager.&quot;))</pre></td></tr><tr><td class="docs"><p>...</p>
-</td><td class="codes"><pre class="brush: clojure">(defprotocol ITables
-  (create-table
-    [db table-name opts])
-  (describe-table
-    [db table-name])
-  (alter-table-meta
-    [db table-name f])
-  (alter-families
-    [db table-name new-families])
+    [db opts]
+    &quot;Return a sequence of maps with partial information about the tables in the
+    database, including their name and total size.
+    Options may include:
+    - `:named`
+      If set to a string, return tables whose names are prefixed by the value.
+      This may also be a regular expression to match table names against.
+    - `:offset`
+      Skip this many matching results.
+    - `:limit`
+      Return at most this many results.&quot;)
+  (get-table
+    [db table-name]
+    &quot;Return a value representing the named table in the database, or nil if no
+    such table exists.&quot;)
+  (set-table
+    [db table-name value]
+    &quot;Set the state of the named table. Returns an updated database value.&quot;)
   (drop-table
     [db table-name]
-    &quot;....&quot;))</pre></td></tr><tr><td class="docs"><p>...</p>
-</td><td class="codes"><pre class="brush: clojure">(defprotocol IRecords
-  (scan
-    [db table-name opts])
-  (get-records
-    [db table-name primary-keys fields])
-  (write
-    [db table-name records])
-  (delete
-    [db table-name primary-keys]))</pre></td></tr><tr><td class="docs"><p>...</p>
-</td><td class="codes"><pre class="brush: clojure">(defprotocol IPartitions
-  (list-partitions
-    [db table-name])
-  (read-partition
-    [db partition-id fields])
-  (build-table
-    [db table-name partition-ids]))</pre></td></tr><tr><td class="docs"><h2>Database Type</h2>
-</td><td class="codes"></td></tr><tr><td class="docs">
+    &quot;Remove the named table from the database. Returns an updated database
+    value.&quot;)
+  (flush!
+    [db]
+    &quot;Ensure any pending changes are persistently stored. Returns an updated
+    database value.&quot;))</pre></td></tr><tr><td class="docs"><p>Create a new table with the given name and optional attributes to merge into
+  the root node data. Returns an updated database value, or throws an exception
+  if the table already exists.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn create-table
+  [db table-name attrs]
+  (when (get-table db table-name)
+    (throw (ex-info
+             (str &quot;Cannot create table: database already has a table named &quot;
+                  table-name)
+             {:type ::table-conflict
+              :table-name table-name})))
+  (set-table db table-name (table/bare-table nil table-name attrs)))</pre></td></tr><tr><td class="docs"><p>Update the table by calling <code>f</code> with the current table value and the
+  remaining <code>args</code>. Returns an updated database value, or throws an
+  exception if the table does not exist.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn update-table
+  [db table-name f &amp; args]
+  (let [table (get-table db table-name)]
+    (when-not table
+      (throw (ex-info
+               (str &quot;Cannot update table: database has no table named &quot;
+                    table-name)
+               {:type ::no-table
+                :table-name table-name})))
+    ; TODO: validate table spec?
+    ; TODO: set :time/updated-at
+    (set-table db table-name (apply f table args))))</pre></td></tr><tr><td class="docs"><p>Update the database by moving the table named <code>from</code> to the name <code>to</code>.
+  Returns an updated database value, or throws an exception if table <code>from</code>
+  does not exist or <code>to</code> already exists.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn rename-table
+  [db from to]
+  (let [table (get-table db from)]
+    (when-not table
+      (throw (ex-info
+               (str &quot;Cannot rename table: database has no table named &quot;
+                    from)
+               {:type ::no-table
+                :from from
+                :to to})))
+    (when (get-table db to)
+      (throw (ex-info
+               (str &quot;Cannot rename table: database already has a table named &quot;
+                    to)
+               {:type ::table-conflict
+                :from from
+                :to to})))
+    (-&gt; db
+        (drop-table from)
+        (set-table to table))))</pre></td></tr><tr><td class="docs"><h2>Database Type</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Databases are implementad as a custom type so they can behave similarly to
+natural Clojure values.</p>
+
+<ul>
+<li><code>store</code> reference to the merkledag node store backing the database.</li>
+<li><code>db-info</code> map of higher-level database properties such as the name,
+node-id, size, version opened, etc.</li>
+<li><code>root-data</code> map of data stored in the database root, excluding <code>::tables</code>.</li>
+<li><code>tables</code> map of table names to reified table objects.</li>
+</ul>
 </td><td class="codes"><pre class="brush: clojure">(deftype Database
-  [store tracker db-name root-id _meta]
+  [store
+   db-info
+   root-data
+   tables
+   _meta]
+  Object
+  (toString
+    [this]
+    (format &quot;db:%s:%s&quot;
+            (::name db-info &quot;?&quot;)
+            (::version db-info &quot;?&quot;)))
+  (equals
+    [this that]
+    (boolean
+      (or (identical? this that)
+          (when (identical? (class this) (class that))
+            (and (= root-data (.root-data ^Database that))
+                 (= tables (.tables ^Database that)))))))
+  (hashCode
+    [this]
+    (hash-combine (hash root-data) (hash tables)))
+  clojure.lang.IObj
+  (meta
+    [this]
+    _meta)
+  (withMeta
+    [this meta-map]
+    (Database. store db-info root-data tables meta-map))
+  clojure.lang.ILookup
+  (valAt
+    [this k]
+    (.valAt this k nil))
+  (valAt
+    [this k not-found]
+    (cond
+      (= ::tables k) tables ; TODO: better return val
+      (contains? info-keys k) (get db-info k not-found)
+      ; TODO: link-expand value
+      :else (get root-data k not-found)))
+  clojure.lang.IPersistentMap
+  (count
+    [this]
+    (+ (count db-info) (count root-data) 1))
+  (empty
+    [this]
+    (Database. store db-info nil tables _meta))
+  (cons
+    [this element]
+    (cond
+      (instance? java.util.Map$Entry element)
+        (let [^java.util.Map$Entry entry element]
+          (.assoc this (.getKey entry) (.getValue entry)))
+      (vector? element)
+        (.assoc this (first element) (second element))
+      :else
+        (loop [result this
+               entries element]
+          (if (seq entries)
+            (let [^java.util.Map$Entry entry (first entries)]
+              (recur (.assoc result (.getKey entry) (.getValue entry))
+                     (rest entries)))
+            result))))
+  (equiv
+    [this that]
+    (.equals this that))
+  (containsKey
+    [this k]
+    (or (= k ::tables)
+        (contains? db-info k)
+        (contains? root-data k)))
+  (entryAt
+    [this k]
+    (let [v (.valAt this k this)]
+      (when-not (identical? this v)
+        (clojure.lang.MapEntry. k v))))
+  (seq
+    [this]
+    (seq (concat (seq db-info)
+                 (seq root-data)
+                 [(clojure.lang.MapEntry. ::tables tables)])))
+  (iterator
+    [this]
+    (clojure.lang.RT/iter (seq this)))
+  (assoc
+    [this k v]
+    (cond
+      (= k :data/type)
+        (throw (IllegalArgumentException.
+                 (str &quot;Cannot change database :data/type from &quot; data-type)))
+      (= k ::tables)
+        (throw (IllegalArgumentException.
+                 (str &quot;Cannot directly set database tables field &quot; k)))
+      (contains? info-keys k)
+        (throw (IllegalArgumentException.
+                 (str &quot;Cannot change database info field &quot; k)))
+      :else
+        (Database. store db-info (assoc root-data k v) tables _meta)))
+  (without
+    [this k]
+    (cond
+      (= k :data/type)
+        (throw (IllegalArgumentException.
+                 &quot;Cannot remove database :data/type&quot;))
+      (= k ::tables)
+        (throw (IllegalArgumentException.
+                 (str &quot;Cannot remove database tables field &quot; k)))
+      (contains? info-keys k)
+        (throw (IllegalArgumentException.
+                 (str &quot;Cannot remove database info field &quot; k)))
+      :else
+        (Database.
+          store
+          db-info
+          (not-empty (dissoc root-data k))
+          tables
+          _meta))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(alter-meta! #'-&gt;Database assoc :private true)</pre></td></tr><tr><td class="docs"><p>Load a database from the store, using the version information given.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn ^:no-doc load-database
+  [store version]
+  (let [node (mdag/get-node store (::node/id version))]
+    (-&gt;Database
+      store
+      (assoc version
+             ::data/size (node/reachable-size node))
+      (dissoc (::node/data node) ::tables)
+      (::tables (::node/data node))
+      nil)))</pre></td></tr><tr><td class="docs"><p>Update the database to use the given version information.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn ^:no-doc update-backing
+  [^Database db store db-info]
+  (-&gt;Database
+    store
+    db-info
+    (.root-data db)
+    (.tables db)
+    (meta db)))</pre></td></tr><tr><td class="docs"><h2>Protocol Implementation</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Build a link to a clean table node.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- table-link
+  [table-name table]
+  (link/create
+    (str &quot;table:&quot; table-name)
+    (::node/id table)
+    (::data/size table)))</pre></td></tr><tr><td class="docs"><p>Coerce either a link value or a table record to a map of information.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- link-or-table-&gt;info
+  [[table-name value]]
+  (if (link/merkle-link? value)
+    {::node/id (::link/target value)
+     ::table/name table-name
+     ::data/size (::link/rsize value)}
+    (select-keys
+      value
+      [::node/id ::table/name ::data/size])))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn- -list-tables
+  ([db]
+   (-list-tables db nil))
+  ([^Database db opts]
+   (cond-&gt;&gt; (map link-or-table-&gt;info (.tables db))
+     (:named opts)
+       (filter #(if (string? (:named opts))
+                  (str/starts-with? (::table/name %) (:named opts))
+                  (re-seq (:named opts) (::table/name %))))
+     (:offset opts)
+       (drop (:offset opts))
+     (:limit opts)
+       (take (:limit opts)))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn- -get-table
+  [^Database db table-name]
+  (when-let [value (get (.tables db) table-name)]
+    (if (link/merkle-link? value)
+      ; Resolve link to stored table root.
+      (table/load-table (.store db) table-name value)
+      ; Loaded table value.
+      value)))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn- -set-table
+  [^Database db table-name value]
+  (let [table (if (table/dirty? value)
+                (table/set-backing value (.store db) table-name)
+                (table-link table-name value))]
+    (-&gt;Database
+      (.store db)
+      (.db-info db)
+      (.root-data db)
+      (assoc (.tables db) table-name table)
+      (._meta db))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn- -drop-table
+  [^Database db table-name]
+  (-&gt;Database
+    (.store db)
+    (.db-info db)
+    (.root-data db)
+    (dissoc (.tables db) table-name)
+    (._meta db)))</pre></td></tr><tr><td class="docs"><p>Takes a map of tables and flushes any pending changes. Returns a map of
+  table names to node links.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- flush-tables!
+  [tables]
+  (reduce-kv
+    (fn [acc table-name value]
+      (assoc
+        acc table-name
+        (if (link/merkle-link? value)
+          value
+          (table-link table-name (table/flush! value false)))))
+    {} tables))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn- -flush!
+  [^Database db]
+  (let [tables (flush-tables! (.tables db))
+        root-data (assoc (.root-data db)
+                         :data/type data-type
+                         ::tables tables)]
+    (when-not (s/valid? ::node-data root-data)
+      (throw (ex-info (str &quot;Cannot write invalid database root node: &quot;
+                           (s/explain-str ::node-data root-data))
+                      {:type ::invalid-node})))
+    (let [node (mdag/store-node! (.store db) nil root-data)
+          db-info (assoc (.db-info db)
+                         ::node/id (::node/id node)
+                         ::data/size (node/reachable-size node))
+          db-meta (assoc (._meta db)
+                         ::node/links (::node/links node))]
+      (-&gt;Database
+        (.store db)
+        db-info
+        (dissoc (::node/data node) ::tables)
+        tables
+        db-meta))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(extend Database
+
   IDatabase
-  (describe-db
-    [this]
-    (when-let [db-root (node/get-data store root-id)]
-      (-&gt;
-        (assoc db-root
-               :merkledag.node/id root-id
-               ::name db-name)
-        (cond-&gt;
-          (::data/metadata db-root)
-            (assoc ::data/metadata (node/get-data store (::data/metadata db-root)))))))
-  (alter-db-meta
-    [this f]
-    (let [db-root (node/get-data store root-id)
-          db-meta (some-&gt;&gt; (::data/metadata db-root) (node/get-data store))
-          db-meta' (f db-meta)]
-      (if (= db-meta db-meta')
-        ; Nothing to change.
-        this
-        ; Store updated metadata node.
-        (let [meta-node (node/store-node! store db-meta')
-              meta-link (link/create &quot;meta&quot; (:id meta-node) (:size meta-node))
-              db-node (node/store-node! store (assoc db-root ::data/metadata meta-link))]
-          (assoc this :root-id (:id db-node))))))
-  (commit!
-    [this]
-    ; TODO: lock db
-    ; TODO: check if current version is the same as the version opened at?
-    (refs/set-ref! tracker db-name root-id)
-    this))</pre></td></tr><tr><td class="docs">
-</td><td class="codes"><pre class="brush: clojure">(alter-meta! #'-&gt;Database assoc :private true)</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.table" name="merkle-db.table"><h1 class="project-name">merkle-db.table</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Tables are named top-level containers of records. Generally, a single table
-  corresponds to a certain 'kind' of data. Tables also contain configuration
-  determining how keys are encoded and records are stored.</p>
-</td><td class="codes"><pre class="brush: clojure">(ns merkle-db.table
-  (:require
-    [clojure.future :refer [pos-int?]]
-    [clojure.spec :as s]
-    [merkledag.link :as link]
-    [merkle-db.data :as data]
-    [merkle-db.index :as index]
-    [merkle-db.key :as key]
-    [merkle-db.partition :as part]))</pre></td></tr><tr><td class="docs"><h2>Specs</h2>
-</td><td class="codes"></td></tr><tr><td class="docs"><p>Table names are non-empty strings.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::name (s/and string? #(&lt;= 1 (count %) 127)))</pre></td></tr><tr><td class="docs"><p>Table data is a link to the root of the data tree.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::data link/merkle-link?)</pre></td></tr><tr><td class="docs"><p>Tables may have a patch tablet containing recent unmerged data.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::patch link/merkle-link?)</pre></td></tr><tr><td class="docs"><p>Table root node.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def :merkle-db/table-root
-  (s/keys :req [::data/count
-                ::index/branching-factor
-                ::part/limit]
-          :opt [::data
-                ::patch
-                ::data/families
-                ::data/metadata
-                ::key/lexicoder
-                ::part/limit
-                :time/updated-at]))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.index" name="merkle-db.index"><h1 class="project-name">merkle-db.index</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>The data tree in a table is a B+ tree which orders the partitions into a
-  sorted branching structure.</p>
+
+  {:list-tables -list-tables
+   :get-table -get-table
+   :set-table -set-table
+   :drop-table -drop-table
+   :flush! -flush!})</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.index" name="merkle-db.index"><h1 class="project-name">merkle-db.index</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>The data tree in a table is a B+ tree variant which orders the partitions
+  into a sorted branching structure.</p>
 
 <p>  The branching factor determines the maximum number of children an index node
   in the data tree can have. Internal (non-root) index nodes with branching
-  factor <code>b</code> will have between <code>ceiling(b/2)</code> and <code>b</code> children.</p>
+  factor <code>b</code> will have between <code>ceil(b/2)</code> and <code>b</code> children.</p>
 
 <p>  An empty data tree is represented by a nil link from the table root. A data
   tree with fewer records than the partition limit is represented directly by a
@@ -3087,24 +3619,32 @@ net.brehaut.ClojureTools = (function (SH) {
   (:require
     [clojure.future :refer [pos-int?]]
     [clojure.spec :as s]
-    [merkledag.link :as link]
-    [merkle-db.data :as data]
-    [merkle-db.key :as key]
-    [merkle-db.node :as node]
-    [merkle-db.partition :as part]))</pre></td></tr><tr><td class="docs"><h2>Specs</h2>
-</td><td class="codes"></td></tr><tr><td class="docs"><p>The branching factor determines the number of children an index node in the
+    (merkledag
+      [core :as mdag]
+      [link :as link]
+      [node :as node])
+    (merkle-db
+      [data :as data]
+      [key :as key]
+      [partition :as part])))</pre></td></tr><tr><td class="docs"><h2>Specs</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Value of <code>:data/type</code> that indicates an index tree node.</p>
+</td><td class="codes"><pre class="brush: clojure">(def ^:const data-type
+  :merkle-db/index)</pre></td></tr><tr><td class="docs"><p>The default number of children to limit each index node to.</p>
+</td><td class="codes"><pre class="brush: clojure">(def default-branching-factor
+  256)</pre></td></tr><tr><td class="docs"><p>The branching factor determines the number of children an index node in the
 data tree can have.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::branching-factor (s/and pos-int? #(&lt; 2 %)))</pre></td></tr><tr><td class="docs"><p>Height of the node in the tree. Partitions are the leaves and have an
+</td><td class="codes"><pre class="brush: clojure">(s/def ::branching-factor (s/and pos-int? #(&lt;= 4 %)))</pre></td></tr><tr><td class="docs"><p>Height of the node in the tree. Partitions are the leaves and have an
 implicit height of zero, so the first index node has a height of one.</p>
 </td><td class="codes"><pre class="brush: clojure">(s/def ::height pos-int?)</pre></td></tr><tr><td class="docs"><p>Sorted vector of index keys.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::keys (s/coll-of key/bytes? :kind vector?))</pre></td></tr><tr><td class="docs"><p>Sorted vector of child links.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::keys (s/coll-of key/key? :kind vector?))</pre></td></tr><tr><td class="docs"><p>Sorted vector of child links.</p>
 </td><td class="codes"><pre class="brush: clojure">(s/def ::children (s/coll-of link/merkle-link? :kind vector?))</pre></td></tr><tr><td class="docs"><p>Data tree index node.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def :merkle-db/index-node
+</td><td class="codes"><pre class="brush: clojure">(s/def ::node-data
   (s/and
     (s/keys :req [::data/count
                   ::height
                   ::keys
                   ::children])
+    #(= data-type (:data/type %))
     #(= (count (::children %))
         (inc (count (::keys %))))))</pre></td></tr><tr><td class="docs"><h2>Read Functions</h2>
 </td><td class="codes"></td></tr><tr><td class="docs"><p>Assigns record keys to the children of this node which they would belong
@@ -3131,51 +3671,51 @@ implicit height of zero, so the first index node has a height of one.</p>
   partitions.</p>
 </td><td class="codes"><pre class="brush: clojure">(defn read-all
   [store node fields]
-  (case (:data/type node)
-    :merkle-db/index-node
+  (condp = (:data/type node)
+    data-type
     (mapcat
       (fn read-child
         [child-link]
-        (if-let [child (node/get-data store child-link)]
+        (if-let [child (mdag/get-data store child-link)]
           (read-all store child fields)
           (throw (ex-info (format &quot;Missing child linked from index-node %s: %s&quot;
                                   (:id node) child-link)
                           {:node (:id node)
                            :child child-link}))))
       (::children node))
-    :merkle-db/partition
+    part/data-type
     (part/read-all store node fields)
-    (throw (ex-info (str &quot;Unsupported data-tree node type: &quot;
+    (throw (ex-info (str &quot;Unsupported index-tree node type: &quot;
                          (pr-str (:data/type node)))
                     {:data/type (:data/type node)}))))</pre></td></tr><tr><td class="docs"><p>Read a lazy sequence of key/map tuples which contain the requested field data
   for the records whose keys are in the given collection. This function works on
   both index nodes and partitions.</p>
 </td><td class="codes"><pre class="brush: clojure">(defn read-batch
   [store node fields record-keys]
-  (case (:data/type node)
-    :merkle-db/index-node
+  (condp = (:data/type node)
+    data-type
     (mapcat
       (fn read-child
         [[index child-keys]]
         (let [child-link (nth (::children node) index)]
-          (if-let [child (node/get-data store child-link)]
+          (if-let [child (mdag/get-data store child-link)]
             (read-batch store child fields child-keys)
             (throw (ex-info (format &quot;Missing child linked from index-node %s: %s&quot;
                                     (:id node) child-link)
                             {:node (:id node)
                              :child child-link})))))
       (assign-keys (::keys node) record-keys))
-    :merkle-db/partition
+    part/data-type
     (part/read-batch store node fields record-keys)
-    (throw (ex-info (str &quot;Unsupported data-tree node type: &quot;
+    (throw (ex-info (str &quot;Unsupported index-tree node type: &quot;
                          (pr-str (:data/type node)))
                     {:data/type (:data/type node)}))))</pre></td></tr><tr><td class="docs"><p>Read a lazy sequence of key/map tuples which contain the field data for the
   records whose keys lie in the given range, inclusive. A nil boundary includes
   all records in that range direction.</p>
 </td><td class="codes"><pre class="brush: clojure">(defn read-range
   [store node fields start-key end-key]
-  (case (:data/type node)
-    :merkle-db/index-node
+  (condp = (:data/type node)
+    data-type
     (-&gt;
       (concat (map vector (::children node) (::keys node))
               [[(last (::children node))]])
@@ -3189,443 +3729,113 @@ implicit height of zero, so the first index node has a height of one.</p>
           (drop-while #(key/before? (nth % 2) start-key))
         end-key
           (take-while #(key/after? end-key (nth % 1))))
-      ,,,
+      ,,,  ; FIXME
       #_
       (read-tablets store part fields tablet/read-range start-key end-key))
-    :merkle-db/partition
+    part/data-type
     (part/read-range store node fields start-key end-key)
-    (throw (ex-info (str &quot;Unsupported data-tree node type: &quot;
+    (throw (ex-info (str &quot;Unsupported index-tree node type: &quot;
                          (pr-str (:data/type node)))
                     {:data/type (:data/type node)}))))</pre></td></tr><tr><td class="docs"><h2>Update Functions</h2>
-</td><td class="codes"></td></tr><tr><td class="docs"><h2>Deletion Functions</h2>
-</td><td class="codes"></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.partition" name="merkle-db.partition"><h1 class="project-name">merkle-db.partition</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Partitions contain non-overlapping ranges of the records witin a table.
-  Partition nodes contain metadata about the contained records and links to the
-  tablets where the data for each field family is stored.</p>
-</td><td class="codes"><pre class="brush: clojure">(ns merkle-db.partition
-  (:require
-    [clojure.future :refer [pos-int?]]
-    [clojure.spec :as s]
-    [merkledag.link :as link]
-    [merkle-db.bloom :as bloom]
-    [merkle-db.data :as data]
-    [merkle-db.key :as key]
-    [merkle-db.node :as node]
-    [merkle-db.tablet :as tablet]))</pre></td></tr><tr><td class="docs"><h2>Specs</h2>
-</td><td class="codes"></td></tr><tr><td class="docs"><p>Maximum number of records to allow in each partition.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::limit pos-int?)</pre></td></tr><tr><td class="docs"><p>Bloom filter providing probable membership testing for record keys contained
-in the partition.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::membership bloom/filter?)</pre></td></tr><tr><td class="docs"><p>First key present in the partition.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::first-key key/bytes?)</pre></td></tr><tr><td class="docs"><p>Last key present in the partition.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::last-key key/bytes?)</pre></td></tr><tr><td class="docs"><p>Map of family keys (and <code>:base</code>) to links to the corresponding tablets.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::tablets (s/map-of keyword? link/merkle-link?))</pre></td></tr><tr><td class="docs"><p>Partition node.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def :merkle-db/partition
-  (s/keys :req [::data/count
-                ::data/families
-                ::limit
-                ::membership
-                ::first-key
-                ::last-key
-                ::tablets]))</pre></td></tr><tr><td class="docs"><h2>Utilities</h2>
-</td><td class="codes"></td></tr><tr><td class="docs"><p>The default number of records to build partitions up to.</p>
-</td><td class="codes"><pre class="brush: clojure">(def default-limit
-  100000)</pre></td></tr><tr><td class="docs"><p>Returns a lazy sequence of <code>n</code> lists containing the elements of <code>coll</code> in
-  order, where each list is approximately the same size.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn- partition-approx
-  [n coll]
-  (-&gt;&gt;
-    [nil
-     (-&gt;&gt; (range (inc n))
-          (map #(int (* (/ % n) (count coll))))
-          (partition 2 1))
-     coll]
-    (iterate
-      (fn [[_ [[start end :as split] &amp; splits] xs]]
-        (when-let [length (and split (- end start))]
-          [(seq (take length xs))
-           splits
-           (drop length xs)])))
-    (drop 1)
-    (take-while first)
-    (map first)))</pre></td></tr><tr><td class="docs"><p>Store the given tablet data and return the family key and updated id.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn- store-tablet!
-  [store family-key tablet]
-  (let [node (node/store-node!
-               store
-               (cond-&gt; tablet
-                 (not= family-key :base)
-                 (tablet/prune-records)))]
-    [family-key
-     (link/create
-       (if (namespace family-key)
-         (str (namespace family-key) &quot;:&quot; (name family-key))
-         (name family-key))
-       (:id node)
-       (:size node))]))</pre></td></tr><tr><td class="docs"><p>Take a map of tablet links and a split key and returns a vector of two
-  tablet maps, each containing the left and right tablet splits, respectively.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn- divide-tablets
-  [store tablets split-key]
-  (reduce-kv
-    (fn divide
-      [[left right] family-key tablet-link]
-      (let [tablet (node/get-data store tablet-link)]
-        (cond
-          ; All tablet data is in the left split.
-          (key/before? (tablet/last-key tablet) split-key)
-          [(assoc left family-key tablet-link) right]
-          ; All tablet data is in the right split.
-          (key/after? (tablet/first-key tablet) split-key)
-          [left (assoc right family-key tablet-link)]
-          ; Split tablet into two pieces.
-          :else
-          (let [[ltab rtab] (tablet/split tablet split-key)]
-            [(conj left (store-tablet! store family-key ltab))
-             (conj right (store-tablet! store family-key rtab))]))))
-    [{} {}]
-    tablets))</pre></td></tr><tr><td class="docs"><p>Split the partition into two partitions at the given key. All records less
-  than the split key will be contained in the first partition, all others in
-  the second.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn split
-  [store part split-key]
-  (when-not (and (key/after? split-key (::first-key part))
-                 (key/before? split-key (::last-key part)))
-    (throw (ex-info (format &quot;Cannot split partition with key %s which falls outside the contained range [%s, %s]&quot;
-                            split-key (::first-key part) (::last-key part))
-                    {:split-key split-key
-                     :first-key (::first-key part)
-                     :last-key (::last-key part)})))
-  (let [defaults (select-keys part [:data/type ::data/families ::limit])]
-    ; Construct new partitions from left and right tablet maps.
-    (map
-      (fn make-part
-        [tablets]
-        (let [base-keys (tablet/keys (node/get-data store (:base tablets)))]
-          (assoc defaults
-                 ::data/count (count base-keys)
-                 ::membership (into (bloom/create (::limit part)) base-keys)
-                 ::first-key (first base-keys)
-                 ::last-key (last base-keys)
-                 ::tablets tablets)))
-      (divide-tablets store (::tablets part) split-key))))</pre></td></tr><tr><td class="docs"><p>Join two partitions into a single partition. The partition key ranges must
-  not overlap.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn join
-  [store left right]
-  ; TODO: implement
-  (throw (UnsupportedOperationException. &quot;NYI&quot;)))</pre></td></tr><tr><td class="docs"><h2>Read Functions</h2>
-</td><td class="codes"></td></tr><tr><td class="docs"><p>Selects a list of tablet names to query over, given a mapping of tablet
-  names to sets of the contained fields and the desired set of field data. If
-  selected-fields is empty, returns all tablets.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn- choose-tablets
-  [tablet-fields selected]
-  (if (seq selected)
-    ; Use field selection to filter tablets to load.
-    (-&gt; (dissoc tablet-fields :base)
-        (-&gt;&gt; (keep #(when (some selected (val %)) (key %))))
-        (set)
-        (as-&gt; chosen
-          (if (seq (apply disj selected (mapcat tablet-fields chosen)))
-            (conj chosen :base)
-            chosen)))
-    ; No selection provided, return all field data.
-    (-&gt; tablet-fields keys set (conj :base))))</pre></td></tr><tr><td class="docs"><p>Combines lazy sequences of partial records into a single lazy sequence
-  containing key/data tuples.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn- record-seq
-  [field-seqs]
-  (lazy-seq
-    (when-let [next-key (some-&gt;&gt; (seq (keep ffirst field-seqs))
-                                 (apply key/min))]
-      (let [has-next? #(= next-key (ffirst %))
-            next-data (-&gt;&gt; field-seqs
-                           (filter has-next?)
-                           (map (comp second first))
-                           (apply merge))
-            next-seqs (keep #(if (has-next? %) (next %) (seq %))
-                            field-seqs)]
-        (cons [next-key next-data] (record-seq next-seqs))))))</pre></td></tr><tr><td class="docs"><p>Performs a read across the tablets in the partition by selecting based on
-  the desired fields. The reader function is called on each selected tablet
-  along with any extra args, producing a collection of lazy record sequences
-  which are combined into a single sequence of key/record pairs.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn- read-tablets
-  [store part fields read-fn &amp; args]
-  ; OPTIMIZE: use transducer instead of intermediate sequences.
-  (-&gt;&gt; (set fields)
-       (choose-tablets (::data/families part))
-       (map (::tablets part))
-       (map (partial node/get-data store))
-       (map #(apply read-fn % args))
-       (record-seq)
-       (map (juxt first #(select-keys (second %) fields)))))</pre></td></tr><tr><td class="docs"><p>Read a lazy sequence of key/map tuples which contain the requested field data
-  for every record in the partition.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn read-all
-  [store part fields]
-  (read-tablets store part fields tablet/read-all))</pre></td></tr><tr><td class="docs"><p>Read a lazy sequence of key/map tuples which contain the requested field
-  data for the records whose keys are in the given collection.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn read-batch
-  [store part fields record-keys]
-  ; OPTIMIZE: use the membership filter to weed out keys which are definitely not present.
-  (read-tablets store part fields tablet/read-batch record-keys))</pre></td></tr><tr><td class="docs"><p>Read a lazy sequence of key/map tuples which contain the field data for the
-  records whose keys lie in the given range, inclusive. A nil boundary includes
-  all records in that range direction.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn read-range
-  [store part fields start-key end-key]
-  (read-tablets store part fields tablet/read-range start-key end-key))</pre></td></tr><tr><td class="docs"><p>Read a lazy sequence of key/map tuples which contain the field data for the
-  records whose ranks lie in the given range, inclusive. A nil boundary includes
-  all records in that range direction.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn read-slice
-  [store part fields start-index end-index]
-  (let [base (node/get-data store (:base (::tablets part)))
-        start (and start-index (tablet/nth-key base start-index))
-        end (and end-index (tablet/nth-key base end-index))]
-    (read-tablets store part fields tablet/read-range start end)))</pre></td></tr><tr><td class="docs"><h2>Update Functions</h2>
-</td><td class="codes"></td></tr><tr><td class="docs"><p>Build a map from field keys to the family the field belongs to.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn- map-field-families
-  [families]
-  (into {}
-        (mapcat #(map vector (second %) (repeat (first %))))
-        families))</pre></td></tr><tr><td class="docs"><p>Build a map from family keys to maps which contain the field data for the
-  corresponding family. Fields not grouped in a family will be added to
-  <code>:base</code>.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn- group-families
-  [field-&gt;family data]
-  (reduce-kv
-    (fn split-data
-      [groups field value]
-      (update groups (field-&gt;family field :base) assoc field value))
-    {} data))</pre></td></tr><tr><td class="docs"><p>Add record data to a map of <code>updates</code> from family keys to vectors of pairs
-  of record keys and family-specific data. The function <em>always</em> appends a pair
-  to the <code>:base</code> family vector, to ensure the key is represented there.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn- append-record-updates
-  [families updates [record-key data]]
-  (-&gt;
-    (group-families (map-field-families families) data)
-    (update :base #(or % {}))
-    (-&gt;&gt;
-      (reduce-kv
-        (fn assign-updates
-          [updates family fdata]
-          (update updates family (fnil conj []) [record-key fdata]))
-        updates))))</pre></td></tr><tr><td class="docs"><p>Apply an updating function to the data contained in the given tablet.
-  Returns an updated tablets map.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn- update-tablet!
-  [store f tablets [family-key tablet-updates]]
-  (-&gt;&gt;
-    (if-let [tablet-link (get tablets family-key)]
-      ; Load existing tablet to update it.
-      (-&gt;
-        (node/get-data store tablet-link)
-        (or (throw (ex-info (format &quot;Couldn't find tablet %s in backing store&quot;
-                                    family-key)
-                            {:family family-key
-                             :link tablet-link})))
-        (tablet/update-records f tablet-updates))
-      ; Create new tablet and store it.
-      (tablet/from-records f tablet-updates))
-    (store-tablet! store family-key)
-    (conj tablets)))</pre></td></tr><tr><td class="docs"><p>Constructs new partitions from the given map of record data. The records
-  will be split into tablets matching the given families, if provided.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn from-records
-  [store parameters f records]
-  (let [records (sort-by first key/compare records)
-        limit (or (::limit parameters) default-limit)
-        families (or (::data/families parameters) {})
-        part-count (inc (int (/ (count records) limit)))]
-    (map
-      (fn make-partition
-        [partition-records]
-        {:data/type :merkle-db/partition
-         ::data/families families
-         ::data/count (count partition-records)
-         ::limit limit
-         ::membership (into (bloom/create limit) (map first partition-records))
-         ::first-key (first (first partition-records))
-         ::last-key (first (last partition-records))
-         ::tablets (-&gt;&gt;
-                     partition-records
-                     (reduce (partial append-record-updates families) {})
-                     (map (juxt key #(tablet/from-records f (val %))))
-                     (map (partial apply store-tablet! store))
-                     (into {}))})
-      (partition-approx part-count records))))</pre></td></tr><tr><td class="docs"><p>Performs an update across the tablets in the partition to merge in the given
-  record data. Returns a sequence of one or more partitions.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn add-records!
-  [store part f records]
-  (let [limit (or (::limit part) default-limit)
-        tablets (-&gt;&gt; records
-                     (reduce (partial append-record-updates (::data/families part)) {})
-                     (reduce (partial update-tablet! store f) (::tablets part)))
-        record-keys (map first records)
-        record-count (count (tablet/read-all (node/get-data store (:base tablets))))
-        part-count (inc (int (/ record-count limit)))]
-    (if (&lt; 1 part-count)
-      ; Records still fit into one partition
-      [(assoc part
-              ::data/count record-count
-              ::tablets tablets
-              ::membership (into (::membership part) record-keys)
-              ::first-key (apply key/min (::first-key part) record-keys)
-              ::last-key (apply key/max (::last-key part) record-keys))]
-      ; Partition must be split into multiple.
-      (-&gt;&gt;
-        (read-all store part nil)
-        (partition-approx part-count)
-        (map
-          (fn make-partition
-            [partition-records]
-            ; TODO: build partitions from records))))))</pre></td></tr><tr><td class="docs"><h2>Deletion Functions</h2>
-</td><td class="codes"></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.tablet" name="merkle-db.tablet"><h1 class="project-name">merkle-db.tablet</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Functions for working with tablet data.</p>
-</td><td class="codes"><pre class="brush: clojure">(ns merkle-db.tablet
-  (:refer-clojure :exclude [keys])
-  (:require
-    [clojure.spec :as s]
-    [merkle-db.key :as key]))</pre></td></tr><tr><td class="docs"><h2>Specs</h2>
-</td><td class="codes"></td></tr><tr><td class="docs"><p>Records are stored as a key/data pair.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::record-entry
-  (s/tuple key/bytes? map?))</pre></td></tr><tr><td class="docs"><p>Sorted vector of record entries.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::records
-  (s/coll-of ::record-entry :kind vector?))</pre></td></tr><tr><td class="docs"><p>Tablet node.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def :merkle-db/tablet
-  (s/keys :req [::records]))</pre></td></tr><tr><td class="docs"><h2>Key Functions</h2>
-</td><td class="codes"></td></tr><tr><td class="docs"><p>Return a sequence of the keys in the tablet.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn keys
-  [tablet]
-  (map first (::records tablet)))</pre></td></tr><tr><td class="docs"><p>Return the first record key present in the tablet.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn first-key
-  [tablet]
-  (first (first (::records tablet))))</pre></td></tr><tr><td class="docs"><p>Return the last record key present in the tablet.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn last-key
-  [tablet]
-  (first (peek (::records tablet))))</pre></td></tr><tr><td class="docs"><p>Return the nth key present in the tablet data.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn nth-key
-  [tablet n]
-  (first (nth (::records tablet) n)))</pre></td></tr><tr><td class="docs"><h2>Utilities</h2>
-</td><td class="codes"></td></tr><tr><td class="docs"><p>Constructs a new bare-bones tablet node.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn from-records*
-  [records]
-  {:data/type :merkle-db/tablet
-   ::records (vec records)})</pre></td></tr><tr><td class="docs"><p>Scans the records in a tablet to determine the full set of fields present.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn fields-present
-  [tablet]
-  (set (mapcat (comp clojure.core/keys second) (::records tablet))))</pre></td></tr><tr><td class="docs"><p>Split the tablet into two tablets at the given key. All records less than the
-  split key will be contained in the first tablet, all others in the second. </p>
-</td><td class="codes"><pre class="brush: clojure">(defn split
-  [tablet split-key]
-  (let [fkey (first-key tablet)
-        lkey (last-key tablet)]
-    (when-not (and (key/after? split-key fkey)
-                   (key/before? split-key lkey))
-      (throw (ex-info (format &quot;Cannot split tablet with key %s which falls outside the contained range [%s, %s]&quot;
-                              split-key fkey lkey)
-                      {:split-key split-key
-                       :first-key fkey
-                       :last-key lkey}))))
-  (let [before-split? #(neg? (key/compare (first %) split-key))]
-    [(-&gt;&gt;
-       (::records tablet)
-       (take-while before-split?)
-       (from-records*))
-     (-&gt;&gt;
-       (::records tablet)
-       (drop-while before-split?)
-       (from-records*))]))</pre></td></tr><tr><td class="docs"><p>Join two tablets into a single tablet. The tablets key ranges must not
-  overlap.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn join
-  [left right]
-  (let [left-bound (last-key left)
-        right-bound (first-key right)]
-    (when (key/before? right-bound left-bound)
-      (throw (ex-info (format &quot;Cannot join tablets with overlapping key ranges: %s &gt; %s&quot;
-                              left-bound right-bound)
-                      {:left-bound left-bound
-                       :right-bound right-bound}))))
-  (update left ::records (comp vec concat) (::records right)))</pre></td></tr><tr><td class="docs"><h2>Read Functions</h2>
-</td><td class="codes"></td></tr><tr><td class="docs"><p>Read a sequence of key/map tuples which contain the field data for all the
-  records in the tablet.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn read-all
-  [tablet]
-  (::records tablet))</pre></td></tr><tr><td class="docs"><p>Read a lazy sequence of key/map tuples which contain the field data for the
-  records whose keys are in the given collection.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn read-batch
-  [tablet record-keys]
-  ; OPTIMIZE: divide up the range by binary-searching for keys in the batch.
-  (filter (comp (set record-keys) first) (::records tablet)))</pre></td></tr><tr><td class="docs"><p>Read a lazy sequence of key/map tuples which contain the field data for the
-  records whose keys lie in the given range, inclusive. A nil boundary includes
-  all records in that range direction.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn read-range
-  [tablet start-key end-key]
-  ; OPTIMIZE: binary-search to the starting point and then iterate.
-  (cond-&gt;&gt; (::records tablet)
-    start-key
-      (drop-while #(neg? (key/compare (first %) start-key)))
-    end-key
-      (take-while #(not (neg? (key/compare end-key (first %)))))))</pre></td></tr><tr><td class="docs"><h2>Update Functions</h2>
-</td><td class="codes"></td></tr><tr><td class="docs"><p>Merge updated fields from the <code>right</code> map into the <code>left</code> map, dropping any
-  fields which are nil-valued.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn merge-fields
-  [_ left right]
-  (-&gt;&gt; (merge left right)
-       (remove (comp nil? val))
-       (into {})
-       (not-empty)))</pre></td></tr><tr><td class="docs"><p>Construct a tablet from a collection of record keys and field data.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn from-records
-  ([records]
-   (from-records merge-fields records))
-  ([f records]
-   (-&gt;&gt;
-     records
-     (map (fn apply-f [[k v]] [k (or (f k nil v) {})]))
-     (sort-by first key/compare)
-     (from-records*))))</pre></td></tr><tr><td class="docs"><p>Update a tablet by merging record data into it.</p>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Updating an index tree starts with the root node and a batch of changes to
+apply to it. The <em>leaves</em> of the tree are partitions, and all other nodes
+are index nodes. In a tree with branching factor <code>b</code>, every index node
+except the root must have between <code>ceiling(b/2)</code> and <code>b</code> children. The root
+is allowed to have between 2 and <code>b</code> children. If the tree has more than
+<code>::partition/limit</code> records, then each partition in the tree will be at
+least half full.</p>
 
-<p>  For each record in the <code>records</code> map, the function <code>f</code> will be called with
-  the record key, the old data (or nil, if the key is absent), and the new
-  data. The result will be used as the new data for that record. Nil results
-  are promoted to empty record maps.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn update-records
-  [tablet f records]
-  ; OPTIMIZE: do this in one pass instead of sorting
-  (-&gt;&gt; (::records tablet)
-       (map (fn [[k v]]
-              [k (if-let [updates (get records k)]
-                   (or (f k v updates) {})
-                   v)]))
-       (concat (map #(vector % (or (f % nil (get records %)) {}))
-                    (clojure.set/difference
-                      (set (map first records))
-                      (set (map first (::records tablet))))))
-       (sort-by first key/compare)
-       (vec)
-       (assoc tablet ::records)))</pre></td></tr><tr><td class="docs"><h2>Deletion Functions</h2>
-</td><td class="codes"></td></tr><tr><td class="docs"><p>Update a tablet by removing empty records from the data.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn prune-records
-  [tablet]
-  (update tablet ::records #(vec (remove (comp empty? second) %))))</pre></td></tr><tr><td class="docs"><p>Update the tablet by removing certain record keys from it. Returns nil if
-  the resulting tablet is empty.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn remove-batch
-  [tablet record-keys]
-  {:pre [(every? key/bytes? record-keys)]}
-  (-&gt;
-    (-&gt;&gt;
-      (::records tablet)
-      (remove (comp (set record-keys) first))
-      (vec))
-    (as-&gt; records
-      (when (seq records)
-        (assoc tablet ::records records)))))</pre></td></tr><tr><td class="docs"><p>Update the tablet by removing a range of record keys from it. Returns nil
-  if the resulting tablet is empty.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn remove-range
-  [tablet start-key end-key]
-  (-&gt;
-    (into
-      []
-      (remove (fn in-range?
-                [[key-bytes data]]
-                (and (or (nil? start-key)
-                         (not (key/before? key-bytes start-key)))
-                     (or (nil? end-key)
-                         (not (key/after? key-bytes end-key))))))
-      (::records tablet))
-    (as-&gt; records
-      (when (seq records)
-        (assoc tablet ::records records)))))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.key" name="merkle-db.key"><h1 class="project-name">merkle-db.key</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Record keys are immutable byte sequences which uniquely identify a record
+<p>The root node may be:
+- nil, indicating an empty tree.
+- A partition, indicating that the tree has only a single node and fewer
+  than <code>::partition/limit</code> records.
+- An index, which is treated as the root node of the tree.</p>
+
+<p>In the first "downward" phase, changes are grouped by the child which links
+to the subtree containing the updated keys. Once the changes reach the leaf
+partitions, apply them to produce some result partitions, in order.
+- If zero partitions (all deleted), remove the original child link and key
+  from the parent node.
+- If one partition, update the original child link and key.
+- If multiple partitions (split), insert the additional child links and keys into the parent node
+- If any partitions (across the tree) underflowed, merge with or borrow from siblings.</p>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Insertion</p>
+
+<ul>
+<li>Perform a search to determine what partition the new record should go into.</li>
+<li>If the partition is not full (at most p entries after the insertion), add the record.</li>
+<li>Otherwise, split the partition.
+<ul><li>Split half the partition's elements into a new partition.</li>
+<li>Insert the new partition's smallest key and link into the parent.</li>
+<li>If the parent is full, split it too.
+<ul><li>Add the middle key to the parent node.</li></ul></li>
+<li>Repeat until a parent is found that need not split.</li></ul></li>
+<li>If the root splits, create a new root which has one key and two links.
+(That is, the value that gets pushed to the new root gets removed from
+the original node)</li>
+</ul>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Deletion</p>
+
+<ul>
+<li>Start at root, find partition P where record belongs.</li>
+<li>Remove the record.
+<ul><li>If P is at least half-full, done!</li>
+<li>If P has fewer entries than it should,
+<ul><li>If sibling (adjacent node with same parent as P) is more than half-full, re-distribute, borrowing an record from it.</li>
+<li>Otherwise, sibling is exactly half-full, so we can merge P and sibling.</li></ul></li></ul></li>
+<li>If merge occurred, must delete record (pointing to P or sibling) from parent of P.</li>
+<li>Merge could propagate to root, decreasing height.</li>
+</ul>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>References</p>
+
+<p>https://pdfs.semanticscholar.org/85eb/4cf8dfd51708418881e2b5356d6778645a1a.pdf
+Insight: instead of flushing all the updates, select a related subgroup that
+minimizes repeated changes to the same node path.</p>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Given a sequence of partitions, builds an index tree with the given
+  parameters incorporating the partitions. Returns ???</p>
+</td><td class="codes"><pre class="brush: clojure">(defn build-index
+  ; TODO: document return type
+  [store parameters partitions]
+  (cond
+    (empty? partitions) nil
+    (= 1 (count partitions)) (first partitions)
+    :else
+    ; TODO: implement
+    (throw (UnsupportedOperationException. &quot;NYI: build-index over partition sequence&quot;))))</pre></td></tr><tr><td class="docs"><p>Apply changes to an empty tree, returning an updated root node data.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- update-empty
+  [store parameters changes]
+  ; Divide up added records into a sequence of partitions and build an index
+  ; over them.
+  (-&gt;&gt; (part/from-records store parameters)
+       (build-index store parameters)))</pre></td></tr><tr><td class="docs"><p>Apply changes to a partition root, returning an updated root node data.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- update-partition
+  [store parameters part changes]
+  (when-let [parts (seq (part/apply-patch! store (merge part parameters) changes))]
+    (build-index store parameters parts)))</pre></td></tr><tr><td class="docs"><p>Apply changes to an index subtree, returning a ...</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- update-index
+  ; TODO: document return type
+  [store parameters index changes]
+  ; TODO: implement
+  (throw (UnsupportedOperationException. &quot;NYI: update data index tree&quot;)))</pre></td></tr><tr><td class="docs"><p>Apply a set of changes to the index tree rooted in the given node. The
+  changes should be a sequence of record ids to either data maps or patch
+  tombstones. Parameters may include <code>:merkle-db.partition/limit</code> and
+  <code>:merkle-db.data/families</code>. Returns an updated persisted root node if any
+  records remain in the tree.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn update-tree
+  [store parameters root changes]
+  (if (nil? root)
+    ; Empty tree.
+    (update-empty store parameters changes)
+    ; Check root node type.
+    (condp = (get-in root [::node/data :data/type])
+      part/data-type
+        (update-partition store parameters root changes)
+      data-type
+        (update-index store parameters root changes)
+      (throw (ex-info (str &quot;Unsupported index-tree node type: &quot;
+                           (pr-str (:data/type (::node/data root))))
+                      {:data/type (:data/type (::node/data root))})))))</pre></td></tr><tr><td class="docs"><h2>Deletion Functions</h2>
+</td><td class="codes"></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.key" name="merkle-db.key"><h1 class="project-name">merkle-db.key</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Record keys are immutable byte sequences which uniquely identify a record
   within a table. Keys are stored in sorted order by comparing them
   lexicographically.</p>
 
@@ -3633,34 +3843,24 @@ in the partition.</p>
   with the lower byte value ranking first. If the prefix of the longer key
   matches all the bytes in the shorter key, the shorter key ranks first.</p>
 </td><td class="codes"><pre class="brush: clojure">(ns merkle-db.key
-  (:refer-clojure :exclude [bytes? compare min max])
+  (:refer-clojure :exclude [min max])
   (:require
-    [clojure.future :refer [any?]]
+    [clojure.future :refer [any? bytes?]]
     [clojure.spec :as s])
   (:import
-    blocks.data.PersistentBytes
+    clojure.lang.Murmur3
     (java.nio.charset
       Charset
       StandardCharsets)
-    java.time.Instant))</pre></td></tr><tr><td class="docs"><p>Lexicoders can be specified either as a simple type keyword or a vector of
+    java.time.Instant
+    java.util.Arrays
+    javax.xml.bind.DatatypeConverter))</pre></td></tr><tr><td class="docs"><h2>Specs</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Lexicoders can be specified either as a simple type keyword or a vector of
 a type keyword and some parameters.</p>
 </td><td class="codes"><pre class="brush: clojure">(s/def ::lexicoder
-  ; TODO: multi-spec?
   (s/or :simple keyword?
         :params (s/and vector? (s/cat :type keyword?
-                                      :args (s/* any?)))))</pre></td></tr><tr><td class="docs"><h2>Key Construction</h2>
-</td><td class="codes"></td></tr><tr><td class="docs"><p>Construct a new <code>PersistentBytes</code> value containing the given byte data,
-  which should either be a byte array or a sequence of byte values.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn create
-  [data]
-  (PersistentBytes/wrap (byte-array data)))</pre></td></tr><tr><td class="docs"><p>Return a copy of the raw bytes inside a key.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn get-bytes
-  ^bytes
-  [key]
-  (.toByteArray ^PersistentBytes key))</pre></td></tr><tr><td class="docs"><p>Predicate which returns true if <code>x</code> is a <code>PersistentBytes</code> value.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn bytes?
-  [x]
-  (instance? PersistentBytes x))</pre></td></tr><tr><td class="docs"><h2>Comparators</h2>
+                                      :args (s/* any?)))))</pre></td></tr><tr><td class="docs"><h2>Comparators</h2>
 </td><td class="codes"></td></tr><tr><td class="docs"><p>Lexicographically compares two byte-array keys for order. Returns a negative
   number, zero, or a positive number if <code>a</code> is less than, equal to, or greater
   than <code>b</code>, respectively.</p>
@@ -3671,7 +3871,7 @@ a type keyword and some parameters.</p>
 
 <p>  If the keys differ in length, and all the bytes in the shorter key match the
   longer key, the shorter key ranks first.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn compare
+</td><td class="codes"><pre class="brush: clojure">(defn- compare-bytes
   [a b]
   (let [prefix-len (clojure.core/min (count a) (count b))]
     (loop [i 0]
@@ -3703,7 +3903,74 @@ a type keyword and some parameters.</p>
   ([x y]
    (if (neg? (compare y x)) x y))
   ([x y &amp; more]
-   (reduce max x (cons y more))))</pre></td></tr><tr><td class="docs"><h2>Lexicoder Protocol</h2>
+   (reduce max x (cons y more))))</pre></td></tr><tr><td class="docs"><h2>Key Construction</h2>
+</td><td class="codes"></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(deftype Key
+  [^bytes data
+   _meta
+   ^:unsynchronized-mutable _hash]
+  Object
+  (toString
+    [this]
+    (str &quot;key:&quot; (DatatypeConverter/printHexBinary data)))
+  (equals
+    [this that]
+    (boolean
+      (or (identical? this that)
+          (and (identical? (class this) (class that))
+               (= (count data) (count that))
+               (zero? (compare-bytes data (.data ^Key that)))))))
+  clojure.lang.IHashEq
+  (hashCode
+    [this]
+    (let [hc _hash]
+      (if (zero? hc)
+        (let [hc (int (bit-xor (hash :merkle-db/key)
+                               (Murmur3/hashOrdered (seq data))))]
+          (set! _hash hc)
+          hc)
+        hc)))
+  (hasheq
+    [this]
+    (.hashCode this))
+  clojure.lang.IObj
+  (meta
+    [this]
+    _meta)
+  (withMeta
+    [this meta-map]
+    (Key. data meta-map _hash))
+  clojure.lang.Counted
+  (count
+    [this]
+    (count data))
+  Comparable
+  (compareTo
+    [this that]
+    (when-not (instance? Key that)
+      (throw (RuntimeException. &quot;Keys can only be compared to keys&quot;)))
+    (compare-bytes data (.data ^Key that))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(alter-meta! #'-&gt;Key assoc :private true)</pre></td></tr><tr><td class="docs"><p>Construct a new key value containing the given byte data, which should
+  either be a byte array or a sequence of byte values.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn create
+  [data]
+  (-&gt;Key (byte-array data) nil 0))</pre></td></tr><tr><td class="docs"><p>Return a copy of the raw bytes inside a key.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn get-bytes
+  ^bytes
+  [^Key k]
+  (Arrays/copyOf ^bytes (.data k) (count k)))</pre></td></tr><tr><td class="docs"><p>Predicate which returns true if <code>x</code> is a key value.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn key?
+  [x]
+  (instance? Key x))</pre></td></tr><tr><td class="docs"><p>Return a hexadecimal string encoding the bytes in the key.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn hex
+  [^Key k]
+  (DatatypeConverter/printHexBinary (.data k)))</pre></td></tr><tr><td class="docs"><p>Parse a key from a hexadecimal string.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn parse
+  [s]
+  (create (DatatypeConverter/parseHexBinary s)))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defmethod print-method Key
+  [x w]
+  (print-method (tagged-literal 'merkle-db/key (hex x)) w))</pre></td></tr><tr><td class="docs"><h2>Lexicoder Protocol</h2>
 </td><td class="codes"></td></tr><tr><td class="docs"><p>Simple codec for transforming values into keys that have specific ordering
   semantics.</p>
 </td><td class="codes"><pre class="brush: clojure">(defprotocol Lexicoder
@@ -3718,12 +3985,12 @@ a type keyword and some parameters.</p>
     &quot;Decode a key value from a section of a byte array.&quot;))</pre></td></tr><tr><td class="docs"><p>Encodes the given value and returns persistent key bytes.</p>
 </td><td class="codes"><pre class="brush: clojure">(defn encode
   [coder value]
-  (PersistentBytes/wrap (encode* coder value)))</pre></td></tr><tr><td class="docs"><p>Decodes the given key byte data and returns a value.</p>
+  (create (encode* coder value)))</pre></td></tr><tr><td class="docs"><p>Decodes the given key byte data and returns a value.</p>
 </td><td class="codes"><pre class="brush: clojure">(defn decode
   ([coder data]
    (decode coder data 0 (count data)))
   ([coder data offset len]
-   (let [byte-data (if (bytes? data)
+   (let [byte-data (if (key? data)
                      (get-bytes data)
                      (byte-array data))]
      (decode* coder byte-data offset len))))</pre></td></tr><tr><td class="docs"><p>Construct a lexicoder from a configuration data structure. The structure
@@ -3743,12 +4010,12 @@ a type keyword and some parameters.</p>
 </td><td class="codes"></td></tr><tr><td class="docs"><p>Returns the parameters given to a lexicoder spec. For simple keyword, this
   function returns nil; for the vector form, it returns a sequence of the
   values following the lexicoder type key.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn ^:no-doc config-params
+</td><td class="codes"><pre class="brush: clojure">(defn- config-params
   [config]
   (when (vector? config)
     (next config)))</pre></td></tr><tr><td class="docs"><p>Escape the given byte sequence, replacing any 0x00 bytes with 0x0101 and any
   0x01 bytes with 0x0102.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn ^:no-doc escape-bytes
+</td><td class="codes"><pre class="brush: clojure">(defn- escape-bytes
   ^bytes
   [^bytes data]
   (let [escape-count (count (filter #(or (== 0x00 %) (== 0x01 %)) data))]
@@ -3773,7 +4040,7 @@ a type keyword and some parameters.</p>
                 (do (aset-byte edata o b)
                     (recur (inc i) (inc o)))))))))))</pre></td></tr><tr><td class="docs"><p>Unescape the given byte sequence, replacing escaped 0x00 and 0x01 bytes with
   their original values.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn ^:no-doc unescape-bytes
+</td><td class="codes"><pre class="brush: clojure">(defn- unescape-bytes
   ^bytes
   [^bytes edata]
   (let [escape-count (loop [c 0
@@ -3797,7 +4064,7 @@ a type keyword and some parameters.</p>
                     (recur (inc (inc i)) (inc o)))
                 (do (aset-byte data o b)
                     (recur (inc i) (inc o)))))))))))</pre></td></tr><tr><td class="docs"><p>Join a sequence of byte arrays together with 0x00 bytes.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn ^:no-doc join-bytes
+</td><td class="codes"><pre class="brush: clojure">(defn- join-bytes
   [byte-arrays]
   (if (empty? byte-arrays)
     (byte-array 0)
@@ -3813,7 +4080,7 @@ a type keyword and some parameters.</p>
                   (recur (rest elements) (long (inc idx'))))
               (recur (rest elements) (long idx'))))
           data)))))</pre></td></tr><tr><td class="docs"><p>Split a byte array into sections separated by 0x00 bytes.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn ^:no-doc split-bytes
+</td><td class="codes"><pre class="brush: clojure">(defn- split-bytes
   [^bytes data offset length]
   (if (empty? data)
     []
@@ -3858,16 +4125,21 @@ byte arrays directly into key bytes.</p>
 
   (encode*
     [_ value]
-    (when (empty? value)
+    (when-not (bytes? value)
       (throw (IllegalArgumentException.
-               &quot;Cannot encode empty byte arrays&quot;)))
+               (format &quot;BytesLexicoder cannot encode non-byte-array value: %s (%s)&quot;
+                       (pr-str value)
+                       (.getName (class value))))))
+    (when (zero? (count value))
+      (throw (IllegalArgumentException.
+               &quot;BytesLexicoder cannot encode empty byte arrays&quot;)))
     value)
 
   (decode*
     [_ data offset len]
     (when (or (empty? data) (zero? len))
       (throw (IllegalArgumentException.
-               &quot;Cannot decode empty byte arrays&quot;)))
+               &quot;BytesLexicoder cannot decode empty byte arrays&quot;)))
     (if (and (zero? offset) (= len (count data)))
       data
       (let [data' (byte-array len)]
@@ -3910,16 +4182,21 @@ the default of UTF-8, if none is provided.</p>
 
   (encode*
     [this value]
+    (when-not (string? value)
+      (throw (IllegalArgumentException.
+               (format &quot;StringLexicoder cannot encode non-string value: %s (%s)&quot;
+                       (pr-str value)
+                       (.getName (class value))))))
     (when (empty? value)
       (throw (IllegalArgumentException.
-               &quot;Cannot encode empty strings&quot;)))
+               &quot;StringLexicoder cannot encode empty strings&quot;)))
     (.getBytes (str value) ^Charset (.charset this)))
 
   (decode*
     [this data offset len]
     (when (empty? data)
       (throw (IllegalArgumentException.
-               &quot;Cannot decode empty byte arrays&quot;)))
+               &quot;StringLexicoder cannot decode empty byte arrays&quot;)))
     (String. ^bytes data (long offset) (long len) ^Charset (.charset this))))</pre></td></tr><tr><td class="docs"><h2>Long Lexicoder</h2>
 </td><td class="codes"></td></tr><tr><td class="docs"><p>The long lexicoder converts integer values into key bytes.</p>
 </td><td class="codes"><pre class="brush: clojure">(deftype LongLexicoder [])</pre></td></tr><tr><td class="docs"><p>Lexicoder for long integer values.</p>
@@ -3950,6 +4227,11 @@ the default of UTF-8, if none is provided.</p>
 
   (encode*
     [_ value]
+    (when-not (integer? value)
+      (throw (IllegalArgumentException.
+               (format &quot;LongLexicoder cannot encode non-integer value: %s (%s)&quot;
+                       (pr-str value)
+                       (.getName (class value))))))
     ; Flip sign bit so that positive values sort after negative values.
     (let [lexed (flip-long-sign (long value))
           data (byte-array 8)]
@@ -3998,6 +4280,11 @@ the default of UTF-8, if none is provided.</p>
 
   (encode*
     [_ value]
+    (when-not (float? value)
+      (throw (IllegalArgumentException.
+               (format &quot;DoubleLexicoder cannot encode non-floating-point value: %s (%s)&quot;
+                       (pr-str value)
+                       (.getName (class value))))))
     (encode*
       long-lexicoder
       (let [bits (Double/doubleToRawLongBits
@@ -4037,8 +4324,9 @@ the default of UTF-8, if none is provided.</p>
     [_ value]
     (when-not (instance? Instant value)
       (throw (IllegalArgumentException.
-               (str &quot;Input to instant lexicoder must be an Instant, got: &quot;
-                    (pr-str value)))))
+               (format &quot;InstantLexicoder cannot encode non-instant value: %s (%s)&quot;
+                       (pr-str value)
+                       (.getName (class value))))))
     (encode* long-lexicoder (.toEpochMilli ^Instant value)))
 
   (decode*
@@ -4073,6 +4361,11 @@ such that the sequence as whole is lexically ordered.</p>
 
   (encode*
     [this value]
+    (when-not (sequential? value)
+      (throw (IllegalArgumentException.
+               (format &quot;SequenceLexicoder cannot encode non-sequential value: %s (%s)&quot;
+                       (pr-str value)
+                       (.getName (class value))))))
     (-&gt;&gt; value
          (map #(escape-bytes (encode* (.element-coder this) %)))
          (join-bytes)))
@@ -4097,8 +4390,9 @@ values <code>y1</code> and <code>y2</code> have. Alternately, if <code>x1</code>
 </td><td class="codes"><pre class="brush: clojure">(ns-unmap *ns* '-&gt;TupleLexicoder)</pre></td></tr><tr><td class="docs"><p>Configures a new tuple lexicoder by wrapping a collection of lexicoder
 configurations:</p>
 
-<p>   ; Composite ordering by name then numeric version.
-   [:tuple :string :long]</p>
+<pre><code>; Composite ordering by name then numeric version.
+[:tuple :string :long]
+</code></pre>
 </td><td class="codes"><pre class="brush: clojure">(defmethod lexicoder :tuple
   [config]
   (when-not (config-params config)
@@ -4116,9 +4410,14 @@ configurations:</p>
 
   (encode*
     [this value]
+    (when-not (sequential? value)
+      (throw (IllegalArgumentException.
+               (format &quot;TupleLexicoder cannot encode non-sequential value: %s (%s)&quot;
+                       (pr-str value)
+                       (.getName (class value))))))
     (when (not= (count (.coders this)) (count value))
       (throw (IllegalArgumentException.
-               (format &quot;Cannot encode tuple which does not match lexicoder count %d: %s&quot;
+               (format &quot;TupleLexicoder cannot encode tuple which does not match lexicoder count %d: %s&quot;
                        (count (.coders this)) (pr-str value)))))
     (join-bytes (mapv #(escape-bytes (encode* %1 %2)) (.coders this) value)))
 
@@ -4179,129 +4478,960 @@ configuration:</p>
     (let [encoded (byte-array len)]
       (dotimes [i (alength encoded)]
         (aset-byte encoded i (flip-byte (aget ^bytes data (+ offset i)))))
-      (decode* (.coder this) encoded 0 len))))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.bloom" name="merkle-db.bloom"><h1 class="project-name">merkle-db.bloom</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Bloom filters provide a probablistic way to test for membership in a set
-  using a fixed amount of space. This is useful for reducing work when the test
-  definitively rules out the existence of a record.</p>
-</td><td class="codes"><pre class="brush: clojure">(ns merkle-db.bloom
-  (:refer-clojure :exclude [merge])
+      (decode* (.coder this) encoded 0 len))))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.partition" name="merkle-db.partition"><h1 class="project-name">merkle-db.partition</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Partitions contain non-overlapping ranges of the records witin a table.
+  Partition nodes contain metadata about the contained records and links to the
+  tablets where the data for each field family is stored.</p>
+</td><td class="codes"><pre class="brush: clojure">(ns merkle-db.partition
   (:require
-    [bigml.sketchy.bits :as bits]
-    [bigml.sketchy.bloom :as bloom]
-    [bigml.sketchy.murmur :as murmur]))</pre></td></tr><tr><td class="docs"><p>The filter type wraps the bigml.sketchy bloom-filter implementation and
-provides some extra features:</p>
+    [clojure.future :refer [pos-int?]]
+    [clojure.spec :as s]
+    (merkledag
+      [core :as mdag]
+      [link :as link]
+      [node :as node])
+    (merkle-db
+      [bloom :as bloom]
+      [data :as data]
+      [key :as key]
+      [patch :as patch]
+      [tablet :as tablet])))</pre></td></tr><tr><td class="docs"><h2>Specs</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Value of <code>:data/type</code> that indicates a partition node.</p>
+</td><td class="codes"><pre class="brush: clojure">(def ^:const data-type
+  :merkle-db/partition)</pre></td></tr><tr><td class="docs"><p>The default number of records to build partitions up to.</p>
+</td><td class="codes"><pre class="brush: clojure">(def default-limit
+  100000)</pre></td></tr><tr><td class="docs"><p>Maximum number of records to allow in each partition.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::limit pos-int?)</pre></td></tr><tr><td class="docs"><p>Bloom filter providing probable membership testing for record keys contained
+in the partition.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::membership bloom/filter?)</pre></td></tr><tr><td class="docs"><p>First key present in the partition.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::first-key key/key?)</pre></td></tr><tr><td class="docs"><p>Last key present in the partition.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::last-key key/key?)</pre></td></tr><tr><td class="docs"><p>Map of family keys (and <code>:base</code>) to links to the corresponding tablets.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::tablets (s/map-of keyword? link/merkle-link?))</pre></td></tr><tr><td class="docs"><p>Partition node.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def :merkle-db/partition
+  (s/and
+    (s/keys :req [::data/count
+                  ::data/families
+                  ::limit
+                  ::membership
+                  ::first-key
+                  ::last-key
+                  ::tablets])
+    #(= data-type (:data/type %))))</pre></td></tr><tr><td class="docs"><h2>Utilities</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Returns a lazy sequence of <code>n</code> lists containing the elements of <code>coll</code> in
+  order, where each list is approximately the same size.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- partition-approx
+  [n coll]
+  (-&gt;&gt;
+    [nil
+     (-&gt;&gt; (range (inc n))
+          (map #(int (* (/ % n) (count coll))))
+          (partition 2 1))
+     coll]
+    (iterate
+      (fn [[_ [[start end :as split] &amp; splits] xs]]
+        (when-let [length (and split (- end start))]
+          [(seq (take length xs))
+           splits
+           (drop length xs)])))
+    (drop 1)
+    (take-while first)
+    (map first)))</pre></td></tr><tr><td class="docs"><p>Store the given tablet data and return the family key and updated id.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- store-tablet!
+  [store family-key tablet]
+  (let [node (mdag/store-node!
+               store
+               nil
+               (cond-&gt; tablet
+                 (not= family-key :base)
+                 (tablet/prune-records)))]
+    [family-key
+     (mdag/link
+       (if (namespace family-key)
+         (str (namespace family-key) &quot;:&quot; (name family-key))
+         (name family-key))
+       node)]))</pre></td></tr><tr><td class="docs"><p>Take a map of tablet links and a split key and returns a vector of two
+  tablet maps, each containing the left and right tablet splits, respectively.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- divide-tablets
+  [store tablets split-key]
+  (reduce-kv
+    (fn divide
+      [[left right] family-key tablet-link]
+      (let [tablet (mdag/get-data store tablet-link)]
+        (cond
+          ; All tablet data is in the left split.
+          (key/before? (tablet/last-key tablet) split-key)
+          [(assoc left family-key tablet-link) right]
+          ; All tablet data is in the right split.
+          (key/after? (tablet/first-key tablet) split-key)
+          [left (assoc right family-key tablet-link)]
+          ; Split tablet into two pieces.
+          :else
+          (let [[ltab rtab] (tablet/split tablet split-key)]
+            [(conj left (store-tablet! store family-key ltab))
+             (conj right (store-tablet! store family-key rtab))]))))
+    [{} {}]
+    tablets))</pre></td></tr><tr><td class="docs"><p>Split the partition into two partitions at the given key. All records less
+  than the split key will be contained in the first partition, all others in
+  the second.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn split
+  [store part split-key]
+  (when-not (and (key/after? split-key (::first-key part))
+                 (key/before? split-key (::last-key part)))
+    (throw (ex-info (format &quot;Cannot split partition with key %s which falls outside the contained range [%s, %s]&quot;
+                            split-key (::first-key part) (::last-key part))
+                    {:split-key split-key
+                     :first-key (::first-key part)
+                     :last-key (::last-key part)})))
+  (let [defaults (select-keys part [:data/type ::data/families ::limit])]
+    ; Construct new partitions from left and right tablet maps.
+    (map
+      (fn make-part
+        [tablets]
+        (let [base-keys (tablet/keys (mdag/get-data store (:base tablets)))]
+          (assoc defaults
+                 ::data/count (count base-keys)
+                 ::membership (into (bloom/create (::limit part)) base-keys)
+                 ::first-key (first base-keys)
+                 ::last-key (last base-keys)
+                 ::tablets tablets)))
+      (divide-tablets store (::tablets part) split-key))))</pre></td></tr><tr><td class="docs"><p>Join two partitions into a single partition. The partition key ranges must
+  not overlap.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn join
+  [store left right]
+  ; TODO: implement
+  (throw (UnsupportedOperationException. &quot;NYI: join partitions&quot;)))</pre></td></tr><tr><td class="docs"><h2>Read Functions</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Selects a list of tablet names to query over, given a mapping of tablet
+  names to sets of the contained fields and the desired set of field data. If
+  selected-fields is empty, returns all tablets.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- choose-tablets
+  [tablet-fields selected]
+  (if (seq selected)
+    ; Use field selection to filter tablets to load.
+    (-&gt; (dissoc tablet-fields :base)
+        (-&gt;&gt; (keep #(when (some selected (val %)) (key %))))
+        (set)
+        (as-&gt; chosen
+          (if (seq (apply disj selected (mapcat tablet-fields chosen)))
+            (conj chosen :base)
+            chosen)))
+    ; No selection provided, return all field data.
+    (-&gt; tablet-fields keys set (conj :base))))</pre></td></tr><tr><td class="docs"><p>Combines lazy sequences of partial records into a single lazy sequence
+  containing key/data tuples.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- record-seq
+  [field-seqs]
+  (lazy-seq
+    (when-let [next-key (some-&gt;&gt; (seq (keep ffirst field-seqs))
+                                 (apply key/min))]
+      (let [has-next? #(= next-key (ffirst %))
+            next-data (-&gt;&gt; field-seqs
+                           (filter has-next?)
+                           (map (comp second first))
+                           (apply merge))
+            next-seqs (keep #(if (has-next? %) (next %) (seq %))
+                            field-seqs)]
+        (cons [next-key next-data] (record-seq next-seqs))))))</pre></td></tr><tr><td class="docs"><p>Performs a read across the tablets in the partition by selecting based on
+  the desired fields. The reader function is called on each selected tablet
+  along with any extra args, producing a collection of lazy record sequences
+  which are combined into a single sequence of key/record pairs.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- read-tablets
+  [store part fields read-fn &amp; args]
+  ; OPTIMIZE: use transducer instead of intermediate sequences.
+  (-&gt;&gt; (set fields)
+       (choose-tablets (::data/families part))
+       (map (::tablets part))
+       (map (partial mdag/get-data store))
+       (map #(apply read-fn % args))
+       (record-seq)
+       (map (juxt first #(select-keys (second %) fields)))))</pre></td></tr><tr><td class="docs"><p>Read a lazy sequence of key/map tuples which contain the requested field data
+  for every record in the partition.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn read-all
+  [store part fields]
+  (read-tablets store part fields tablet/read-all))</pre></td></tr><tr><td class="docs"><p>Read a lazy sequence of key/map tuples which contain the requested field
+  data for the records whose keys are in the given collection.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn read-batch
+  [store part fields record-keys]
+  ; OPTIMIZE: use the membership filter to weed out keys which are definitely not present.
+  (read-tablets store part fields tablet/read-batch record-keys))</pre></td></tr><tr><td class="docs"><p>Read a lazy sequence of key/map tuples which contain the field data for the
+  records whose keys lie in the given range, inclusive. A nil boundary includes
+  all records in that range direction.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn read-range
+  [store part fields start-key end-key]
+  (read-tablets store part fields tablet/read-range start-key end-key))</pre></td></tr><tr><td class="docs"><h2>Update Functions</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Apply inserts and tombstone deletions to the data contained in the given
+  tablet. Returns an updated map with a link to the new tablet.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- update-tablet!
+  [store deletions tablets [family-key additions]]
+  (-&gt;
+    (if-let [tablet-link (get tablets family-key)]
+      ; Load existing tablet to update it.
+      (-&gt;
+        (mdag/get-data store tablet-link)
+        (or (throw (ex-info (format &quot;Couldn't find tablet %s in backing store&quot;
+                                    family-key)
+                            {:family family-key
+                             :link tablet-link})))
+        (tablet/update-records additions deletions))
+      ; Create new tablet and store it.
+      (tablet/from-records additions))
+    (as-&gt; tablet'
+      (if (seq (tablet/read-all tablet'))
+        (conj tablets (store-tablet! store family-key tablet'))
+        (dissoc tablets family-key)))))</pre></td></tr><tr><td class="docs"><p>Constructs new partitions from the given map of record data. The records
+  will be split into tablets matching the given families, if provided. Returns
+  a sequence of persisted partitions.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn from-records
+  [store parameters records]
+  (let [records (sort-by first (patch/remove-tombstones records))
+        limit (or (::limit parameters) default-limit)
+        families (or (::data/families parameters) {})
+        part-count (inc (int (/ (count records) limit)))]
+    (into
+      []
+      (map
+        (fn make-partition
+          [partition-records]
+          (-&gt;&gt;
+            {:data/type data-type
+             ::data/families families
+             ::data/count (count partition-records)
+             ::limit limit
+             ::membership (into (bloom/create limit) (map first partition-records))
+             ::first-key (first (first partition-records))
+             ::last-key (first (last partition-records))
+             ::tablets (-&gt;&gt;
+                         partition-records
+                         (data/split-records families)
+                         (map (juxt key #(tablet/from-records (val %))))
+                         (map (partial apply store-tablet! store))
+                         (into {}))}
+            (mdag/store-node! store nil)
+            (::node/data))))
+      (partition-approx part-count records))))</pre></td></tr><tr><td class="docs"><p>Performs an update across the tablets in the partition to merge in the given
+  patch changes. Returns a sequence of zero or more partitions.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn apply-patch!
+  [store part changes]
+  (let [limit (or (::limit part) default-limit)
+        additions (remove (comp patch/tombstone? second) changes)
+        deletions (set (map first (filter (comp patch/tombstone? second)
+                                          changes)))
+        family-updates (data/split-records (::data/families part) additions)
+        tablets (reduce (partial update-tablet! store deletions)
+                        (::tablets part)
+                        family-updates)
+        added-keys (map first additions)
+        record-count (count (tablet/read-all (mdag/get-data store (:base tablets))))
+        part-count (inc (int (/ record-count limit)))]
+    (when (pos? record-count)
+      (if (&lt; 1 part-count)
+        ; Records still fit into one partition
+        [(assoc part
+                ::data/count record-count
+                ::tablets tablets
+                ::membership (into (::membership part) added-keys)
+                ::first-key (apply key/min (::first-key part) added-keys)
+                ::last-key (apply key/max (::last-key part) added-keys))]
+        ; Partition must be split into multiple.
+        ; OPTIMIZE: split overflows without storing invalid tablets
+        (-&gt;&gt;
+          (read-all store part nil)
+          (from-records store part))))))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.patch" name="merkle-db.patch"><h1 class="project-name">merkle-db.patch</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Patches are applied on top of tables in order to efficiently store changes
+  while re-using old indexed data.</p>
+</td><td class="codes"><pre class="brush: clojure">(ns merkle-db.patch
+  (:require
+    [clojure.future :refer [pos-int?]]
+    [clojure.spec :as s]
+    (merkle-db
+      [key :as key])))</pre></td></tr><tr><td class="docs"><h2>Tombstones</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Value which marks the deletion of a record.</p>
+</td><td class="codes"><pre class="brush: clojure">(def tombstone
+  ::tombstone)</pre></td></tr><tr><td class="docs"><p>Returns true if the value is a tombstone.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn tombstone?
+  [x]
+  (identical? ::tombstone x))</pre></td></tr><tr><td class="docs"><h2>Specs</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Value of <code>:data/type</code> that indicates a patch tablet node.</p>
+</td><td class="codes"><pre class="brush: clojure">(def ^:const data-type
+  :merkle-db/patch)</pre></td></tr><tr><td class="docs"><p>Maximum number of changes to allow in a patch tablet.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::limit pos-int?)</pre></td></tr><tr><td class="docs"><p>Records are stored as a key/data-or-tombstone pair.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::change-entry
+  (s/tuple key/key? (s/or :record map? :tombstone tombstone?)))</pre></td></tr><tr><td class="docs"><p>Sorted vector of record entries.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::changes
+  (s/coll-of ::change-entry :kind vector?))</pre></td></tr><tr><td class="docs"><p>Patch tablet node data.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::node-data
+  (s/and
+    (s/keys :req [::changes])
+    #(= data-type (:data/type %))))</pre></td></tr><tr><td class="docs"><h2>Construction</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Construct a patch tablet node data from a map of change data.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn from-changes
+  [changes]
+  {:data/type data-type
+   ::changes (vec changes)})</pre></td></tr><tr><td class="docs"><h2>Utility Functions</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Returns a lazy sequence of record entries with tombstoned records removed.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn remove-tombstones
+  [rs]
+  (remove (comp tombstone? second) rs))</pre></td></tr><tr><td class="docs"><p>Takes a full set of patch data and returns a filtered sequence based on the
+  given options.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn filter-patch
+  [patch opts]
+  (when (seq patch)
+    (cond-&gt;&gt; patch
+      (:start-key opts)
+        (drop-while #(key/before? (first %) (:start-key opts)))
+      (:end-key opts)
+        (take-while #(not (key/after? (first %) (:end-key opts))))
+      (:fields opts)
+        (map (fn [[k r]]
+               [k (if (map? r) (select-keys r (:fields opts)) r)])))))</pre></td></tr><tr><td class="docs"><p>Combines an ordered sequence of patch data with a lazy sequence of record
+  keys and data. Any records present in the patch will appear in the output
+  sequence, replacing any equivalent keys from the sequence. The result may
+  contain tombstones.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn patch-seq
+  [patch records]
+  (lazy-seq
+    (cond
+      ; No more patch data, return records directly.
+      (empty? patch)
+        records
+      ; No more records, return remaining patch data.
+      (empty? records)
+        patch
+      ; Next key is in both patch and records.
+      (= (ffirst patch) (ffirst records))
+        (cons (first patch) (patch-seq (next patch) (next records)))
+      ; Next key is in patch, not in records.
+      (key/before? (ffirst patch) (ffirst records))
+        (cons (first patch) (patch-seq (next patch) records))
+      ; Next key is in records, not in patch.
+      :else
+        (cons (first records) (patch-seq patch (next records))))))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.table" name="merkle-db.table"><h1 class="project-name">merkle-db.table</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Tables are named top-level containers of records. Generally, a single table
+  corresponds to a certain 'kind' of data. Tables also contain configuration
+  determining how keys are encoded and records are stored.</p>
+</td><td class="codes"><pre class="brush: clojure">(ns merkle-db.table
+  (:require
+    [clojure.future :refer [nat-int? pos-int?]]
+    [clojure.spec :as s]
+    [clojure.string :as str]
+    (merkledag
+      [core :as mdag]
+      [link :as link]
+      [node :as node])
+    (merkle-db
+      [data :as data]
+      [index :as index]
+      [key :as key]
+      [partition :as part]
+      [patch :as patch]))
+  (:import
+    java.time.Instant))</pre></td></tr><tr><td class="docs"><h2>Data Specifications</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Value of <code>:data/type</code> that indicates a table root node.</p>
+</td><td class="codes"><pre class="brush: clojure">(def ^:const data-type
+  :merkle-db/table)</pre></td></tr><tr><td class="docs"><p>Set of keys which may appear in the table info map.</p>
+</td><td class="codes"><pre class="brush: clojure">(def ^:no-doc info-keys
+  #{::node/id ::name ::data/size})</pre></td></tr><tr><td class="docs"><p>Table names are strings which conform to some restrictions.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::name
+  (s/and string?
+         #(not (str/includes? % &quot;/&quot;))
+         #(&lt;= 1 (count %) 127)))</pre></td></tr><tr><td class="docs"><p>Table data is a link to the root of the data tree.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::data link/merkle-link?)</pre></td></tr><tr><td class="docs"><p>Tables may have a patch tablet containing recent unmerged data.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::patch link/merkle-link?)</pre></td></tr><tr><td class="docs"><p>Table root node.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::node-data
+  (s/and
+    (s/keys :req [::data/count
+                  ::index/branching-factor
+                  ::part/limit]
+            :opt [::data
+                  ::patch
+                  ::data/families
+                  ::key/lexicoder
+                  :time/updated-at])
+    #(= data-type (:data/type %))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(s/def ::table-info
+  (s/keys :req [::node/id
+                ::name
+                ::version
+                ::committed-at]))</pre></td></tr><tr><td class="docs"><h2>Table API</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Protocol for an immutable table of record data.</p>
+</td><td class="codes"><pre class="brush: clojure">(defprotocol ITable
+  ;; Records
+  (scan
+    [table]
+    [table opts]
+    &quot;Scan the table, returning data from records which match the given options.
+    Returns a lazy sequence of vectors which each hold a record key and a map
+    of the record data.
+    If start and end keys or indices are given, only records within the
+    bounds will be returned (inclusive). A nil start or end implies the beginning
+    or end of the data, respectively.
+    Options may include:
+    - `:fields`
+      Only return data for the selected set of fields. If not provided, all
+      fields are returned.
+    - `:start-key`
+      Return records with keys equal to or greater than the marker.
+    - `:end-key`
+      Return records with keys equal to or less than the marker.
+    - `:offset`
+      Skip this many records in the output.
+    - `:limit`
+      Return at most this many records.&quot;)
+  (get-records
+    [table id-keys]
+    [table id-keys opts]
+    &quot;Read a set of records from the database, returning data for each present
+    record.
+    Options may include:
+    - `:fields`
+      Only return data for the selected set of fields. If not provided, all
+      fields are returned.&quot;)
+  (insert
+    [table records]
+    [table records opts]
+    &quot;Insert some record data into the database, represented by a collection
+    of pairs of record key values and field maps.
+    Options may include:
+    - `:merge-field`
+      A function which will be called with `(f field-key old-val new-val)`, and
+      should return the new value to use for that field. By default, `new-val`
+      is used directly.
+    - `:merge-record`
+      A function which will be called with `(f record-key old-data new-data)`,
+      and should return the data map to use for the record. By default, this
+      merges the data maps and removes nil-valued fields.&quot;)
+  (delete
+    [table id-keys]
+    &quot;Remove some records from the table, identified by a collection of id keys.
+    Returns an updated table.&quot;)
+  (flush!
+    [table]
+    [table apply-patches?]
+    &quot;Ensure that all local state has been persisted to the storage backend and
+    return an updated persisted table.
+    If `apply-patches?` is true, the current patch data will be merged into the
+    main data tree and the returned table will have no patch link.&quot;)
+  ;; Partitions
+  (list-partitions
+    [table]
+    &quot;List the partitions which comprise the table. Returns a sequence of
+    partition nodes.&quot;)
+  (read-partition
+    [table partition-id opts]
+    &quot;Read all the records in the identified partition.&quot;))</pre></td></tr><tr><td class="docs"><h2>Table Type</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Tables are implementad as a custom type so they can behave similarly to
+natural Clojure values.</p>
 
 <ul>
-<li>Better printing than the basic map representation.</li>
-<li>Collection semantics supporting <code>conj</code>, <code>into</code>, <code>empty</code>, <code>merge</code>, etc.</li>
-<li>Filters can be invoked on elements to test membership, similar to regular
-set types.</li>
+<li><code>store</code> reference to the merkledag node store backing the database.</li>
+<li><code>table-info</code> map of higher-level table properties such as table-name,
+node-id, and recursive size.</li>
+<li><code>root-data</code> map of data stored in the table root.</li>
+<li><code>pending</code> sorted map of keys to pending record updates.</li>
+<li><code>dirty</code> flag to indicate whether the table data has been changed since
+the node was loaded.</li>
 </ul>
-</td><td class="codes"><pre class="brush: clojure">(deftype BloomFilter
-  [bins bits k _meta]
-  java.lang.Object
+</td><td class="codes"><pre class="brush: clojure">(deftype Table
+  [store
+   table-info
+   root-data
+   pending
+   dirty
+   _meta]
+  Object
   (toString
     [this]
-    (format &quot;#{2^%d bits, %d hashes}&quot; bits k))
+    (format &quot;table:%s %s&quot;
+            (::name table-info &quot;?&quot;)
+            (hash root-data)))
   (equals
     [this that]
     (boolean
       (or (identical? this that)
           (when (identical? (class this) (class that))
-            (let [that ^BloomFilter that]
-              (= bins (.bins that))
-              (= bits (.bits that))
-              (= k    (.k that)))))))
+            (and (= root-data (.root-data ^Table that))
+                 (= pending (.pending ^Table that)))))))
   (hashCode
     [this]
-    (hash [(class this) bins bits k]))
+    (hash-combine (hash root-data) (hash pending)))
   clojure.lang.IObj
-  (meta [this] _meta)
+  (meta
+    [this]
+    _meta)
   (withMeta
     [this meta-map]
-    (BloomFilter. bins bits k meta-map))
-  clojure.lang.IPersistentCollection
+    (Table. store table-info root-data pending dirty meta-map))
+  clojure.lang.ILookup
+  (valAt
+    [this k]
+    (.valAt this k nil))
+  (valAt
+    [this k not-found]
+    ; TODO: something different with ::data or ::patch?
+    (if (contains? info-keys k)
+      (get table-info k not-found)
+      ; TODO: link-expand value
+      (get root-data k not-found)))
+  clojure.lang.IPersistentMap
   (count
     [this]
-    (throw (RuntimeException.
-             &quot;Bloom filters are not countable&quot;)))
-  (cons
-    [this x]
-    (BloomFilter.
-      (apply bits/set bins (take k (murmur/hash-seq x bits)))
-      bits k _meta))
+    (+ (count root-data) (count table-info)))
   (empty
     [this]
-    (BloomFilter.
-      (bits/create (bit-shift-left 1 bits))
-      bits k _meta))
+    (Table.
+      store
+      (dissoc table-info ::node/id)
+      {::data/count 0}
+      (empty pending)
+      true
+      _meta))
+  (cons
+    [this element]
+    (cond
+      (instance? java.util.Map$Entry element)
+        (let [^java.util.Map$Entry entry element]
+          (.assoc this (.getKey entry) (.getValue entry)))
+      (vector? element)
+        (.assoc this (first element) (second element))
+      :else
+        (loop [result this
+               entries element]
+          (if (seq entries)
+            (let [^java.util.Map$Entry entry (first entries)]
+              (recur (.assoc result (.getKey entry) (.getValue entry))
+                     (rest entries)))
+            result))))
   (equiv
     [this that]
     (.equals this that))
-  clojure.lang.ILookup
-  (valAt
-    [this key]
-    (.valAt this key nil))
-  (valAt
-    [this key not-found]
-    (case key
-      :bins bins
-      :bits bits
-      :k k
-      not-found))
-  clojure.lang.IFn
-  (invoke
-    [this x]
-    (bloom/contains? this x)))</pre></td></tr><tr><td class="docs">
-</td><td class="codes"><pre class="brush: clojure">(alter-meta! #'-&gt;BloomFilter assoc :private true)</pre></td></tr><tr><td class="docs">
-</td><td class="codes"><pre class="brush: clojure">(defmethod print-method BloomFilter
-  [x w]
-  (print-method
-    (tagged-literal 'merkle-db/bloom-filter [(:bits x) (:k x)])
-    w))</pre></td></tr><tr><td class="docs"><p>Constructs a new bloom filter with the given expected population size and
-  desired error (false positive) rate.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn create
-  ([expected-size]
-   (create expected-size 0.01))
-  ([expected-size error-rate]
-   (let [{:keys [bins bits k]} (bloom/create expected-size error-rate)]
-     (-&gt;BloomFilter bins bits k nil))))</pre></td></tr><tr><td class="docs"><p>Predicate which tests whether the value is a BloomFilter.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn filter?
-  [x]
-  (instance? BloomFilter x))</pre></td></tr><tr><td class="docs"><p>Returns true if the two bloom filters can be merged together.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn mergeable?
-  [a b]
-  (and (= (:bits a) (:bits b))
-       (= (:k a) (:k b))))</pre></td></tr><tr><td class="docs"><p>Merge the bloom filters together. Only works if <code>bits</code> and <code>k</code> match.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn merge
-  [a b]
-  (when-not (mergeable? a b)
-    (throw (IllegalArgumentException.
-             (format &quot;Bloom filters with different sizes cannot be merged: %s != %s&quot; a b))))
-  (-&gt;BloomFilter
-    (bits/or (:bins a) (:bins b))
-    (:bits a)
-    (:k a)
-    (clojure.core/merge (meta a) (meta b))))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.data" name="merkle-db.data"><h1 class="project-name">merkle-db.data</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs">
-</td><td class="codes"><pre class="brush: clojure">(ns merkle-db.data
+  (containsKey
+    [this k]
+    (not (identical? this (.valAt this k this))))
+  (entryAt
+    [this k]
+    (let [v (.valAt this k this)]
+      (when-not (identical? this v)
+        (clojure.lang.MapEntry. k v))))
+  (seq
+    [this]
+    (seq (concat (seq table-info) (seq root-data))))
+  (iterator
+    [this]
+    (clojure.lang.RT/iter (seq this)))
+  (assoc
+    [this k v]
+    (when (= k :data/type)
+      (throw (IllegalArgumentException.
+               (str &quot;Cannot change table :data/type from &quot; data-type))))
+    (when (contains? info-keys k)
+      (throw (IllegalArgumentException.
+               (str &quot;Cannot change table info field &quot; k))))
+    (let [root' (assoc root-data k v)]
+      (if (= root-data root')
+        this
+        (Table.
+          store
+          (dissoc table-info ::node/id)
+          root'
+          pending
+          true
+          _meta))))
+  (without
+    [this k]
+    (when (= k :data/type)
+      (throw (IllegalArgumentException.
+               &quot;Cannot remove table :data/type&quot;)))
+    (when (contains? info-keys k)
+      (throw (IllegalArgumentException.
+               (str &quot;Cannot remove table info field &quot; k))))
+    (let [root' (dissoc root-data k)]
+      (if (= root-data root')
+        this
+        (Table.
+          store
+          (dissoc table-info ::node/id)
+          root'
+          pending
+          true
+          _meta)))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(alter-meta! #'-&gt;Table assoc :private true)</pre></td></tr><tr><td class="docs"><p>Build a new ephemeral table value without a backing store.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn ^:no-doc bare-table
+  [store table-name opts]
+  (-&gt;Table
+    store
+    {::name table-name}
+    (merge
+      {::index/branching-factor index/default-branching-factor
+       ::part/limit part/default-limit}
+      (dissoc opts ::data ::patch)
+      {::data/count 0})
+    (sorted-map)
+    true
+    nil))</pre></td></tr><tr><td class="docs"><p>Load a table node from the store.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn ^:no-doc load-table
+  [store table-name target]
+  (let [node (mdag/get-node store target)]
+    (-&gt;Table
+      store
+      {::name table-name
+       ::node/id (::node/id node)
+       ::data/size (node/reachable-size node)}
+      (::node/data node)
+      (sorted-map)
+      false
+      {::node/links (::node/links node)})))</pre></td></tr><tr><td class="docs"><p>Change the backing store and info for a table.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn ^:no-doc set-backing
+  [^Table table store table-name]
+  (-&gt;Table
+    store
+    {::name table-name}
+    (.root-data table)
+    (.pending table)
+    (.dirty table)
+    (._meta table)))</pre></td></tr><tr><td class="docs"><p>Returns a new <code>Table</code> value with the given function applied to update its
+  pending data.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- update-pending
+  [^Table table f &amp; args]
+  (let [patch' (apply f (.pending table) args)]
+    (if (= patch' (.pending table))
+      table
+      (-&gt;Table
+        (.store table)
+        (dissoc (.table-info table) ::node/id)
+        (.root-data table)
+        patch'
+        true
+        (._meta table)))))</pre></td></tr><tr><td class="docs"><p>Return true if the table has local non-persisted modifications.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn dirty?
+  [^Table table]
+  (.dirty table))</pre></td></tr><tr><td class="docs"><h2>Protocol Implementation</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Construct a lexicoder for the keys in a table.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- table-lexicoder
+  [table]
+  (key/lexicoder (::key/lexicoder table :bytes)))</pre></td></tr><tr><td class="docs"><p>Return a function which will decode the keys in record entries with the
+  given lexicoder.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- key-decoder
+  [lexicoder]
+  (fn decode-entry [[k r]] [(key/decode lexicoder k) r]))</pre></td></tr><tr><td class="docs"><p>Return the table's patch changes as a map from keys to records or
+  tombstones. This will load the table's patch tablet if present and merge in
+  any locally pending changes.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- load-changes
+  [^Table table]
+  (into
+    (sorted-map)
+    (concat
+      (when-let [patch (some-&gt;&gt; (::patch table)
+                                (mdag/get-data (.store table)))]
+        (::patch/changes patch))
+      (.pending table))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn- -scan
+  ([table]
+   (-scan table nil))
+  ([^Table table opts]
+   (let [lexicoder (table-lexicoder table)
+         start-key (some-&gt;&gt; (:start-key opts) (key/encode lexicoder))
+         end-key (some-&gt;&gt; (:end-key opts) (key/encode lexicoder))]
+     (-&gt;
+       (patch/patch-seq
+         ; Merged patch data to apply to the records.
+         (patch/filter-patch
+           (load-changes table)
+           {:fields (:fields opts)
+            :start-key start-key
+            :end-key end-key})
+         ; Lazy sequence of matching records from the index tree.
+         (when-let [data-node (mdag/get-data
+                                (.store table)
+                                (::data (.root-data table)))]
+           (if (or start-key end-key)
+             (index/read-range
+               (.store table)
+               data-node
+               (:fields opts)
+               start-key
+               end-key)
+             (index/read-all
+               (.store table)
+               data-node
+               (:fields opts)))))
+       (patch/remove-tombstones)
+       (cond-&gt;&gt;
+         (and (:offset opts) (pos? (:offset opts)))
+           (drop (:offset opts))
+         (and (:limit opts) (nat-int? (:offset opts)))
+           (take (:limit opts)))
+       (-&gt;&gt;
+         (map (key-decoder lexicoder)))))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn- -get-records
+  ([table id-keys]
+   (-get-records table id-keys nil))
+  ([^Table table id-keys opts]
+   (let [lexicoder (table-lexicoder table)
+         id-keys (into #{} (map (partial key/encode lexicoder)) id-keys)
+         patch-map (load-changes table)
+         patch-entries (select-keys patch-map id-keys)
+         extra-keys (apply disj id-keys (keys patch-entries))
+         patch-entries (patch/filter-patch patch-entries {:fields (:fields opts)})
+         data-entries (when-let [data-node (and (seq extra-keys)
+                                                (mdag/get-data
+                                                  (.store table)
+                                                  (::data (.root-data table))))]
+                        (index/read-batch
+                          (.store table)
+                          data-node
+                          (:fields opts)
+                          extra-keys))]
+     (-&gt;&gt; (concat patch-entries data-entries)
+          (patch/remove-tombstones)
+          (map (key-decoder lexicoder))))))</pre></td></tr><tr><td class="docs"><p>Construct a new record updating function from the given options. The
+  resulting function accepts three arguments, the record key, the existing
+  record data (or nil), and the new record data map.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- record-updater
+  [{:keys [merge-record merge-field]}]
+  (cond
+    (and merge-record merge-field)
+      (throw (IllegalArgumentException.
+               &quot;Record updates cannot make use of both :merge-field and :merge-record at the same time.&quot;))
+    (fn? merge-record)
+      merge-record
+    merge-record
+      (throw (IllegalArgumentException.
+               (str &quot;Record update :merge-record must be a function: &quot;
+                    (pr-str merge-record))))
+    (or (map? merge-field) (fn? merge-field))
+      (fn merge-fields
+        [_ old-data new-data]
+        (let [merger (if (map? merge-field)
+                       (fn [fk l r]
+                         (if-let [f (get merge-field fk)]
+                           (f l r)
+                           r))
+                       merge-field)]
+          (reduce
+            (fn [data field-key]
+              (let [left (get old-data field-key)
+                    right (get new-data field-key)
+                    value (merger field-key left right)]
+                (if (some? value)
+                  (assoc data field-key value)
+                  data)))
+            {} (distinct (concat (keys old-data) (keys new-data))))))
+    merge-field
+      (throw (IllegalArgumentException.
+               (str &quot;Record update :merge-field must be a function or map of field functions: &quot;
+                    (pr-str merge-field))))
+    :else
+      (fn merge-simple
+        [_ old-data new-data]
+        (into {} (filter (comp some? val)) (merge old-data new-data)))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn- -insert
+  ([table records]
+   (-insert table records nil))
+  ([table records opts]
+   (let [{:keys [merge-record merge-field]} opts
+         lexicoder (table-lexicoder table)
+         update-record (record-updater opts)
+         extant (into {} (-get-records table (map first records)))
+         new-records (map
+                       (fn [[k data]]
+                         [(key/encode lexicoder k)
+                          (update-record k (get extant k) data)])
+                       records)]
+     ; Add new data maps to pending changes.
+     (-&gt; table
+         (update-pending into new-records)
+         (update ::data/count + (- (count records) (count extant)))))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn- -delete
+  [table id-keys]
+  (let [lexicoder (key/lexicoder (::key/lexicoder table :bytes))
+        extant (-get-records table id-keys {:fields {}})]
+    (-&gt; table
+        (update-pending
+          into
+          (comp
+            (map first)
+            (map (fn [k] [(key/encode lexicoder k) patch/tombstone])))
+          extant)
+        (update ::data/count - (count extant)))))</pre></td></tr><tr><td class="docs"><p>Returns a vector containing a link to a patch tablet and an index tree.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- flush-changes
+  [^Table table full?]
+  (let [changes (load-changes table)]
+    (if (seq changes)
+      ; Check for force or limit overflow.
+      (if (or full? (&lt; (::patch/limit table 0) (count changes)))
+        ; Combine pending changes and patch tablet and update data tree.
+        [nil (index/update-tree (.store table)
+                                table
+                                (mdag/get-data (.store table) (::data table))
+                                changes)]
+        ; Flush any pending changes to the patch tablet.
+        [(-&gt;&gt; (patch/from-changes changes)
+              (mdag/store-node! (.store table) nil)
+              (mdag/link &quot;patch&quot;))
+         (::data table)])
+      ; No patch data or tablet.
+      [nil (::data table)])))</pre></td></tr><tr><td class="docs"><p>Ensure that all local state has been persisted to the storage backend and
+  return an updated non-dirty table.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- -flush!
+  ([table]
+   (-flush! table false))
+  ([^Table table apply-patches?]
+   (if (dirty? table)
+     (let [[patch-link data-link] (flush-changes table apply-patches?)
+           root-data (-&gt; (.root-data table)
+                         (assoc :data/type data-type)
+                         (dissoc ::patch ::data)
+                         (cond-&gt;
+                           patch-link (assoc ::patch patch-link)
+                           data-link (assoc ::data data-link)))]
+       (when-not (s/valid? ::node-data root-data)
+         (throw (ex-info (str &quot;Cannot write invalid table root node: &quot;
+                              (s/explain-str ::node-data root-data))
+                         {:type ::invalid-root})))
+       (let [node (mdag/store-node! (.store table) nil root-data)
+             table-info (assoc (.table-info table)
+                               ::node/id (::node/id node)
+                               ::data/size (node/reachable-size node))
+             table-meta (assoc (._meta table)
+                               ::node/links (::node/links node))]
+         (-&gt;Table
+           (.store table)
+           table-info
+           (::node/data node)
+           (sorted-map)
+           false
+           table-meta)))
+     ; Table is clean, return directly.
+     table)))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(extend Table
+
+  ITable
+
+  {:scan -scan
+   :get-records -get-records
+   :insert -insert
+   :delete -delete
+   :flush! -flush!})</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.tablet" name="merkle-db.tablet"><h1 class="project-name">merkle-db.tablet</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Functions for working with tablet data.</p>
+</td><td class="codes"><pre class="brush: clojure">(ns merkle-db.tablet
+  (:refer-clojure :exclude [keys])
   (:require
-    [clojure.future :refer [any? nat-int?]]
     [clojure.spec :as s]
-    [merkledag.link :as link]))</pre></td></tr><tr><td class="docs"><p>Count of the records contained under a node.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::count nat-int?)</pre></td></tr><tr><td class="docs"><p>Data size in bytes.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::size nat-int?)</pre></td></tr><tr><td class="docs"><p>Valid field key values.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::field-key any?)</pre></td></tr><tr><td class="docs"><p>Valid family keys.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::family-key
-  (s/and keyword? #(not= % :base)))</pre></td></tr><tr><td class="docs"><p>Map of family keywords to sets of contained fields.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::families
+    [merkle-db.key :as key]))</pre></td></tr><tr><td class="docs"><h2>Specs</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Value of <code>:data/type</code> that indicates a tablet node.</p>
+</td><td class="codes"><pre class="brush: clojure">(def ^:const data-type
+  :merkle-db/tablet)</pre></td></tr><tr><td class="docs"><p>Records are stored as a key/data pair.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::record-entry
+  (s/tuple key/key? map?))</pre></td></tr><tr><td class="docs"><p>Sorted vector of record entries.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::records
+  (s/coll-of ::record-entry :kind vector?))</pre></td></tr><tr><td class="docs"><p>Tablet node.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def :merkle-db/tablet
   (s/and
-    (s/map-of
-      ::family-key
-      (s/coll-of ::field-key :kind set?))
-    #(= (reduce + (map count (vals %)))
-        (count (distinct (apply concat (vals %)))))))</pre></td></tr><tr><td class="docs"><p>Link to user-supplied metadata.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::metadata link/merkle-link?)</pre></td></tr><tr><td class="docs"><p>Instant point in time.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def :time/instant #(instance? java.time.Instant %))</pre></td></tr><tr><td class="docs"><p>Time an entity was last modified.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def :time/updated-at :time/instant)</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr></table><div class="footer">Generated by <a href="https://github.com/gdeer81/marginalia">Marginalia</a>.&nbsp;&nbsp;Syntax highlighting provided by Alex Gorbatchev's <a href="http://alexgorbatchev.com/SyntaxHighlighter/">SyntaxHighlighter</a><div id="floating-toc"><ul><li class="floating-toc-li" id="floating-toc_merkle-db.connection">merkle-db.connection</li><li class="floating-toc-li" id="floating-toc_merkle-db.db">merkle-db.db</li><li class="floating-toc-li" id="floating-toc_merkle-db.table">merkle-db.table</li><li class="floating-toc-li" id="floating-toc_merkle-db.index">merkle-db.index</li><li class="floating-toc-li" id="floating-toc_merkle-db.partition">merkle-db.partition</li><li class="floating-toc-li" id="floating-toc_merkle-db.tablet">merkle-db.tablet</li><li class="floating-toc-li" id="floating-toc_merkle-db.key">merkle-db.key</li><li class="floating-toc-li" id="floating-toc_merkle-db.bloom">merkle-db.bloom</li><li class="floating-toc-li" id="floating-toc_merkle-db.data">merkle-db.data</li></ul></div></div><script type="text/javascript">SyntaxHighlighter.defaults['gutter'] = false;
+    (s/keys :req [::records])
+    #(= data-type (:data/type %))))</pre></td></tr><tr><td class="docs"><h2>Key Functions</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Return a sequence of the keys in the tablet.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn keys
+  [tablet]
+  (map first (::records tablet)))</pre></td></tr><tr><td class="docs"><p>Return the first record key present in the tablet.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn first-key
+  [tablet]
+  (first (first (::records tablet))))</pre></td></tr><tr><td class="docs"><p>Return the last record key present in the tablet.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn last-key
+  [tablet]
+  (first (peek (::records tablet))))</pre></td></tr><tr><td class="docs"><p>Return the nth key present in the tablet data.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn nth-key
+  [tablet n]
+  (first (nth (::records tablet) n)))</pre></td></tr><tr><td class="docs"><h2>Utilities</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Constructs a new bare-bones tablet node. Does not ensure that the records
+  are sorted.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn from-records
+  [records]
+  {:data/type data-type
+   ::records (vec records)})</pre></td></tr><tr><td class="docs"><p>Scans the records in a tablet to determine the full set of fields present.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn fields-present
+  [tablet]
+  (set (mapcat (comp clojure.core/keys second) (::records tablet))))</pre></td></tr><tr><td class="docs"><p>Split the tablet into two tablets at the given key. All records less than the
+  split key will be contained in the first tablet, all others in the second. </p>
+</td><td class="codes"><pre class="brush: clojure">(defn split
+  [tablet split-key]
+  (let [fkey (first-key tablet)
+        lkey (last-key tablet)]
+    (when-not (and (key/after? split-key fkey)
+                   (key/before? split-key lkey))
+      (throw (ex-info (format &quot;Cannot split tablet with key %s which falls outside the contained range [%s, %s]&quot;
+                              split-key fkey lkey)
+                      {:split-key split-key
+                       :first-key fkey
+                       :last-key lkey}))))
+  (-&gt;&gt; (::records tablet)
+       (split-with #(key/before? (first %) split-key))
+       (mapv from-records)))</pre></td></tr><tr><td class="docs"><p>Join two tablets into a single tablet. The tablets key ranges must not
+  overlap.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn join
+  [left right]
+  (let [left-bound (last-key left)
+        right-bound (first-key right)]
+    (when-not (key/before? left-bound right-bound)
+      (throw (ex-info (format &quot;Cannot join tablets with overlapping key ranges: %s &gt; %s&quot;
+                              left-bound right-bound)
+                      {:left-bound left-bound
+                       :right-bound right-bound}))))
+  (update left ::records (comp vec concat) (::records right)))</pre></td></tr><tr><td class="docs"><h2>Read Functions</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Read a sequence of key/map tuples which contain the field data for all the
+  records in the tablet.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn read-all
+  [tablet]
+  (::records tablet))</pre></td></tr><tr><td class="docs"><p>Read a lazy sequence of key/map tuples which contain the field data for the
+  records whose keys are in the given collection.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn read-batch
+  [tablet record-keys]
+  ; OPTIMIZE: divide up the range by binary-searching for keys in the batch.
+  (filter (comp (set record-keys) first) (::records tablet)))</pre></td></tr><tr><td class="docs"><p>Read a lazy sequence of key/map tuples which contain the field data for the
+  records whose keys lie in the given range, inclusive. A nil boundary includes
+  all records in that range direction.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn read-range
+  [tablet start-key end-key]
+  ; OPTIMIZE: binary-search to the starting point and then iterate.
+  (cond-&gt;&gt; (::records tablet)
+    start-key
+      (drop-while #(key/before? (first %) start-key))
+    end-key
+      (take-while #(not (key/after? (first %) end-key)))))</pre></td></tr><tr><td class="docs"><h2>Update Functions</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Update a tablet by inserting the records in <code>additions</code> (a collection of
+  key/data map entries) and removing the records whose keys are in
+  <code>deletions</code> (a collection of record keys).</p>
+</td><td class="codes"><pre class="brush: clojure">(defn update-records
+  [tablet additions deletions]
+  ; OPTIMIZE: do this in one pass instead of building maps.
+  (when-let [records (-&gt; (sorted-map)
+                         (into (::records tablet))
+                         (into additions)
+                         (cond-&gt;
+                           (seq deletions)
+                             (as-&gt; rs (apply dissoc rs deletions)))
+                         (seq))]
+    (assoc tablet ::records (vec records))))</pre></td></tr><tr><td class="docs"><p>Update a tablet by inserting record data into it.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn insert-records
+  [tablet records]
+  (update-records tablet records nil))</pre></td></tr><tr><td class="docs"><p>Update a tablet by removing empty records from the data.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn prune-records
+  [tablet]
+  (update tablet ::records #(vec (remove (comp empty? second) %))))</pre></td></tr><tr><td class="docs"><p>Update the tablet by removing certain record keys from it. Returns nil if
+  the resulting tablet is empty.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn remove-batch
+  [tablet record-keys]
+  {:pre [(every? key/key? record-keys)]}
+  (update-records tablet nil record-keys))</pre></td></tr><tr><td class="docs"><p>Update the tablet by removing a range of record keys from it. Returns nil
+  if the resulting tablet is empty.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn remove-range
+  [tablet start-key end-key]
+  (-&gt;
+    (into
+      []
+      (remove (fn in-range?
+                [[key-bytes data]]
+                (and (or (nil? start-key)
+                         (not (key/before? key-bytes start-key)))
+                     (or (nil? end-key)
+                         (not (key/after? key-bytes end-key))))))
+      (::records tablet))
+    (as-&gt; records
+      (when (seq records)
+        (assoc tablet ::records records)))))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr></table><div class="footer">Generated by <a href="https://github.com/gdeer81/marginalia">Marginalia</a>.&nbsp;&nbsp;Syntax highlighting provided by Alex Gorbatchev's <a href="http://alexgorbatchev.com/SyntaxHighlighter/">SyntaxHighlighter</a><div id="floating-toc"><ul><li class="floating-toc-li" id="floating-toc_merkle-db.bloom">merkle-db.bloom</li><li class="floating-toc-li" id="floating-toc_merkle-db.connection">merkle-db.connection</li><li class="floating-toc-li" id="floating-toc_merkle-db.data">merkle-db.data</li><li class="floating-toc-li" id="floating-toc_merkle-db.db">merkle-db.db</li><li class="floating-toc-li" id="floating-toc_merkle-db.index">merkle-db.index</li><li class="floating-toc-li" id="floating-toc_merkle-db.key">merkle-db.key</li><li class="floating-toc-li" id="floating-toc_merkle-db.partition">merkle-db.partition</li><li class="floating-toc-li" id="floating-toc_merkle-db.patch">merkle-db.patch</li><li class="floating-toc-li" id="floating-toc_merkle-db.table">merkle-db.table</li><li class="floating-toc-li" id="floating-toc_merkle-db.tablet">merkle-db.tablet</li></ul></div></div><script type="text/javascript">SyntaxHighlighter.defaults['gutter'] = false;
 SyntaxHighlighter.all();
 
 // hackity hack

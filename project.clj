@@ -5,7 +5,8 @@
             :url "http://unlicense.org/"}
 
   :aliases
-  {"docs" ["do" ["codox"] ["doc-lit"]]
+  {"coverage" ["with-profile" "+coverage" "cloverage"]
+   "docs" ["do" ["codox"] ["doc-lit"]]
    "doc-lit" ["marg" "--dir" "target/doc/marginalia"
               "src/merkle_db/connection.clj"
               "src/merkle_db/lock.clj"
@@ -68,4 +69,10 @@
     :dependencies
     [[clj-stacktrace "0.2.8"]
      [org.clojure/tools.namespace "0.2.11"]
-     [rhizome "0.2.7"]]}})
+     [rhizome "0.2.7"]]}
+
+   :coverage
+   {:plugins [[lein-cloverage "1.0.9"]]
+    :dependencies [[commons-logging "1.2"]]
+    :jvm-opts ["-Dorg.apache.commons.logging.Log=org.apache.commons.logging.impl.SimpleLog"
+               "-Dorg.apache.commons.logging.simplelog.defaultlog=trace"]}})

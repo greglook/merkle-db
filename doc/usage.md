@@ -1,5 +1,4 @@
-Usage Patterns
-==============
+# Usage Patterns
 
 This document details how to use MerkleDB to satisfy various usage patterns.
 

@@ -1,9 +1,10 @@
-MerkleDB Client API
-===================
+# Client API
 
-The library should support the following client interface:
+The library's client interface is broken up into four main sections, dealing
+with the various levels of data storage.
 
-### Connection Operations
+
+## Connection Operations
 
 A _connection_ is a long-lived handle to the backing data store and db ref
 manager. It can be used to open databases for reading and writing.
@@ -44,7 +45,8 @@ manager. It can be used to open databases for reading and writing.
 (conn/commit! conn db-name db) => db'
 ```
 
-### Database Operations
+
+## Database Operations
 
 Databases provide an immutable wrapper around the dynamic connection to the
 block and ref stores. Once you are interacting with the database object, most
@@ -97,7 +99,8 @@ root node.
 (db/flush! db) => db'
 ```
 
-### Table Operations
+
+## Table Operations
 
 Tables are collections of records, identified by a string name. Each table name
 must be unique within the database. These operations provide a high-level
@@ -138,7 +141,8 @@ will be returned.
 (table/delete table record-keys) => table'
 ```
 
-### Partition Operations
+
+## Partition Operations
 
 Partitions divide up the record keys into ranges and are the basic unit of
 parallelism. These operations are lower-level and intended for use by

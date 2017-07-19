@@ -1,5 +1,4 @@
-MerkleDB Design
-===============
+# Structural Design
 
 A database is stored as a _merkle tree_, which is a type of
 [merkle DAG](https://github.com/greglook/merkledag-core) structure.

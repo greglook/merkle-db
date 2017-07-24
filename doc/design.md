@@ -176,3 +176,11 @@ patch tablet replace the values from the data tree. Tombstones will remove a
 record from the result if it would have been present; patch data will replace
 (not merge with) the data in the tree, or insert the record if it wasn't already
 present.
+
+```clojure
+{:data/type :merkle-db/patch
+ :merkle-db.patch/changes
+ [[key-bytes-a {:abc 123, "xyz" true, ...}]
+  [key-bytes-b :merkle-db.patch/tombstone]
+  ...]}
+```

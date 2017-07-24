@@ -4,7 +4,7 @@
     [clojure.test :as test]
     [clojure.test.check.generators :as gen]
     [com.gfredericks.test.chuck.generators :as tcgen]
-    [merkle-db.data :as data]
+    [merkle-db.record :as record]
     [merkle-db.key :as key]))
 
 
@@ -82,7 +82,7 @@
       (gen/bind
         (fn [field-sets]
           (gen/tuple
-            (gen/vector (s/gen ::data/family-key)
+            (gen/vector (s/gen ::record/family-key)
                         (count field-sets))
             (gen/return (map set field-sets)))))
       (->> (gen/fmap (partial apply zipmap)))

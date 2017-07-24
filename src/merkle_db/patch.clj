@@ -5,7 +5,8 @@
     [clojure.future :refer [pos-int?]]
     [clojure.spec :as s]
     (merkle-db
-      [key :as key])))
+      [key :as key]
+      [record :as record])))
 
 
 ;; ## Tombstones
@@ -32,12 +33,12 @@
 (s/def ::limit pos-int?)
 
 ;; Records are stored as a key/data-or-tombstone pair.
-(s/def ::change-entry
-  (s/tuple key/key? (s/or :record map? :tombstone tombstone?)))
+(s/def ::entry
+  (s/tuple ::record/key (s/or :data ::record/data :tombstone tombstone?)))
 
 ;; Sorted vector of record entries.
 (s/def ::changes
-  (s/coll-of ::change-entry :kind vector?))
+  (s/coll-of ::entry :kind vector?))
 
 ;; Patch tablet node data.
 (s/def ::node-data

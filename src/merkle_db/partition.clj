@@ -11,9 +11,9 @@
       [node :as node])
     (merkle-db
       [bloom :as bloom]
-      [data :as data]
       [key :as key]
       [patch :as patch]
+      [record :as record]
       [tablet :as tablet])))
 
 
@@ -46,8 +46,8 @@
 ;; Partition node.
 (s/def :merkle-db/partition
   (s/and
-    (s/keys :req [::data/count
-                  ::data/families
+    (s/keys :req [::record/count
+                  ::record/families
                   ::limit
                   ::membership
                   ::first-key
@@ -136,14 +136,14 @@
                     {:split-key split-key
                      :first-key (::first-key part)
                      :last-key (::last-key part)})))
-  (let [defaults (select-keys part [:data/type ::data/families ::limit])]
+  (let [defaults (select-keys part [:data/type ::record/families ::limit])]
     ; Construct new partitions from left and right tablet maps.
     (map
       (fn make-part
         [tablets]
         (let [base-keys (tablet/keys (mdag/get-data store (:base tablets)))]
           (assoc defaults
-                 ::data/count (count base-keys)
+                 ::record/count (count base-keys)
                  ::membership (into (bloom/create (::limit part)) base-keys)
                  ::first-key (first base-keys)
                  ::last-key (last base-keys)
@@ -205,7 +205,7 @@
   [store part fields read-fn & args]
   ; OPTIMIZE: use transducer instead of intermediate sequences.
   (->> (set fields)
-       (choose-tablets (::data/families part))
+       (choose-tablets (::record/families part))
        (map (::tablets part))
        (map (partial mdag/get-data store))
        (map #(apply read-fn % args))
@@ -268,7 +268,7 @@
   [store parameters records]
   (let [records (sort-by first (patch/remove-tombstones records))
         limit (or (::limit parameters) default-limit)
-        families (or (::data/families parameters) {})
+        families (or (::record/families parameters) {})
         part-count (inc (int (/ (count records) limit)))]
     (into
       []
@@ -277,15 +277,15 @@
           [partition-records]
           (->>
             {:data/type data-type
-             ::data/families families
-             ::data/count (count partition-records)
+             ::record/families families
+             ::record/count (count partition-records)
              ::limit limit
              ::membership (into (bloom/create limit) (map first partition-records))
              ::first-key (first (first partition-records))
              ::last-key (first (last partition-records))
              ::tablets (->>
                          partition-records
-                         (data/split-records families)
+                         (record/split-records families)
                          (map (juxt key #(tablet/from-records (val %))))
                          (map (partial apply store-tablet! store))
                          (into {}))}
@@ -302,7 +302,7 @@
         additions (remove (comp patch/tombstone? second) changes)
         deletions (set (map first (filter (comp patch/tombstone? second)
                                           changes)))
-        family-updates (data/split-records (::data/families part) additions)
+        family-updates (record/split-records (::record/families part) additions)
         tablets (reduce (partial update-tablet! store deletions)
                         (::tablets part)
                         family-updates)
@@ -313,7 +313,7 @@
       (if (< 1 part-count)
         ; Records still fit into one partition
         [(assoc part
-                ::data/count record-count
+                ::record/count record-count
                 ::tablets tablets
                 ::membership (into (::membership part) added-keys)
                 ::first-key (apply key/min (::first-key part) added-keys)

@@ -1,4 +1,5 @@
-(ns merkle-db.data
+(ns merkle-db.record
+  "Core record specs and functions."
   (:require
     [clojure.future :refer [any? nat-int?]]
     [clojure.spec :as s]
@@ -13,14 +14,30 @@
     merkle_db.key.Key))
 
 
+; TODO: replace with something more specific?
+;; Instant point in time.
+(s/def :time/instant #(instance? Instant %))
+
+;; Time an entity was last modified.
+(s/def :time/updated-at :time/instant)
+
 ;; Count of the records contained under a node.
 (s/def ::count nat-int?)
 
 ;; Data size in bytes.
 (s/def ::size nat-int?)
 
+;; Record key bytes.
+(s/def ::key key/key?)
+
 ;; Valid field key values.
 (s/def ::field-key any?)
+
+;; Map of record field data.
+(s/def ::data (s/map-of ::field-key any?))
+
+;; Record key/data tuple.
+(s/def ::entry (s/tuple ::key ::data))
 
 ;; Valid family keys.
 (s/def ::family-key keyword?)
@@ -33,12 +50,6 @@
       (s/coll-of ::field-key :kind set?))
     #(= (reduce + (map count (vals %)))
         (count (distinct (apply concat (vals %)))))))
-
-;; Instant point in time.
-(s/def :time/instant #(instance? Instant %))
-
-;; Time an entity was last modified.
-(s/def :time/updated-at :time/instant)
 
 
 

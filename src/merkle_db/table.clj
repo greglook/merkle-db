@@ -11,11 +11,11 @@
       [link :as link]
       [node :as node])
     (merkle-db
-      [data :as data]
       [index :as index]
       [key :as key]
       [partition :as part]
-      [patch :as patch]))
+      [patch :as patch]
+      [record :as record]))
   (:import
     java.time.Instant))
 
@@ -28,7 +28,7 @@
 
 (def ^:no-doc info-keys
   "Set of keys which may appear in the table info map."
-  #{::node/id ::name ::data/size})
+  #{::node/id ::name ::record/size})
 
 ;; Table names are strings which conform to some restrictions.
 (s/def ::name
@@ -37,7 +37,7 @@
          #(<= 1 (count %) 127)))
 
 ;; Table data is a link to the root of the data tree.
-(s/def ::data link/merkle-link?)
+(s/def ::record link/merkle-link?)
 
 ;; Tables may have a patch tablet containing recent unmerged data.
 (s/def ::patch link/merkle-link?)
@@ -45,12 +45,12 @@
 ;; Table root node.
 (s/def ::node-data
   (s/and
-    (s/keys :req [::data/count
+    (s/keys :req [::record/count
                   ::index/branching-factor
                   ::part/limit]
             :opt [::data
                   ::patch
-                  ::data/families
+                  ::record/families
                   ::key/lexicoder
                   :time/updated-at])
     #(= data-type (:data/type %))))
@@ -234,7 +234,7 @@
     (Table.
       store
       (dissoc table-info ::node/id)
-      {::data/count 0}
+      {::record/count 0}
       (empty pending)
       true
       _meta))
@@ -338,7 +338,7 @@
       {::index/branching-factor index/default-branching-factor
        ::part/limit part/default-limit}
       (dissoc opts ::data ::patch)
-      {::data/count 0})
+      {::record/count 0})
     (sorted-map)
     true
     nil))
@@ -352,7 +352,7 @@
       store
       {::name table-name
        ::node/id (::node/id node)
-       ::data/size (node/reachable-size node)}
+       ::record/size (node/reachable-size node)}
       (::node/data node)
       (sorted-map)
       false
@@ -552,7 +552,7 @@
      ; Add new data maps to pending changes.
      (-> table
          (update-pending into new-records)
-         (update ::data/count + (- (count records) (count extant)))))))
+         (update ::record/count + (- (count records) (count extant)))))))
 
 
 (defn- -delete
@@ -566,7 +566,7 @@
             (map first)
             (map (fn [k] [(key/encode lexicoder k) patch/tombstone])))
           extant)
-        (update ::data/count - (count extant)))))
+        (update ::record/count - (count extant)))))
 
 
 (defn- flush-changes
@@ -611,7 +611,7 @@
        (let [node (mdag/store-node! (.store table) nil root-data)
              table-info (assoc (.table-info table)
                                ::node/id (::node/id node)
-                               ::data/size (node/reachable-size node))
+                               ::record/size (node/reachable-size node))
              table-meta (assoc (._meta table)
                                ::node/links (::node/links node))]
          (->Table

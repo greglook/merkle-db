@@ -17,9 +17,9 @@
       [link :as link]
       [node :as node])
     (merkle-db
-      [data :as data]
       [key :as key]
-      [partition :as part])))
+      [partition :as part]
+      [record :as record])))
 
 
 ;; ## Specs
@@ -49,10 +49,10 @@
 ;; Data tree index node.
 (s/def ::node-data
   (s/and
-    (s/keys :req [::data/count
-                  ::height
+    (s/keys :req [::height
                   ::keys
-                  ::children])
+                  ::children
+                  ::record/count])
     #(= data-type (:data/type %))
     #(= (count (::children %))
         (inc (count (::keys %))))))

@@ -7,12 +7,11 @@
     [com.gfredericks.test.chuck.clojure-test :refer [checking]]
     [merkledag.core :as mdag]
     (merkle-db
-      [data :as data]
       [generators :as mdgen]
       [key :as key]
       [partition :as part]
-      [tablet :as tablet]
-      [test-utils])))
+      [record :as record]
+      [tablet :as tablet])))
 
 
 ;; ## Unit Tests
@@ -57,7 +56,7 @@
 
 
 (deftest partition-logic
-  (let [store (mdag/init-store :types data/codec-types)
+  (let [store (mdag/init-store :types record/codec-types)
         k0 (key/create [0 1 2])
         k1 (key/create [1 2 3])
         k2 (key/create [2 3 4])
@@ -65,19 +64,19 @@
         k4 (key/create [4 5 6])
         [part] (part/from-records
                  store
-                 {::data/families {:ab #{:a :b}, :cd #{:c :d}}}
+                 {::record/families {:ab #{:a :b}, :cd #{:c :d}}}
                  {k0 {:x 0, :y 0, :a 0, :c 0}
                   k1 {:x 1, :c 1, :d 1, }
                   k2 {:b 2, :c 2}
                   k3 {:x 3, :y 3, :a 3, :b 3}
                   k4 {:z 4, :d 4}})]
     (testing "partition construction"
-      (is (= 5 (::data/count part)))
+      (is (= 5 (::record/count part)))
       (is (= k0 (::part/first-key part)))
       (is (= k4 (::part/last-key part)))
       (is (= #{:base :ab :cd} (set (keys (::part/tablets part)))))
-      (is (= #{:a :b} (get-in part [::data/families :ab])))
-      (is (= #{:c :d} (get-in part [::data/families :cd]))))
+      (is (= #{:a :b} (get-in part [::record/families :ab])))
+      (is (= #{:c :d} (get-in part [::record/families :cd]))))
     (testing "record reading"
       (is (= [[k0 {:x 0, :a 0}]
               [k1 {:x 1, :d 1}]
@@ -93,9 +92,9 @@
 (deftest ^:generative partition-behavior
   (checking "valid properties" 20
     [[field-keys families records] mdgen/data-context]
-    (is (valid? ::data/families families))
-    (let [store (mdag/init-store :types data/codec-types)
-          [part] (part/from-records store {::data/families families} records)
+    (is (valid? ::record/families families))
+    (let [store (mdag/init-store :types record/codec-types)
+          [part] (part/from-records store {::record/families families} records)
           tablets (into {}
                         (map (juxt key #(mdag/get-data store (val %))))
                         (::part/tablets part))]
@@ -120,7 +119,7 @@
             "family tablet should only contain field data for that family")
         (is (zero? (count (filter empty? (map second (tablet/read-all tablet)))))
             "family tablet should not contain empty data values"))
-      (is (= (count (part/read-all store part nil)) (::data/count part))
+      (is (= (count (part/read-all store part nil)) (::record/count part))
           "::count attribute is accurate")
       (is (= (first (tablet/keys (:base tablets)))
              (::part/first-key part))

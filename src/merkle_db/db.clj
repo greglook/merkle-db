@@ -9,7 +9,7 @@
       [link :as link]
       [node :as node])
     (merkle-db
-      [data :as data]
+      [record :as record]
       [table :as table])
     [multihash.core :as multihash])
   (:import
@@ -25,7 +25,7 @@
 
 (def ^:no-doc info-keys
   "Set of keys which may appear in the database info map."
-  #{::node/id ::name ::version ::committed-at ::data/size})
+  #{::node/id ::name ::version ::committed-at ::record/size})
 
 ;; Database name.
 (s/def ::name
@@ -55,7 +55,7 @@
                 ::name
                 ::version
                 ::committed-at]
-          :opt [::data/size]))
+          :opt [::record/size]))
 
 
 
@@ -333,7 +333,7 @@
     (->Database
       store
       (assoc version
-             ::data/size (node/reachable-size node))
+             ::record/size (node/reachable-size node))
       (dissoc (::node/data node) ::tables)
       (::tables (::node/data node))
       nil)))
@@ -359,7 +359,7 @@
   (link/create
     (str "table:" table-name)
     (::node/id table)
-    (::data/size table)))
+    (::record/size table)))
 
 
 (defn- link-or-table->info
@@ -368,10 +368,10 @@
   (if (link/merkle-link? value)
     {::node/id (::link/target value)
      ::table/name table-name
-     ::data/size (::link/rsize value)}
+     ::record/size (::link/rsize value)}
     (select-keys
       value
-      [::node/id ::table/name ::data/size])))
+      [::node/id ::table/name ::record/size])))
 
 
 (defn- -list-tables
@@ -449,7 +449,7 @@
     (let [node (mdag/store-node! (.store db) nil root-data)
           db-info (assoc (.db-info db)
                          ::node/id (::node/id node)
-                         ::data/size (node/reachable-size node))
+                         ::record/size (node/reachable-size node))
           db-meta (assoc (._meta db)
                          ::node/links (::node/links node))]
       (->Database

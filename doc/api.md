@@ -62,7 +62,7 @@ root node.
 ; Databases provide direct keyword access to their properties:
 (into {} db) =>
 {:merkledag.node/id Multihash
- :merkle-db.data/size Long
+ :merkle-db.record/size Long
  :merkle-db.db/committed-at Instant
  :merkle-db.db/name String
  :merkle-db.db/version Long
@@ -77,7 +77,7 @@ root node.
 (db/list-tables db opts) =>
 ({:merkledag.node/id Multihash
   :merkle-db.table/name String
-  :merkle-db.data/size Long}
+  :merkle-db.record/size Long}
  ...)
 
 ; Add a new table to the database. Options may include pre-defined field
@@ -153,8 +153,8 @@ high-performance applications.
 ; records in the table.
 (table/list-partitions table) =>
 ({:merkledag.node/id Multihash
-  :merkle-db.data/count Long
-  :merkle-db.data/size Long
+  :merkle-db.record/count Long
+  :merkle-db.record/size Long
   :merkle-db.partition/first-key key-bytes
   :merkle-db.partition/last-key key-bytes}
  ...)

@@ -11,7 +11,7 @@ format versioning and feature evolution.  Initial versions will use the
 [CBOR](https://github.com/greglook/clj-cbor) format for node data and Snappy for
 compression.
 
-![MerkleDB database structure](doc/images/db-data-structure.jpg)
+![MerkleDB data structure](images/db-data-structure.jpg)
 
 Within a node, references to other nodes are represented with _merkle links_,
 which combine a multihash target with an optional name and the recursive size
@@ -47,8 +47,8 @@ keys.
 
 ```clojure
 {:data/type :merkle-db/table-root
- :merkle-db.data/count Long
- :merkle-db.data/families {Keyword #{field-key}}
+ :merkle-db.record/count Long
+ :merkle-db.record/families {Keyword #{field-key}}
  :merkle-db.key/lexicoder Keyword
  :merkle-db.index/branching-factor Long  ; e.g. 256 children
  :merkle-db.partition/limit Long         ; e.g. 100,000 records
@@ -77,7 +77,7 @@ sizing.
 
 ```clojure
 {:data/type :merkle-db/index
- :merkle-db.data/count Long
+ :merkle-db.record/count Long
  :merkle-db.index/height Long
  :merkle-db.index/keys
  [key-bytes-A  ; encoded key A
@@ -116,8 +116,8 @@ sure that the full sequence of keys can be enumerated with only the base.
 
 ```clojure
 {:data/type :merkle-db/partition
- :merkle-db.data/count Long
- :merkle-db.data/families {Keyword #{field-key}}
+ :merkle-db.record/count Long
+ :merkle-db.record/families {Keyword #{field-key}}
  :merkle-db.partition/limit Long
  :merkle-db.partition/membership BloomFilter
  :merkle-db.partition/first-key key-bytes

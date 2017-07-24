@@ -3,7 +3,8 @@
   (:refer-clojure :exclude [keys])
   (:require
     [clojure.spec :as s]
-    [merkle-db.key :as key]))
+    [merkle-db.key :as key]
+    [merkle-db.record :as record]))
 
 
 ;; ## Specs
@@ -12,13 +13,9 @@
   "Value of `:data/type` that indicates a tablet node."
   :merkle-db/tablet)
 
-;; Records are stored as a key/data pair.
-(s/def ::record-entry
-  (s/tuple key/key? map?))
-
 ;; Sorted vector of record entries.
 (s/def ::records
-  (s/coll-of ::record-entry :kind vector?))
+  (s/coll-of ::record/entry :kind vector?))
 
 ;; Tablet node.
 (s/def :merkle-db/tablet

@@ -25,7 +25,7 @@
 
 (def default-limit
   "The default number of records to build partitions up to."
-  100000)
+  10000)
 
 ;; Maximum number of records to allow in each partition.
 (s/def ::limit pos-int?)

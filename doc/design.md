@@ -29,7 +29,6 @@ maps table names to _table root nodes_.
 ```clojure
 {:data/type :merkle-db/database
  :merkle-db.db/tables {String MerkleLink}
- :time/updated-at Instant
  ,,,}
 ```
 
@@ -50,11 +49,12 @@ keys.
  :merkle-db.record/count Long
  :merkle-db.record/families {Keyword #{field-key}}
  :merkle-db.key/lexicoder Keyword
- :merkle-db.index/branching-factor Long  ; e.g. 256 children
- :merkle-db.partition/limit Long         ; e.g. 100,000 records
+ :merkle-db.index/branching-factor Long  ; 256 children
+ :merkle-db.partition/limit Long         ; 10,000 records
+ :merkle-db.patch/limit Long             ; 100 changes
  :merkle-db.table/data MerkleLink
  :merkle-db.table/patch MerkleLink
- :time/updated-at Instant
+ :merkle-db.table/modified-at Instant
  ,,,}
 ```
 

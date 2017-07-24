@@ -29,6 +29,10 @@
   "Value of `:data/type` that indicates a patch tablet node."
   :merkle-db/patch)
 
+(def default-limit
+  "The default number of changes to hold in a patch tablet."
+  100)
+
 ;; Maximum number of changes to allow in a patch tablet.
 (s/def ::limit pos-int?)
 

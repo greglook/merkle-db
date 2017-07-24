@@ -14,13 +14,6 @@
     merkle_db.key.Key))
 
 
-; TODO: replace with something more specific?
-;; Instant point in time.
-(s/def :time/instant #(instance? Instant %))
-
-;; Time an entity was last modified.
-(s/def :time/updated-at :time/instant)
-
 ;; Count of the records contained under a node.
 (s/def ::count nat-int?)
 

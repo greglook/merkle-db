@@ -42,17 +42,21 @@
 ;; Tables may have a patch tablet containing recent unmerged data.
 (s/def ::patch link/merkle-link?)
 
+;; Time the table was last modified.
+(s/def ::modified-at #(instance? Instant %))
+
 ;; Table root node.
 (s/def ::node-data
   (s/and
     (s/keys :req [::record/count
                   ::index/branching-factor
-                  ::part/limit]
+                  ::part/limit
+                  ::modified-at]
             :opt [::data
                   ::patch
+                  ::patch/limit
                   ::record/families
-                  ::key/lexicoder
-                  :time/updated-at])
+                  ::key/lexicoder])
     #(= data-type (:data/type %))))
 
 (s/def ::table-info
@@ -336,7 +340,8 @@
     {::name table-name}
     (merge
       {::index/branching-factor index/default-branching-factor
-       ::part/limit part/default-limit}
+       ::part/limit part/default-limit
+       ::patch/limit patch/default-limit}
       (dissoc opts ::data ::patch)
       {::record/count 0})
     (sorted-map)

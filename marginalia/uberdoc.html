@@ -2866,7 +2866,7 @@ net.brehaut.ClojureTools = (function (SH) {
   };
 })(SyntaxHighlighter);
 </script><title>mvxcvi/merkle-db -- Marginalia</title></head><body><table><tr><td class="docs"><div class="header"><h1 class="project-name"><a href="https://github.com/greglook/merkle-db">mvxcvi/merkle-db</a></h1><h2 class="project-version">0.1.0-SNAPSHOT</h2><br /><p>Hybrid data store built on merkle trees.</p>
-</div><div class="dependencies"><h3>dependencies</h3><table><tr><td class="dep-name">org.clojure/clojure</td><td class="dotted"><hr /></td><td class="dep-version">1.8.0</td></tr><tr><td class="dep-name">org.clojure/tools.logging</td><td class="dotted"><hr /></td><td class="dep-version">0.4.0</td></tr><tr><td class="dep-name">clojure-future-spec</td><td class="dotted"><hr /></td><td class="dep-version">1.9.0-alpha14</td></tr><tr><td class="dep-name">bigml/sketchy</td><td class="dotted"><hr /></td><td class="dep-version">0.4.1</td></tr><tr><td class="dep-name">mvxcvi/merkledag-core</td><td class="dotted"><hr /></td><td class="dep-version">0.2.0</td></tr><tr><td class="dep-name">mvxcvi/merkledag-ref</td><td class="dotted"><hr /></td><td class="dep-version">0.1.0</td></tr><tr><td class="dep-name">mvxcvi/blocks</td><td class="dotted"><hr /></td><td class="dep-version">0.9.1</td></tr></table></div></td><td class="codes" style="text-align: center; vertical-align: middle;color: #666;padding-right:20px"><br /><br /><br />(this space intentionally left almost blank)</td></tr><tr><td class="docs"><div class="toc"><a name="toc"><h3>namespaces</h3></a><ul><li><a href="#merkle-db.bloom">merkle-db.bloom</a></li><li><a href="#merkle-db.connection">merkle-db.connection</a></li><li><a href="#merkle-db.data">merkle-db.data</a></li><li><a href="#merkle-db.db">merkle-db.db</a></li><li><a href="#merkle-db.index">merkle-db.index</a></li><li><a href="#merkle-db.key">merkle-db.key</a></li><li><a href="#merkle-db.partition">merkle-db.partition</a></li><li><a href="#merkle-db.patch">merkle-db.patch</a></li><li><a href="#merkle-db.table">merkle-db.table</a></li><li><a href="#merkle-db.tablet">merkle-db.tablet</a></li></ul></div></td><td class="codes">&nbsp;</td></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.bloom" name="merkle-db.bloom"><h1 class="project-name">merkle-db.bloom</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Bloom filters provide a probablistic way to test for membership in a set
+</div><div class="dependencies"><h3>dependencies</h3><table><tr><td class="dep-name">org.clojure/clojure</td><td class="dotted"><hr /></td><td class="dep-version">1.8.0</td></tr><tr><td class="dep-name">org.clojure/tools.logging</td><td class="dotted"><hr /></td><td class="dep-version">0.4.0</td></tr><tr><td class="dep-name">clojure-future-spec</td><td class="dotted"><hr /></td><td class="dep-version">1.9.0-alpha14</td></tr><tr><td class="dep-name">bigml/sketchy</td><td class="dotted"><hr /></td><td class="dep-version">0.4.1</td></tr><tr><td class="dep-name">mvxcvi/merkledag-core</td><td class="dotted"><hr /></td><td class="dep-version">0.2.0</td></tr><tr><td class="dep-name">mvxcvi/merkledag-ref</td><td class="dotted"><hr /></td><td class="dep-version">0.1.0</td></tr><tr><td class="dep-name">mvxcvi/blocks</td><td class="dotted"><hr /></td><td class="dep-version">0.9.1</td></tr></table></div></td><td class="codes" style="text-align: center; vertical-align: middle;color: #666;padding-right:20px"><br /><br /><br />(this space intentionally left almost blank)</td></tr><tr><td class="docs"><div class="toc"><a name="toc"><h3>namespaces</h3></a><ul><li><a href="#merkle-db.bloom">merkle-db.bloom</a></li><li><a href="#merkle-db.connection">merkle-db.connection</a></li><li><a href="#merkle-db.db">merkle-db.db</a></li><li><a href="#merkle-db.index">merkle-db.index</a></li><li><a href="#merkle-db.key">merkle-db.key</a></li><li><a href="#merkle-db.partition">merkle-db.partition</a></li><li><a href="#merkle-db.patch">merkle-db.patch</a></li><li><a href="#merkle-db.record">merkle-db.record</a></li><li><a href="#merkle-db.table">merkle-db.table</a></li><li><a href="#merkle-db.tablet">merkle-db.tablet</a></li></ul></div></td><td class="codes">&nbsp;</td></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.bloom" name="merkle-db.bloom"><h1 class="project-name">merkle-db.bloom</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Bloom filters provide a probablistic way to test for membership in a set
   using a fixed amount of space. This is useful for reducing work when the test
   definitively rules out the existence of a record.</p>
 </td><td class="codes"><pre class="brush: clojure">(ns merkle-db.bloom
@@ -3159,93 +3159,7 @@ set types.</li>
    :create-db! -create-db!
    :drop-db! -drop-db!
    :open-db -open-db
-   :commit! -commit!})</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.data" name="merkle-db.data"><h1 class="project-name">merkle-db.data</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs">
-</td><td class="codes"><pre class="brush: clojure">(ns merkle-db.data
-  (:require
-    [clojure.future :refer [any? nat-int?]]
-    [clojure.spec :as s]
-    [clojure.string :as str]
-    [merkledag.link :as link]
-    [merkle-db.bloom :as bloom]
-    [merkle-db.key :as key])
-  (:import
-    java.time.Instant
-    java.time.format.DateTimeFormatter
-    merkle_db.bloom.BloomFilter
-    merkle_db.key.Key))</pre></td></tr><tr><td class="docs"><p>Count of the records contained under a node.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::count nat-int?)</pre></td></tr><tr><td class="docs"><p>Data size in bytes.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::size nat-int?)</pre></td></tr><tr><td class="docs"><p>Valid field key values.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::field-key any?)</pre></td></tr><tr><td class="docs"><p>Valid family keys.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::family-key keyword?)</pre></td></tr><tr><td class="docs"><p>Map of family keywords to sets of contained fields.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::families
-  (s/and
-    (s/map-of
-      ::family-key
-      (s/coll-of ::field-key :kind set?))
-    #(= (reduce + (map count (vals %)))
-        (count (distinct (apply concat (vals %)))))))</pre></td></tr><tr><td class="docs"><p>Instant point in time.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def :time/instant #(instance? Instant %))</pre></td></tr><tr><td class="docs"><p>Time an entity was last modified.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def :time/updated-at :time/instant)</pre></td></tr><tr><td class="docs"><h2>Family Functions</h2>
-</td><td class="codes"></td></tr><tr><td class="docs"><p>Build a lookup function for field families. Takes a map from family keys to
-  collections of field keys in that family. Returns a function which accepts a
-  field key and returns either the corresponding family or <code>:base</code> if it is not
-  assigned one.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn- family-lookup
-  [families]
-  (let [lookup (into {}
-                     (mapcat #(map vector (second %) (repeat (first %))))
-                     families)]
-    (fn [field-key] (lookup field-key :base))))</pre></td></tr><tr><td class="docs"><p>Build a map from family keys to maps which contain the field data for the
-  corresponding family. Fields not grouped in a family will be added to
-  <code>:base</code>. Families which had no data will have an entry with a <code>nil</code> value,
-  except <code>:base</code> which will be an empty map.</p>
-</td><td class="codes"><pre class="brush: clojure">(defn group-families
-  [families data]
-  (let [field-&gt;family (family-lookup families)
-        init (assoc (zipmap (keys families) (repeat nil))
-                    :base {})]
-    (reduce-kv
-      (fn split-data
-        [groups field value]
-        (update groups (field-&gt;family field) assoc field value))
-      init data)))</pre></td></tr><tr><td class="docs"><p>Split new record values into collections grouped by family. Each configured
-  family and <code>:base</code> will have an entry in the resulting map, containing a
-  sorted map of record keys to new values. The values may be <code>nil</code> if the
-  record had no data for that family, an empty map if the family is <code>:base</code> and
-  all the record's data is in other families, or a map of field data belonging
-  to that family.</p>
-
-<p>  ```
-  {:base {#merkle-db/key "00" {:a 123}, ...}
-   :bc {#merkle-db/key "00" {:b true, :c "cat"}, ...}
-   ...}
-  ```</p>
-</td><td class="codes"><pre class="brush: clojure">(defn split-records
-  [families records]
-  (reduce
-    (fn append-updates
-      [updates [record-key data]]
-      (reduce-kv
-        (fn assign-updates
-          [updates family fdata]
-          (update updates family (fnil assoc (sorted-map)) record-key fdata))
-        updates
-        (group-families families data)))
-    {} records))</pre></td></tr><tr><td class="docs"><h2>Codecs</h2>
-</td><td class="codes"></td></tr><tr><td class="docs"><p>Map of codec type information that can be used with MerkleDAG stores.</p>
-</td><td class="codes"><pre class="brush: clojure">(def codec-types
-  {'inst
-   {:description &quot;An instant in time.&quot;
-    :reader #(Instant/parse ^String %)
-    :writers {Instant #(.format DateTimeFormatter/ISO_INSTANT ^Instant %)}}
-   'merkle-db/key
-   {:description &quot;Record key byte data.&quot;
-    :reader key/parse
-    :writers {Key key/hex}}
-   'merkle-db/bloom-filter
-   {:description &quot;Probablistic Bloom filter.&quot;
-    :reader bloom/form-&gt;filter
-    :writers {BloomFilter bloom/filter-&gt;form}}})</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.db" name="merkle-db.db"><h1 class="project-name">merkle-db.db</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Core database functions.</p>
+   :commit! -commit!})</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.db" name="merkle-db.db"><h1 class="project-name">merkle-db.db</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Core database functions.</p>
 </td><td class="codes"><pre class="brush: clojure">(ns merkle-db.db
   (:require
     [clojure.future :refer [inst? nat-int?]]
@@ -3256,7 +3170,7 @@ set types.</li>
       [link :as link]
       [node :as node])
     (merkle-db
-      [data :as data]
+      [record :as record]
       [table :as table])
     [multihash.core :as multihash])
   (:import
@@ -3266,7 +3180,7 @@ set types.</li>
 </td><td class="codes"><pre class="brush: clojure">(def ^:const data-type
   :merkle-db/database)</pre></td></tr><tr><td class="docs"><p>Set of keys which may appear in the database info map.</p>
 </td><td class="codes"><pre class="brush: clojure">(def ^:no-doc info-keys
-  #{::node/id ::name ::version ::committed-at ::data/size})</pre></td></tr><tr><td class="docs"><p>Database name.</p>
+  #{::node/id ::name ::version ::committed-at ::record/size})</pre></td></tr><tr><td class="docs"><p>Database name.</p>
 </td><td class="codes"><pre class="brush: clojure">(s/def ::name
   (s/and string?
          #(not (str/includes? % &quot;/&quot;))
@@ -3284,7 +3198,7 @@ set types.</li>
                 ::name
                 ::version
                 ::committed-at]
-          :opt [::data/size]))</pre></td></tr><tr><td class="docs"><h2>Database API</h2>
+          :opt [::record/size]))</pre></td></tr><tr><td class="docs"><h2>Database API</h2>
 </td><td class="codes"></td></tr><tr><td class="docs"><p>Protocol for interacting with a database at a specific version.</p>
 </td><td class="codes"><pre class="brush: clojure">(defprotocol IDatabase
   (list-tables
@@ -3496,7 +3410,7 @@ node-id, size, version opened, etc.</li>
     (-&gt;Database
       store
       (assoc version
-             ::data/size (node/reachable-size node))
+             ::record/size (node/reachable-size node))
       (dissoc (::node/data node) ::tables)
       (::tables (::node/data node))
       nil)))</pre></td></tr><tr><td class="docs"><p>Update the database to use the given version information.</p>
@@ -3514,16 +3428,16 @@ node-id, size, version opened, etc.</li>
   (link/create
     (str &quot;table:&quot; table-name)
     (::node/id table)
-    (::data/size table)))</pre></td></tr><tr><td class="docs"><p>Coerce either a link value or a table record to a map of information.</p>
+    (::record/size table)))</pre></td></tr><tr><td class="docs"><p>Coerce either a link value or a table record to a map of information.</p>
 </td><td class="codes"><pre class="brush: clojure">(defn- link-or-table-&gt;info
   [[table-name value]]
   (if (link/merkle-link? value)
     {::node/id (::link/target value)
      ::table/name table-name
-     ::data/size (::link/rsize value)}
+     ::record/size (::link/rsize value)}
     (select-keys
       value
-      [::node/id ::table/name ::data/size])))</pre></td></tr><tr><td class="docs">
+      [::node/id ::table/name ::record/size])))</pre></td></tr><tr><td class="docs">
 </td><td class="codes"><pre class="brush: clojure">(defn- -list-tables
   ([db]
    (-list-tables db nil))
@@ -3588,7 +3502,7 @@ node-id, size, version opened, etc.</li>
     (let [node (mdag/store-node! (.store db) nil root-data)
           db-info (assoc (.db-info db)
                          ::node/id (::node/id node)
-                         ::data/size (node/reachable-size node))
+                         ::record/size (node/reachable-size node))
           db-meta (assoc (._meta db)
                          ::node/links (::node/links node))]
       (-&gt;Database
@@ -3624,9 +3538,9 @@ node-id, size, version opened, etc.</li>
       [link :as link]
       [node :as node])
     (merkle-db
-      [data :as data]
       [key :as key]
-      [partition :as part])))</pre></td></tr><tr><td class="docs"><h2>Specs</h2>
+      [partition :as part]
+      [record :as record])))</pre></td></tr><tr><td class="docs"><h2>Specs</h2>
 </td><td class="codes"></td></tr><tr><td class="docs"><p>Value of <code>:data/type</code> that indicates an index tree node.</p>
 </td><td class="codes"><pre class="brush: clojure">(def ^:const data-type
   :merkle-db/index)</pre></td></tr><tr><td class="docs"><p>The default number of children to limit each index node to.</p>
@@ -3640,10 +3554,10 @@ implicit height of zero, so the first index node has a height of one.</p>
 </td><td class="codes"><pre class="brush: clojure">(s/def ::children (s/coll-of link/merkle-link? :kind vector?))</pre></td></tr><tr><td class="docs"><p>Data tree index node.</p>
 </td><td class="codes"><pre class="brush: clojure">(s/def ::node-data
   (s/and
-    (s/keys :req [::data/count
-                  ::height
+    (s/keys :req [::height
                   ::keys
-                  ::children])
+                  ::children
+                  ::record/count])
     #(= data-type (:data/type %))
     #(= (count (::children %))
         (inc (count (::keys %))))))</pre></td></tr><tr><td class="docs"><h2>Read Functions</h2>
@@ -4491,15 +4405,15 @@ configuration:</p>
       [node :as node])
     (merkle-db
       [bloom :as bloom]
-      [data :as data]
       [key :as key]
       [patch :as patch]
+      [record :as record]
       [tablet :as tablet])))</pre></td></tr><tr><td class="docs"><h2>Specs</h2>
 </td><td class="codes"></td></tr><tr><td class="docs"><p>Value of <code>:data/type</code> that indicates a partition node.</p>
 </td><td class="codes"><pre class="brush: clojure">(def ^:const data-type
   :merkle-db/partition)</pre></td></tr><tr><td class="docs"><p>The default number of records to build partitions up to.</p>
 </td><td class="codes"><pre class="brush: clojure">(def default-limit
-  100000)</pre></td></tr><tr><td class="docs"><p>Maximum number of records to allow in each partition.</p>
+  10000)</pre></td></tr><tr><td class="docs"><p>Maximum number of records to allow in each partition.</p>
 </td><td class="codes"><pre class="brush: clojure">(s/def ::limit pos-int?)</pre></td></tr><tr><td class="docs"><p>Bloom filter providing probable membership testing for record keys contained
 in the partition.</p>
 </td><td class="codes"><pre class="brush: clojure">(s/def ::membership bloom/filter?)</pre></td></tr><tr><td class="docs"><p>First key present in the partition.</p>
@@ -4508,8 +4422,8 @@ in the partition.</p>
 </td><td class="codes"><pre class="brush: clojure">(s/def ::tablets (s/map-of keyword? link/merkle-link?))</pre></td></tr><tr><td class="docs"><p>Partition node.</p>
 </td><td class="codes"><pre class="brush: clojure">(s/def :merkle-db/partition
   (s/and
-    (s/keys :req [::data/count
-                  ::data/families
+    (s/keys :req [::record/count
+                  ::record/families
                   ::limit
                   ::membership
                   ::first-key
@@ -4581,14 +4495,14 @@ in the partition.</p>
                     {:split-key split-key
                      :first-key (::first-key part)
                      :last-key (::last-key part)})))
-  (let [defaults (select-keys part [:data/type ::data/families ::limit])]
+  (let [defaults (select-keys part [:data/type ::record/families ::limit])]
     ; Construct new partitions from left and right tablet maps.
     (map
       (fn make-part
         [tablets]
         (let [base-keys (tablet/keys (mdag/get-data store (:base tablets)))]
           (assoc defaults
-                 ::data/count (count base-keys)
+                 ::record/count (count base-keys)
                  ::membership (into (bloom/create (::limit part)) base-keys)
                  ::first-key (first base-keys)
                  ::last-key (last base-keys)
@@ -4636,7 +4550,7 @@ in the partition.</p>
   [store part fields read-fn &amp; args]
   ; OPTIMIZE: use transducer instead of intermediate sequences.
   (-&gt;&gt; (set fields)
-       (choose-tablets (::data/families part))
+       (choose-tablets (::record/families part))
        (map (::tablets part))
        (map (partial mdag/get-data store))
        (map #(apply read-fn % args))
@@ -4682,7 +4596,7 @@ in the partition.</p>
   [store parameters records]
   (let [records (sort-by first (patch/remove-tombstones records))
         limit (or (::limit parameters) default-limit)
-        families (or (::data/families parameters) {})
+        families (or (::record/families parameters) {})
         part-count (inc (int (/ (count records) limit)))]
     (into
       []
@@ -4691,15 +4605,15 @@ in the partition.</p>
           [partition-records]
           (-&gt;&gt;
             {:data/type data-type
-             ::data/families families
-             ::data/count (count partition-records)
+             ::record/families families
+             ::record/count (count partition-records)
              ::limit limit
              ::membership (into (bloom/create limit) (map first partition-records))
              ::first-key (first (first partition-records))
              ::last-key (first (last partition-records))
              ::tablets (-&gt;&gt;
                          partition-records
-                         (data/split-records families)
+                         (record/split-records families)
                          (map (juxt key #(tablet/from-records (val %))))
                          (map (partial apply store-tablet! store))
                          (into {}))}
@@ -4713,7 +4627,7 @@ in the partition.</p>
         additions (remove (comp patch/tombstone? second) changes)
         deletions (set (map first (filter (comp patch/tombstone? second)
                                           changes)))
-        family-updates (data/split-records (::data/families part) additions)
+        family-updates (record/split-records (::record/families part) additions)
         tablets (reduce (partial update-tablet! store deletions)
                         (::tablets part)
                         family-updates)
@@ -4724,7 +4638,7 @@ in the partition.</p>
       (if (&lt; 1 part-count)
         ; Records still fit into one partition
         [(assoc part
-                ::data/count record-count
+                ::record/count record-count
                 ::tablets tablets
                 ::membership (into (::membership part) added-keys)
                 ::first-key (apply key/min (::first-key part) added-keys)
@@ -4740,7 +4654,8 @@ in the partition.</p>
     [clojure.future :refer [pos-int?]]
     [clojure.spec :as s]
     (merkle-db
-      [key :as key])))</pre></td></tr><tr><td class="docs"><h2>Tombstones</h2>
+      [key :as key]
+      [record :as record])))</pre></td></tr><tr><td class="docs"><h2>Tombstones</h2>
 </td><td class="codes"></td></tr><tr><td class="docs"><p>Value which marks the deletion of a record.</p>
 </td><td class="codes"><pre class="brush: clojure">(def tombstone
   ::tombstone)</pre></td></tr><tr><td class="docs"><p>Returns true if the value is a tombstone.</p>
@@ -4749,12 +4664,14 @@ in the partition.</p>
   (identical? ::tombstone x))</pre></td></tr><tr><td class="docs"><h2>Specs</h2>
 </td><td class="codes"></td></tr><tr><td class="docs"><p>Value of <code>:data/type</code> that indicates a patch tablet node.</p>
 </td><td class="codes"><pre class="brush: clojure">(def ^:const data-type
-  :merkle-db/patch)</pre></td></tr><tr><td class="docs"><p>Maximum number of changes to allow in a patch tablet.</p>
+  :merkle-db/patch)</pre></td></tr><tr><td class="docs"><p>The default number of changes to hold in a patch tablet.</p>
+</td><td class="codes"><pre class="brush: clojure">(def default-limit
+  100)</pre></td></tr><tr><td class="docs"><p>Maximum number of changes to allow in a patch tablet.</p>
 </td><td class="codes"><pre class="brush: clojure">(s/def ::limit pos-int?)</pre></td></tr><tr><td class="docs"><p>Records are stored as a key/data-or-tombstone pair.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::change-entry
-  (s/tuple key/key? (s/or :record map? :tombstone tombstone?)))</pre></td></tr><tr><td class="docs"><p>Sorted vector of record entries.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::entry
+  (s/tuple ::record/key (s/or :data ::record/data :tombstone tombstone?)))</pre></td></tr><tr><td class="docs"><p>Sorted vector of record entries.</p>
 </td><td class="codes"><pre class="brush: clojure">(s/def ::changes
-  (s/coll-of ::change-entry :kind vector?))</pre></td></tr><tr><td class="docs"><p>Patch tablet node data.</p>
+  (s/coll-of ::entry :kind vector?))</pre></td></tr><tr><td class="docs"><p>Patch tablet node data.</p>
 </td><td class="codes"><pre class="brush: clojure">(s/def ::node-data
   (s/and
     (s/keys :req [::changes])
@@ -4801,7 +4718,94 @@ in the partition.</p>
         (cons (first patch) (patch-seq (next patch) records))
       ; Next key is in records, not in patch.
       :else
-        (cons (first records) (patch-seq patch (next records))))))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.table" name="merkle-db.table"><h1 class="project-name">merkle-db.table</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Tables are named top-level containers of records. Generally, a single table
+        (cons (first records) (patch-seq patch (next records))))))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.record" name="merkle-db.record"><h1 class="project-name">merkle-db.record</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Core record specs and functions.</p>
+</td><td class="codes"><pre class="brush: clojure">(ns merkle-db.record
+  (:require
+    [clojure.future :refer [any? nat-int?]]
+    [clojure.spec :as s]
+    [clojure.string :as str]
+    [merkledag.link :as link]
+    [merkle-db.bloom :as bloom]
+    [merkle-db.key :as key])
+  (:import
+    java.time.Instant
+    java.time.format.DateTimeFormatter
+    merkle_db.bloom.BloomFilter
+    merkle_db.key.Key))</pre></td></tr><tr><td class="docs"><p>Count of the records contained under a node.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::count nat-int?)</pre></td></tr><tr><td class="docs"><p>Data size in bytes.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::size nat-int?)</pre></td></tr><tr><td class="docs"><p>Record key bytes.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::key key/key?)</pre></td></tr><tr><td class="docs"><p>Valid field key values.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::field-key any?)</pre></td></tr><tr><td class="docs"><p>Map of record field data.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::data (s/map-of ::field-key any?))</pre></td></tr><tr><td class="docs"><p>Record key/data tuple.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::entry (s/tuple ::key ::data))</pre></td></tr><tr><td class="docs"><p>Valid family keys.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::family-key keyword?)</pre></td></tr><tr><td class="docs"><p>Map of family keywords to sets of contained fields.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::families
+  (s/and
+    (s/map-of
+      ::family-key
+      (s/coll-of ::field-key :kind set?))
+    #(= (reduce + (map count (vals %)))
+        (count (distinct (apply concat (vals %)))))))</pre></td></tr><tr><td class="docs"><h2>Family Functions</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Build a lookup function for field families. Takes a map from family keys to
+  collections of field keys in that family. Returns a function which accepts a
+  field key and returns either the corresponding family or <code>:base</code> if it is not
+  assigned one.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn- family-lookup
+  [families]
+  (let [lookup (into {}
+                     (mapcat #(map vector (second %) (repeat (first %))))
+                     families)]
+    (fn [field-key] (lookup field-key :base))))</pre></td></tr><tr><td class="docs"><p>Build a map from family keys to maps which contain the field data for the
+  corresponding family. Fields not grouped in a family will be added to
+  <code>:base</code>. Families which had no data will have an entry with a <code>nil</code> value,
+  except <code>:base</code> which will be an empty map.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn group-families
+  [families data]
+  (let [field-&gt;family (family-lookup families)
+        init (assoc (zipmap (keys families) (repeat nil))
+                    :base {})]
+    (reduce-kv
+      (fn split-data
+        [groups field value]
+        (update groups (field-&gt;family field) assoc field value))
+      init data)))</pre></td></tr><tr><td class="docs"><p>Split new record values into collections grouped by family. Each configured
+  family and <code>:base</code> will have an entry in the resulting map, containing a
+  sorted map of record keys to new values. The values may be <code>nil</code> if the
+  record had no data for that family, an empty map if the family is <code>:base</code> and
+  all the record's data is in other families, or a map of field data belonging
+  to that family.</p>
+
+<p>  ```
+  {:base {#merkle-db/key "00" {:a 123}, ...}
+   :bc {#merkle-db/key "00" {:b true, :c "cat"}, ...}
+   ...}
+  ```</p>
+</td><td class="codes"><pre class="brush: clojure">(defn split-records
+  [families records]
+  (reduce
+    (fn append-updates
+      [updates [record-key data]]
+      (reduce-kv
+        (fn assign-updates
+          [updates family fdata]
+          (update updates family (fnil assoc (sorted-map)) record-key fdata))
+        updates
+        (group-families families data)))
+    {} records))</pre></td></tr><tr><td class="docs"><h2>Codecs</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>Map of codec type information that can be used with MerkleDAG stores.</p>
+</td><td class="codes"><pre class="brush: clojure">(def codec-types
+  {'inst
+   {:description &quot;An instant in time.&quot;
+    :reader #(Instant/parse ^String %)
+    :writers {Instant #(.format DateTimeFormatter/ISO_INSTANT ^Instant %)}}
+   'merkle-db/key
+   {:description &quot;Record key byte data.&quot;
+    :reader key/parse
+    :writers {Key key/hex}}
+   'merkle-db/bloom-filter
+   {:description &quot;Probablistic Bloom filter.&quot;
+    :reader bloom/form-&gt;filter
+    :writers {BloomFilter bloom/filter-&gt;form}}})</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.table" name="merkle-db.table"><h1 class="project-name">merkle-db.table</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Tables are named top-level containers of records. Generally, a single table
   corresponds to a certain 'kind' of data. Tables also contain configuration
   determining how keys are encoded and records are stored.</p>
 </td><td class="codes"><pre class="brush: clojure">(ns merkle-db.table
@@ -4814,34 +4818,36 @@ in the partition.</p>
       [link :as link]
       [node :as node])
     (merkle-db
-      [data :as data]
       [index :as index]
       [key :as key]
       [partition :as part]
-      [patch :as patch]))
+      [patch :as patch]
+      [record :as record]))
   (:import
     java.time.Instant))</pre></td></tr><tr><td class="docs"><h2>Data Specifications</h2>
 </td><td class="codes"></td></tr><tr><td class="docs"><p>Value of <code>:data/type</code> that indicates a table root node.</p>
 </td><td class="codes"><pre class="brush: clojure">(def ^:const data-type
   :merkle-db/table)</pre></td></tr><tr><td class="docs"><p>Set of keys which may appear in the table info map.</p>
 </td><td class="codes"><pre class="brush: clojure">(def ^:no-doc info-keys
-  #{::node/id ::name ::data/size})</pre></td></tr><tr><td class="docs"><p>Table names are strings which conform to some restrictions.</p>
+  #{::node/id ::name ::record/size})</pre></td></tr><tr><td class="docs"><p>Table names are strings which conform to some restrictions.</p>
 </td><td class="codes"><pre class="brush: clojure">(s/def ::name
   (s/and string?
          #(not (str/includes? % &quot;/&quot;))
          #(&lt;= 1 (count %) 127)))</pre></td></tr><tr><td class="docs"><p>Table data is a link to the root of the data tree.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::data link/merkle-link?)</pre></td></tr><tr><td class="docs"><p>Tables may have a patch tablet containing recent unmerged data.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::patch link/merkle-link?)</pre></td></tr><tr><td class="docs"><p>Table root node.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::record link/merkle-link?)</pre></td></tr><tr><td class="docs"><p>Tables may have a patch tablet containing recent unmerged data.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::patch link/merkle-link?)</pre></td></tr><tr><td class="docs"><p>Time the table was last modified.</p>
+</td><td class="codes"><pre class="brush: clojure">(s/def ::modified-at #(instance? Instant %))</pre></td></tr><tr><td class="docs"><p>Table root node.</p>
 </td><td class="codes"><pre class="brush: clojure">(s/def ::node-data
   (s/and
-    (s/keys :req [::data/count
+    (s/keys :req [::record/count
                   ::index/branching-factor
-                  ::part/limit]
+                  ::part/limit
+                  ::modified-at]
             :opt [::data
                   ::patch
-                  ::data/families
-                  ::key/lexicoder
-                  :time/updated-at])
+                  ::patch/limit
+                  ::record/families
+                  ::key/lexicoder])
     #(= data-type (:data/type %))))</pre></td></tr><tr><td class="docs">
 </td><td class="codes"><pre class="brush: clojure">(s/def ::table-info
   (s/keys :req [::node/id
@@ -4976,7 +4982,7 @@ the node was loaded.</li>
     (Table.
       store
       (dissoc table-info ::node/id)
-      {::data/count 0}
+      {::record/count 0}
       (empty pending)
       true
       _meta))
@@ -5057,9 +5063,10 @@ the node was loaded.</li>
     {::name table-name}
     (merge
       {::index/branching-factor index/default-branching-factor
-       ::part/limit part/default-limit}
+       ::part/limit part/default-limit
+       ::patch/limit patch/default-limit}
       (dissoc opts ::data ::patch)
-      {::data/count 0})
+      {::record/count 0})
     (sorted-map)
     true
     nil))</pre></td></tr><tr><td class="docs"><p>Load a table node from the store.</p>
@@ -5070,7 +5077,7 @@ the node was loaded.</li>
       store
       {::name table-name
        ::node/id (::node/id node)
-       ::data/size (node/reachable-size node)}
+       ::record/size (node/reachable-size node)}
       (::node/data node)
       (sorted-map)
       false
@@ -5235,7 +5242,7 @@ the node was loaded.</li>
      ; Add new data maps to pending changes.
      (-&gt; table
          (update-pending into new-records)
-         (update ::data/count + (- (count records) (count extant)))))))</pre></td></tr><tr><td class="docs">
+         (update ::record/count + (- (count records) (count extant)))))))</pre></td></tr><tr><td class="docs">
 </td><td class="codes"><pre class="brush: clojure">(defn- -delete
   [table id-keys]
   (let [lexicoder (key/lexicoder (::key/lexicoder table :bytes))
@@ -5247,7 +5254,7 @@ the node was loaded.</li>
             (map first)
             (map (fn [k] [(key/encode lexicoder k) patch/tombstone])))
           extant)
-        (update ::data/count - (count extant)))))</pre></td></tr><tr><td class="docs"><p>Returns a vector containing a link to a patch tablet and an index tree.</p>
+        (update ::record/count - (count extant)))))</pre></td></tr><tr><td class="docs"><p>Returns a vector containing a link to a patch tablet and an index tree.</p>
 </td><td class="codes"><pre class="brush: clojure">(defn- flush-changes
   [^Table table full?]
   (let [changes (load-changes table)]
@@ -5286,7 +5293,7 @@ the node was loaded.</li>
        (let [node (mdag/store-node! (.store table) nil root-data)
              table-info (assoc (.table-info table)
                                ::node/id (::node/id node)
-                               ::data/size (node/reachable-size node))
+                               ::record/size (node/reachable-size node))
              table-meta (assoc (._meta table)
                                ::node/links (::node/links node))]
          (-&gt;Table
@@ -5311,14 +5318,13 @@ the node was loaded.</li>
   (:refer-clojure :exclude [keys])
   (:require
     [clojure.spec :as s]
-    [merkle-db.key :as key]))</pre></td></tr><tr><td class="docs"><h2>Specs</h2>
+    [merkle-db.key :as key]
+    [merkle-db.record :as record]))</pre></td></tr><tr><td class="docs"><h2>Specs</h2>
 </td><td class="codes"></td></tr><tr><td class="docs"><p>Value of <code>:data/type</code> that indicates a tablet node.</p>
 </td><td class="codes"><pre class="brush: clojure">(def ^:const data-type
-  :merkle-db/tablet)</pre></td></tr><tr><td class="docs"><p>Records are stored as a key/data pair.</p>
-</td><td class="codes"><pre class="brush: clojure">(s/def ::record-entry
-  (s/tuple key/key? map?))</pre></td></tr><tr><td class="docs"><p>Sorted vector of record entries.</p>
+  :merkle-db/tablet)</pre></td></tr><tr><td class="docs"><p>Sorted vector of record entries.</p>
 </td><td class="codes"><pre class="brush: clojure">(s/def ::records
-  (s/coll-of ::record-entry :kind vector?))</pre></td></tr><tr><td class="docs"><p>Tablet node.</p>
+  (s/coll-of ::record/entry :kind vector?))</pre></td></tr><tr><td class="docs"><p>Tablet node.</p>
 </td><td class="codes"><pre class="brush: clojure">(s/def :merkle-db/tablet
   (s/and
     (s/keys :req [::records])
@@ -5431,7 +5437,7 @@ the node was loaded.</li>
       (::records tablet))
     (as-&gt; records
       (when (seq records)
-        (assoc tablet ::records records)))))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr></table><div class="footer">Generated by <a href="https://github.com/gdeer81/marginalia">Marginalia</a>.&nbsp;&nbsp;Syntax highlighting provided by Alex Gorbatchev's <a href="http://alexgorbatchev.com/SyntaxHighlighter/">SyntaxHighlighter</a><div id="floating-toc"><ul><li class="floating-toc-li" id="floating-toc_merkle-db.bloom">merkle-db.bloom</li><li class="floating-toc-li" id="floating-toc_merkle-db.connection">merkle-db.connection</li><li class="floating-toc-li" id="floating-toc_merkle-db.data">merkle-db.data</li><li class="floating-toc-li" id="floating-toc_merkle-db.db">merkle-db.db</li><li class="floating-toc-li" id="floating-toc_merkle-db.index">merkle-db.index</li><li class="floating-toc-li" id="floating-toc_merkle-db.key">merkle-db.key</li><li class="floating-toc-li" id="floating-toc_merkle-db.partition">merkle-db.partition</li><li class="floating-toc-li" id="floating-toc_merkle-db.patch">merkle-db.patch</li><li class="floating-toc-li" id="floating-toc_merkle-db.table">merkle-db.table</li><li class="floating-toc-li" id="floating-toc_merkle-db.tablet">merkle-db.tablet</li></ul></div></div><script type="text/javascript">SyntaxHighlighter.defaults['gutter'] = false;
+        (assoc tablet ::records records)))))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr></table><div class="footer">Generated by <a href="https://github.com/gdeer81/marginalia">Marginalia</a>.&nbsp;&nbsp;Syntax highlighting provided by Alex Gorbatchev's <a href="http://alexgorbatchev.com/SyntaxHighlighter/">SyntaxHighlighter</a><div id="floating-toc"><ul><li class="floating-toc-li" id="floating-toc_merkle-db.bloom">merkle-db.bloom</li><li class="floating-toc-li" id="floating-toc_merkle-db.connection">merkle-db.connection</li><li class="floating-toc-li" id="floating-toc_merkle-db.db">merkle-db.db</li><li class="floating-toc-li" id="floating-toc_merkle-db.index">merkle-db.index</li><li class="floating-toc-li" id="floating-toc_merkle-db.key">merkle-db.key</li><li class="floating-toc-li" id="floating-toc_merkle-db.partition">merkle-db.partition</li><li class="floating-toc-li" id="floating-toc_merkle-db.patch">merkle-db.patch</li><li class="floating-toc-li" id="floating-toc_merkle-db.record">merkle-db.record</li><li class="floating-toc-li" id="floating-toc_merkle-db.table">merkle-db.table</li><li class="floating-toc-li" id="floating-toc_merkle-db.tablet">merkle-db.tablet</li></ul></div></div><script type="text/javascript">SyntaxHighlighter.defaults['gutter'] = false;
 SyntaxHighlighter.all();
 
 // hackity hack

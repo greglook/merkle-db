@@ -273,7 +273,7 @@
 
 (defn apply-patch!
   "Performs an update across the tablets in the partition to merge in the given
-  patch changes. Returns a sequence of zero or more partitions."
+  patch changes. Returns a sequence of zero or more persisted partitions."
   [store part changes]
   ; OPTIMIZE: don't write out too-large tablets
   (let [limit (or (::limit part) default-limit)
@@ -286,18 +286,20 @@
                         family-updates)
         added-keys (map first additions)
         record-count (count (tablet/read-all (mdag/get-data store (:base tablets))))
-        part-count (inc (int (/ record-count limit)))]
+        part-count (int (Math/ceil (/ record-count limit)))]
     (when (pos? record-count)
       (if (= 1 part-count)
         ; Records still fit into one partition
-        [(assoc part
-                ::record/count record-count
-                ::tablets tablets
-                ::membership (into (::membership part) added-keys)
-                ::first-key (apply key/min (::first-key part) added-keys)
-                ::last-key (apply key/max (::last-key part) added-keys))]
+        [(->>
+           (assoc part
+                  ::record/count record-count
+                  ::tablets tablets
+                  ::membership (into (::membership part) added-keys)
+                  ::first-key (apply key/min (::first-key part) added-keys)
+                  ::last-key (apply key/max (::last-key part) added-keys))
+           (mdag/store-node! store nil)
+           (::node/data))]
         ; Partition must be split into multiple.
-        ; OPTIMIZE: split overflows without storing invalid tablets
         (->>
           (read-all store part nil)
           (from-records store part))))))

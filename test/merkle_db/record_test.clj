@@ -8,18 +8,18 @@
 
 (deftest partitioning-utils
   (testing "partition-approx"
-    (is (nil? (record/partition-approx 1 [])))
-    (is (nil? (record/partition-approx 5 [])))
+    (is (nil? (record/partition-approx 1 0 [])))
+    (is (nil? (record/partition-approx 5 0 [])))
     (is (= [[:a :b :c]]
-           (record/partition-approx 1 [:a :b :c])))
+           (record/partition-approx 1 3 [:a :b :c])))
     (is (= [[:a] [:b :c]]
-           (record/partition-approx 2 [:a :b :c])))
+           (record/partition-approx 2 3 [:a :b :c])))
     (is (= [[:a] [:b] [:c]]
-           (record/partition-approx 3 [:a :b :c])))
+           (record/partition-approx 3 3 [:a :b :c])))
     (is (= [[:a] [:b] [:c]]
-           (record/partition-approx 5 [:a :b :c])))
+           (record/partition-approx 5 3 [:a :b :c])))
     (is (= [[:a :b] [:c :d] [:e :f :g]]
-           (record/partition-approx 3 [:a :b :c :d :e :f :g]))))
+           (record/partition-approx 3 7 [:a :b :c :d :e :f :g]))))
   (testing "partition-limited"
     (is (nil? (record/partition-limited 3 [])))
     (is (= [[:a]]

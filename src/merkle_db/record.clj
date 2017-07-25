@@ -129,9 +129,8 @@
 (defn partition-approx
   "Returns a lazy sequence of `n` lists containing the elements of `coll` in
   order, where each list is approximately the same size."
-  [n coll]
-  (let [cnt (count coll)
-        n (min n cnt)]
+  [n cnt coll]
+  (let [n (min n cnt)]
     (when (pos? cnt)
       (->>
         [nil
@@ -156,8 +155,8 @@
   - A minimum number of partitions is returned
   - Partitions are approximately equal in size
 
-  Note that this involves counting the collection."
-  [limit coll]
-  (partition-approx
-    (int (Math/ceil (/ (count coll) limit)))
-    coll))
+  Note that this counts the collection unless it's provided."
+  ([limit coll]
+   (partition-limited limit (count coll) coll))
+  ([limit cnt coll]
+   (partition-approx (int (Math/ceil (/ cnt limit))) cnt coll)))

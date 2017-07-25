@@ -46,6 +46,27 @@
 
 
 
+;; ## Codecs
+
+(def codec-types
+  "Map of codec type information that can be used with MerkleDAG stores."
+  {'inst
+   {:description "An instant in time."
+    :reader #(Instant/parse ^String %)
+    :writers {Instant #(.format DateTimeFormatter/ISO_INSTANT ^Instant %)}}
+
+   'merkle-db/key
+   {:description "Record key byte data."
+    :reader key/parse
+    :writers {Key key/hex}}
+
+   'merkle-db/bloom-filter
+   {:description "Probablistic Bloom filter."
+    :reader bloom/form->filter
+    :writers {BloomFilter bloom/filter->form}}})
+
+
+
 ;; ## Family Functions
 
 (defn- family-lookup
@@ -60,7 +81,7 @@
     (fn [field-key] (lookup field-key :base))))
 
 
-(defn group-families
+(defn family-groups
   "Build a map from family keys to maps which contain the field data for the
   corresponding family. Fields not grouped in a family will be added to
   `:base`. Families which had no data will have an entry with a `nil` value,
@@ -76,7 +97,7 @@
       init data)))
 
 
-(defn split-records
+(defn split-data
   "Split new record values into collections grouped by family. Each configured
   family and `:base` will have an entry in the resulting map, containing a
   sorted map of record keys to new values. The values may be `nil` if the
@@ -98,26 +119,45 @@
           [updates family fdata]
           (update updates family (fnil assoc (sorted-map)) record-key fdata))
         updates
-        (group-families families data)))
+        (family-groups families data)))
     {} records))
 
 
 
-;; ## Codecs
+;; ## Utilities
 
-(def codec-types
-  "Map of codec type information that can be used with MerkleDAG stores."
-  {'inst
-   {:description "An instant in time."
-    :reader #(Instant/parse ^String %)
-    :writers {Instant #(.format DateTimeFormatter/ISO_INSTANT ^Instant %)}}
+(defn partition-approx
+  "Returns a lazy sequence of `n` lists containing the elements of `coll` in
+  order, where each list is approximately the same size."
+  [n coll]
+  (let [cnt (count coll)
+        n (min n cnt)]
+    (when (pos? cnt)
+      (->>
+        [nil
+         (->> (range (inc n))
+              (map #(int (* (/ % n) cnt)))
+              (partition 2 1))
+         coll]
+        (iterate
+          (fn [[_ [[start end :as split] & splits] xs]]
+            (when-let [length (and split (- end start))]
+              [(seq (take length xs))
+               splits
+               (drop length xs)])))
+        (drop 1)
+        (take-while first)
+        (map first)))))
 
-   'merkle-db/key
-   {:description "Record key byte data."
-    :reader key/parse
-    :writers {Key key/hex}}
 
-   'merkle-db/bloom-filter
-   {:description "Probablistic Bloom filter."
-    :reader bloom/form->filter
-    :writers {BloomFilter bloom/filter->form}}})
+(defn partition-limited
+  "Returns a sequence of partitions of the elements of `coll` such that:
+  - No partition has more than `limit` elements
+  - A minimum number of partitions is returned
+  - Partitions are approximately equal in size
+
+  Note that this involves counting the collection."
+  [limit coll]
+  (partition-approx
+    (int (Math/ceil (/ (count coll) limit)))
+    coll))

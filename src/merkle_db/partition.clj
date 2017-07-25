@@ -59,28 +59,6 @@
 
 ;; ## Utilities
 
-; TODO: ensure that if `coll` is empty, the resulting sequence is empty.
-(defn- partition-approx
-  "Returns a lazy sequence of `n` lists containing the elements of `coll` in
-  order, where each list is approximately the same size."
-  [n coll]
-  (->>
-    [nil
-     (->> (range (inc n))
-          (map #(int (* (/ % n) (count coll))))
-          (partition 2 1))
-     coll]
-    (iterate
-      (fn [[_ [[start end :as split] & splits] xs]]
-        (when-let [length (and split (- end start))]
-          [(seq (take length xs))
-           splits
-           (drop length xs)])))
-    (drop 1)
-    (take-while first)
-    (map first)))
-
-
 (defn- store-tablet!
   "Store the given tablet data and return the family key and updated id."
   [store family-key tablet]
@@ -268,8 +246,7 @@
   [store parameters records]
   (let [records (sort-by first (patch/remove-tombstones records))
         limit (or (::limit parameters) default-limit)
-        families (or (::record/families parameters) {})
-        part-count (inc (int (/ (count records) limit)))]
+        families (or (::record/families parameters) {})]
     (into
       []
       (map
@@ -285,24 +262,25 @@
              ::last-key (first (last partition-records))
              ::tablets (->>
                          partition-records
-                         (record/split-records families)
+                         (record/split-data families)
                          (map (juxt key #(tablet/from-records (val %))))
                          (map (partial apply store-tablet! store))
                          (into {}))}
             (mdag/store-node! store nil)
             (::node/data))))
-      (partition-approx part-count records))))
+      (record/partition-limited limit records))))
 
 
 (defn apply-patch!
   "Performs an update across the tablets in the partition to merge in the given
   patch changes. Returns a sequence of zero or more partitions."
   [store part changes]
+  ; OPTIMIZE: don't write out too-large tablets
   (let [limit (or (::limit part) default-limit)
         additions (remove (comp patch/tombstone? second) changes)
         deletions (set (map first (filter (comp patch/tombstone? second)
                                           changes)))
-        family-updates (record/split-records (::record/families part) additions)
+        family-updates (record/split-data (::record/families part) additions)
         tablets (reduce (partial update-tablet! store deletions)
                         (::tablets part)
                         family-updates)
@@ -310,7 +288,7 @@
         record-count (count (tablet/read-all (mdag/get-data store (:base tablets))))
         part-count (inc (int (/ record-count limit)))]
     (when (pos? record-count)
-      (if (< 1 part-count)
+      (if (= 1 part-count)
         ; Records still fit into one partition
         [(assoc part
                 ::record/count record-count

@@ -176,8 +176,8 @@
 ;; are index nodes. In a tree with branching factor `b`, every index node
 ;; except the root must have between `ceiling(b/2)` and `b` children. The root
 ;; is allowed to have between 2 and `b` children. If the tree has more than
-;; `::partition/limit` records, then each partition in the tree will be at
-;; least half full.
+;; `:merkle-db.partition/limit` records, then each partition in the tree will
+;; be at least half full.
 ;;
 ;; The root node may be:
 ;; - nil, indicating an empty tree.
@@ -185,39 +185,153 @@
 ;;   than `::partition/limit` records.
 ;; - An index, which is treated as the root node of the tree.
 ;;
-;; In the first "downward" phase, changes are grouped by the child which links
-;; to the subtree containing the updated keys. Once the changes reach the leaf
-;; partitions, apply them to produce some result partitions, in order.
-;; - If zero partitions (all deleted), remove the original child link and key
-;;   from the parent node.
-;; - If one partition, update the original child link and key.
-;; - If multiple partitions (split), insert the additional child links and keys into the parent node
-;; - If any partitions (across the tree) underflowed, merge with or borrow from siblings.
+;; At each node, the update proceeds in a number of phases. The algorithm
+;; described below uses three terms for nodes:
+;; - The "parent" is the current top level node we're recursing on.
+;; - The "children" are the direct descendants of the parent node.
+;; - The "candidates" are changed but unstored descendant nodes.
 
-;; Insertion
-;;
-;; - Perform a search to determine what partition the new record should go into.
-;; - If the partition is not full (at most p entries after the insertion), add the record.
-;; - Otherwise, split the partition.
-;;     - Split half the partition's elements into a new partition.
-;;     - Insert the new partition's smallest key and link into the parent.
-;;     - If the parent is full, split it too.
-;;         - Add the middle key to the parent node.
-;;     - Repeat until a parent is found that need not split.
-;; - If the root splits, create a new root which has one key and two links.
-;;   (That is, the value that gets pushed to the new root gets removed from
-;;   the original node)
 
-;; Deletion
+;; ### Divide Changes
 ;;
-;; - Start at root, find partition P where record belongs.
-;; - Remove the record.
-;;     - If P is at least half-full, done!
-;;     - If P has fewer entries than it should,
-;;         - If sibling (adjacent node with same parent as P) is more than half-full, re-distribute, borrowing an record from it.
-;;         - Otherwise, sibling is exactly half-full, so we can merge P and sibling.
-;; - If merge occurred, must delete record (pointing to P or sibling) from parent of P.
-;; - Merge could propagate to root, decreasing height.
+;; In the first **downward** phase, changes at the parent are grouped by the
+;; child which links to the subtree containing the referenced keys.
+
+,,,
+
+
+;; ### Apply Changes
+;;
+;; In the **apply** phase, changes are applied to the _children_ to produce
+;; new child nodes. This call returns an unpersisted candidate, or nil if the
+;; resulting node would be empty. The resulting candidate node may have any
+;; number of children, meaning it can either underflow, be valid, or overflow,
+;; depending on the changes applied.
+
+,,,
+
+
+;; ### Redistribute Children
+;;
+;; In the **distribution** phase, any candidate children which have over or
+;; overflowed must split, merge with a neighbor, or borrow some elements from
+;; one. Afterwards, all children should be at least half full and under the
+;; size limit, unless there is only a single child left.
+;;
+;; Consider consecutive runs of invalid candidate nodes; if the total number of
+;; children is at least half the limit, repartition the children into a number
+;; of valid nodes. Otherwise, resolve the last link before the run and add it
+;; to the pool to redistribute. Use the link after if the run includes the
+;; first child.
+
+; TODO: what to do in the exceptional case that there is only a single child left?
+
+; Seems like it needs a 'zipper' phase to re-merge. Say a series of changes has
+; left us in this state with a tree with b=4. O is an unchanged node, * is a
+; candidate:
+; >      *
+;       / \
+;      /   \
+;     *     *
+;    /     / \
+;   *     *   O
+;   |    /|\  |\
+;   *   O * O O O
+
+; Now we've propagated up to the root, and we see that the left child is
+; underflowing, so merge it into the right child:
+;        *
+;        |
+;        |
+; >    .-*-.
+;     /  |  \
+;    *   *   O
+;    |  /|\  |\
+;    * O * O O O
+
+; The check continues recursively, and the new merged node checks its children.
+; Again, the left node needs to be merged in:
+;        *
+;        |
+;        |
+;        *.
+;       /  \
+; >   .*.   O
+;    // \\  |\
+;   * O * O O O
+
+; The final node is valid with 4 children, so we can start serializing the
+; children:
+;        *
+;        |
+;        |
+;        *.
+;       /  \
+;     .*.   O
+;    // \\  |\
+; > + O + O O O
+
+;        *
+;        |
+;        |
+;        *.
+;       /  \
+; >   .+.   O
+;    // \\  |\
+;   + O + O O O
+
+;        *
+;        |
+;        |
+; >      +.
+;       /  \
+;     .+.   O
+;    // \\  |\
+;   + O + O O O
+
+; If the upward recursion reaches a branch with a single child, we're on a path
+; up to the root, so return the subtree directly, decreasing the height of the
+; tree.
+; >      *
+;        |
+;        |
+;        +.
+;       /  \
+;     .+.   O
+;    // \\  |\
+;   + O + O O O
+
+; Resulting balanced tree:
+;        +.
+;       /  \
+;     .+.   O
+;    // \\  |\
+;   + O + O O O
+
+,,,
+
+
+;; ### Flush Candidates
+;;
+;; After the merge, the first child should have all fully valid candidates.
+;; Serialize the candidates and replace them with links. Update the child
+;; node's height and record count as needed. Flushing proceeds to each child
+;; node in turn until all candidates have been serialized and are valid nodes,
+;; completing that layer of the tree.
+
+;; ### Update Parent
+;;
+;; If the number of children is higher than the limit, the node has
+;; _overflowed_, and is split to return a sequence of valid nodes which are at
+;; least half full. Otherwise, a sequence containing a single updated node
+;; candidate is returned. If every child was deleted, an empty sequence is
+;; returned.
+;;
+;; Propagate the changes up to the top of the index tree, creating new layers
+;; as necessary to accommodate child splits.
+;;
+;; ...
+
 
 ;; References
 ;;

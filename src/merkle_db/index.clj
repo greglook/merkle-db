@@ -190,12 +190,62 @@
 ;; - The "parent" is the current top level node we're recursing on.
 ;; - The "children" are the direct descendants of the parent node.
 ;; - The "candidates" are changed but unstored descendant nodes.
-
+;;
+;; The batch-update algorithm has the following goals:
+;; - **Log scaling:** visit `O(log_b(n))` nodes for `n` nodes updated.
+;; - **Minimize garbage:** avoid storing nodes which are not part of the final
+;;   tree.
+;; - **Deduplication:** reuse existing stored nodes where possible.
+;;
+;; In the following diagrams, these symbols are used:
+;; - `O` - unchanged index node
+;; - `*` - candidate index node
+;; - `+` - persisted index node
+;; - `#` - unchanged partition leaf
+;; - `@` - persisted partition leaf
+;; - `U` - underflowing partition leaf
+;; - `x` - node which has had all children deleted
 
 ;; ### Divide Changes
 ;;
 ;; In the first **downward** phase, changes at the parent are grouped by the
 ;; child which links to the subtree containing the referenced keys.
+;;
+;;     >        .[O].         [????|?????]
+;;             /     \
+;;            /       \
+;;           O        .O.
+;;          / \      / | \
+;;         O   O    O  O  O
+;;        /|\  |\  / \/|\/ \
+;;       # # # # # # ##### #
+;;
+;;              ..O..              |?????]
+;;             /     \
+;;            /       \
+;;     >    [O]       .O.     [??|???]
+;;          / \      / | \
+;;         O   O    O  O  O
+;;        /|\  |\  / \/|\/ \
+;;       # # # # # # ##### #
+;;
+;;              ..O..              |?????]
+;;             /     \
+;;            /       \
+;;           O        .O.        |???]
+;;          / \      / | \
+;;     >  [O]  O    O  O  O   [?|?]
+;;        /|\  |\  / \/|\/ \
+;;       # # # # # # ##### #
+;;
+;;              ..O..              |?????]
+;;             /     \
+;;            /       \
+;;           O        .O.        |???]
+;;          / \      / | \
+;;         O   O    O  O  O     |?]
+;;        /|\  |\  / \/|\/ \
+;;     >[#]# # # # # ##### #  [?]
 
 ,,,
 
@@ -207,10 +257,59 @@
 ;; resulting node would be empty. The resulting candidate node may have any
 ;; number of children, meaning it can either underflow, be valid, or overflow,
 ;; depending on the changes applied.
-
-,,,
-
-
+;;
+;;              ..O..
+;;             /     \
+;;            /       \
+;;           O        .O.
+;;          / \      / | \
+;;         O   O    O  O  O
+;;        /|\  |\  /|\/|\/ \
+;;     > x x[U]# # ####### #
+;;
+;; When a node has only a single child, it is 'pulled' up the tree recursively
+;; so it can be passed down the next branch for merging into the next branch.
+;;
+;;              ..O..
+;;             /     \
+;;            /       \
+;;           O        .O.
+;;          / \      / | \
+;;     >  [U]  O    O  O  O
+;;             |\  /|\/|\/ \
+;;             # # ####### #
+;;
+;;              ..O..
+;;             /     \
+;;            /       \
+;;     >    [O](U)    .O.
+;;           |       / | \
+;;           O      O  O  O
+;;          / \    /|\/|\/ \
+;;         #   #   ####### #
+;;
+;; When a subtree is being passed to the next branch, and the current node's
+;; height is one more than the subtree root, insert it as a child of the
+;; current node:
+;;
+;;              ..O..
+;;             /     \
+;;            /       \
+;;           O        .O.
+;;           |       / | \
+;;     >    [*]     O  O  O
+;;          /|\    /|\/|\/ \
+;;        (U)# #   ####### #
+;;
+;;              ..O..
+;;             /     \
+;;            /       \
+;;           O        .O.
+;;           |       / | \
+;;           *      O  O  O
+;;          /|\    /|\/|\/ \
+;;     >   U x[U]  ####### #
+;;
 ;; ### Redistribute Children
 ;;
 ;; In the **distribution** phase, any candidate children which have over or
@@ -223,121 +322,169 @@
 ;; of valid nodes. Otherwise, resolve the last link before the run and add it
 ;; to the pool to redistribute. Use the link after if the run includes the
 ;; first child.
-
-; TODO: what to do in the exceptional case that there is only a single child left?
-
-; Seems like it needs a 'zipper' phase to re-merge. Say a series of changes has
-; left us in this state with a tree with b=4. O is an unchanged node, * is a
-; candidate:
-; >      *
-;       / \
-;      /   \
-;     *     *
-;    /     / \
-;   *     *   O
-;   |    /|\  |\
-;   *   O * O O O
-
-; Now we've propagated up to the root, and we see that the left child is
-; underflowing, so merge it into the right child:
-;        *
-;        |
-;        |
-; >    .-*-.
-;     /  |  \
-;    *   *   O
-;    |  /|\  |\
-;    * O * O O O
-
-; The check continues recursively, and the new merged node checks its children.
-; Again, the left node needs to be merged in:
-;        *
-;        |
-;        |
-;        *.
-;       /  \
-; >   .*.   O
-;    // \\  |\
-;   * O * O O O
-
-; The final node is valid with 4 children, so we can start serializing the
-; children:
-;        *
-;        |
-;        |
-;        *.
-;       /  \
-;     .*.   O
-;    // \\  |\
-; > + O + O O O
-
-;        *
-;        |
-;        |
-;        *.
-;       /  \
-; >   .+.   O
-;    // \\  |\
-;   + O + O O O
-
-;        *
-;        |
-;        |
-; >      +.
-;       /  \
-;     .+.   O
-;    // \\  |\
-;   + O + O O O
-
-; If the upward recursion reaches a branch with a single child, we're on a path
-; up to the root, so return the subtree directly, decreasing the height of the
-; tree.
-; >      *
-;        |
-;        |
-;        +.
-;       /  \
-;     .+.   O
-;    // \\  |\
-;   + O + O O O
-
-; Resulting balanced tree:
-;        +.
-;       /  \
-;     .+.   O
-;    // \\  |\
-;   + O + O O O
-
-,,,
-
-
-;; ### Flush Candidates
 ;;
-;; After the merge, the first child should have all fully valid candidates.
-;; Serialize the candidates and replace them with links. Update the child
-;; node's height and record count as needed. Flushing proceeds to each child
-;; node in turn until all candidates have been serialized and are valid nodes,
-;; completing that layer of the tree.
-
-;; ### Update Parent
+;; Two underflowing partitions need to be merged, but still form an
+;; underflowing partition:
 ;;
-;; If the number of children is higher than the limit, the node has
-;; _overflowed_, and is split to return a sequence of valid nodes which are at
-;; least half full. Otherwise, a sequence containing a single updated node
-;; candidate is returned. If every child was deleted, an empty sequence is
-;; returned.
+;;              ..O..
+;;             /     \
+;;            /       \
+;;           O        .O.
+;;           |       / | \
+;;           *      O  O  O
+;;           |     /|\/|\/ \
+;;     >  [->U<-]  ####### #
 ;;
-;; Propagate the changes up to the top of the index tree, creating new layers
-;; as necessary to accommodate child splits.
+;;              ..O..
+;;             /     \
+;;            /       \
+;;           O        .O.
+;;           |       / | \
+;;     >    [U]     O  O  O
+;;                 /|\/|\/ \
+;;                 ####### #
 ;;
-;; ...
+;;              ..O..
+;;             /     \
+;;            /       \
+;;     >    [U]       .O.
+;;                   / | \
+;;                  O  O  O
+;;                 /|\/|\/ \
+;;                 ####### #
+;;
+;;     >       [O](U)
+;;              |
+;;            ..O..
+;;           /  |  \
+;;          O   O   O
+;;         /|\ /|\ / \
+;;         ### ### # #
+;;
+;;              O
+;;              |
+;;     >      .[O]. (U)
+;;           /  |  \
+;;          O   O   O
+;;         /|\ /|\ / \
+;;         ### ### # #
+;;
+;;              O
+;;              |
+;;            ..O..
+;;           /  |  \
+;;     >   [O]  O   O
+;;        // \\/|\ / \
+;;        U# U@### # #
+;;
+;; Again, redistribute the records in the underflowing partitions.
+;;
+;;              O
+;;              |
+;;            ..O..
+;;           /  |  \
+;;          O   O   O
+;;         /|\ /|\ / \
+;;     >  [@@@]### # #
+;;
+;;              O
+;;              |
+;;            ..O..
+;;           /  |  \
+;;     >   [*]  O   O
+;;         /|\ /|\ / \
+;;         @@@ ### # #
+;;
+;;              O
+;;              |
+;;     >      .[*].
+;;           /  |  \
+;;          *   O   O
+;;         /|\ /|\ / \
+;;         @@@ ### # #
+;;
+;; Fast forward, deleting a subtree...
+;;
+;;              O
+;;              |
+;;            ..*..
+;;           /  |  \
+;;     >    *  [x]  O
+;;         /|\ /|\ / \
+;;     >   @@@[xxx]# #
+;;
+;; Insert nodes into right subtree, resulting in splitting multiple partitions.
+;;
+;;              O
+;;              |
+;;            ..*..
+;;           /     \
+;;          *       *
+;;         /|\    //|\\
+;;     >  @ @ @  [#@@@@]
+;;
+;; Back to distribution phase, fix overflow by splitting the node:
+;;              O
+;;              |
+;;            ..*..
+;;           /  |  \
+;;     >    *  [*   *]
+;;         /|\ / \ /|\
+;;         @@@ # @ @@@
+;;
+;;              *
+;;              |
+;;     >      .[*].
+;;           /  |  \
+;;          *   *   *
+;;         /|\ / \ /|\
+;;         @@@ # @ @@@
+;;
+;;     >       [*]
+;;              |
+;;            ..*..
+;;           /  |  \
+;;          *   *   *
+;;         /|\ / \ /|\
+;;         @@@ # @ @@@
+;;
+;; Now that we're back at the root, we can serialize out the resulting tree.
+;;
+;;              *
+;;              |
+;;     >      .[+].
+;;           /  |  \
+;;          +   +   +
+;;         /|\ / \ /|\
+;;         @@@ # @ @@@
+;;
+;; If the upward recursion reaches a branch with a single child, we're on a path
+;; up to the root, so return the subtree directly, decreasing the height of the
+;; tree.
+;;
+;;     >       [*]
+;;              |
+;;            ..+..
+;;           /  |  \
+;;          +   +   +
+;;         /|\ / \ /|\
+;;         @@@ # @ @@@
+;;
+;; Resulting balanced tree:
+;;
+;;            ..+..
+;;           /  |  \
+;;          +   +   +
+;;         /|\ / \ /|\
+;;         @@@ # @ @@@
 
 
-;; References
+;; ### References
 ;;
 ;; https://pdfs.semanticscholar.org/85eb/4cf8dfd51708418881e2b5356d6778645a1a.pdf
 ;; Insight: instead of flushing all the updates, select a related subgroup that
 ;; minimizes repeated changes to the same node path.
+
 
 (defn build-index
   "Given a sequence of partitions, builds an index tree with the given

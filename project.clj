@@ -9,15 +9,14 @@
    "docs" ["do" ["codox"] ["doc-lit"]]
    "doc-lit" ["marg" "--dir" "target/doc/marginalia"
               "src/merkle_db/connection.clj"
-              "src/merkle_db/lock.clj"
               "src/merkle_db/db.clj"
               "src/merkle_db/table.clj"
               "src/merkle_db/index.clj"
               "src/merkle_db/partition.clj"
               "src/merkle_db/tablet.clj"
+              "src/merkle_db/record.clj"
               "src/merkle_db/key.clj"
-              "src/merkle_db/bloom.clj"
-              "src/merkle_db/data.clj"]}
+              "src/merkle_db/bloom.clj"]}
 
   :deploy-branches ["master"]
   :pedantic? :abort

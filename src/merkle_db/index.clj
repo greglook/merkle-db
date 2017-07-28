@@ -180,24 +180,22 @@
 ;; be at least half full.
 ;;
 ;; The root node may be:
+;;
 ;; - nil, indicating an empty tree.
 ;; - A partition, indicating that the tree has only a single node and fewer
 ;;   than `::partition/limit` records.
 ;; - An index, which is treated as the root node of the tree.
 ;;
-;; At each node, the update proceeds in a number of phases. The algorithm
-;; described below uses three terms for nodes:
-;; - The "parent" is the current top level node we're recursing on.
-;; - The "children" are the direct descendants of the parent node.
-;; - The "candidates" are changed but unstored descendant nodes.
-;;
 ;; The batch-update algorithm has the following goals:
+;;
 ;; - **Log scaling:** visit `O(log_b(n))` nodes for `n` nodes updated.
 ;; - **Minimize garbage:** avoid storing nodes which are not part of the final
 ;;   tree.
 ;; - **Deduplication:** reuse existing stored nodes where possible.
 ;;
-;; In the following diagrams, these symbols are used:
+;; In the following diagrams, these symbols are used to represent a tree with
+;; branching-factor of 4:
+;;
 ;; - `O` - unchanged index node
 ;; - `*` - candidate index node
 ;; - `+` - persisted index node
@@ -205,49 +203,52 @@
 ;; - `@` - persisted partition leaf
 ;; - `U` - underflowing partition leaf
 ;; - `x` - node which has had all children deleted
+;;
+;; Algorithm Phases:
+;;
+;; - divide changes (downward)
+;; - apply changes (to partition leaves)
+;; - carry orphans (upward/sideways)
+;; - redistribute children
+;; - serialize the tree
+
 
 ;; ### Divide Changes
 ;;
 ;; In the first **downward** phase, changes at the parent are grouped by the
 ;; child which links to the subtree containing the referenced keys.
 ;;
-;;     >        .[O].         [????|?????]
-;;             /     \
+;;     >       ..[O]..        [????|?????]
 ;;            /       \
 ;;           O        .O.
 ;;          / \      / | \
 ;;         O   O    O  O  O
-;;        /|\  |\  / \/|\/ \
-;;       # # # # # # ##### #
+;;        /|\ / \  / \/|\/ \
+;;        ### # #  # ##### #
 ;;
-;;              ..O..              |?????]
-;;             /     \
+;;             ...O...             |?????]
 ;;            /       \
 ;;     >    [O]       .O.     [??|???]
 ;;          / \      / | \
 ;;         O   O    O  O  O
 ;;        /|\  |\  / \/|\/ \
-;;       # # # # # # ##### #
+;;        ###  ##  # ##### #
 ;;
-;;              ..O..              |?????]
-;;             /     \
+;;             ...O...             |?????]
 ;;            /       \
 ;;           O        .O.        |???]
 ;;          / \      / | \
 ;;     >  [O]  O    O  O  O   [?|?]
 ;;        /|\  |\  / \/|\/ \
-;;       # # # # # # ##### #
+;;        ###  ##  # ##### #
 ;;
-;;              ..O..              |?????]
-;;             /     \
+;;             ...O...             |?????]
 ;;            /       \
 ;;           O        .O.        |???]
 ;;          / \      / | \
 ;;         O   O    O  O  O     |?]
 ;;        /|\  |\  / \/|\/ \
-;;     >[#]# # # # # ##### #  [?]
-
-,,,
+;;     >[#]##  ##  # ##### #  [?]
 
 
 ;; ### Apply Changes
@@ -258,20 +259,48 @@
 ;; number of children, meaning it can either underflow, be valid, or overflow,
 ;; depending on the changes applied.
 ;;
-;;              ..O..
-;;             /     \
+;; As an optimization when writing partitions out, keep the last-touched
+;; partition in memory until we're sure the next one won't need to be merged
+;; into it. If the last partition underflowed, hang onto it and merge in
+;; partitions until at least 150% of the partition limit has been reached, then
+;; emit a partition that is 75% full, leaving (at worst) another 75% full
+;; partition if there are no more adjacent to process.
+;;
+;; Here, updates have deleted one partition entirely and created an pair of
+;; partitions, which are merged and written out as a (still underflowing)
+;; partition.
+;;
+;;             ...O...
 ;;            /       \
 ;;           O        .O.
 ;;          / \      / | \
 ;;         O   O    O  O  O
 ;;        /|\  |\  /|\/|\/ \
-;;     > x x[U]# # ####### #
+;;     >  Ux[U]##  ####### #
 ;;
-;; When a node has only a single child, it is 'pulled' up the tree recursively
+;;             ...O...
+;;            /       \
+;;           O        .O.
+;;          / \      / | \
+;;         O   O    O  O  O
+;;        / \  |\  /|\/|\/ \
+;;     > [U U] ##  ####### #
+;;
+;;             ...O...
+;;            /       \
+;;           O        .O.
+;;          / \      / | \
+;;         O   O    O  O  O
+;;         |   |\  /|\/|\/ \
+;;     >  [U]  ##  ####### #
+
+
+;; ### Carry Orphans
+;;
+;; When a node has only a single child, it is 'carried' up the tree recursively
 ;; so it can be passed down the next branch for merging into the next branch.
 ;;
-;;              ..O..
-;;             /     \
+;;             ...O...
 ;;            /       \
 ;;           O        .O.
 ;;          / \      / | \
@@ -279,30 +308,38 @@
 ;;             |\  /|\/|\/ \
 ;;             # # ####### #
 ;;
-;;              ..O..
-;;             /     \
+;;             ...O...
 ;;            /       \
-;;     >    [O](U)    .O.
+;;     > (U)[O]       .O.
 ;;           |       / | \
 ;;           O      O  O  O
 ;;          / \    /|\/|\/ \
 ;;         #   #   ####### #
 ;;
-;; When a subtree is being passed to the next branch, and the current node's
-;; height is one more than the subtree root, insert it as a child of the
+;; When an orphaned subtree is being passed to the next branch, and the current
+;; node's height is one more than the subtree root, insert it as a child of the
 ;; current node:
 ;;
-;;              ..O..
-;;             /     \
+;;             ...O...
+;;            /       \
+;;           O        .O.
+;;           |       / | \
+;;     > (U)[*]     O  O  O
+;;          / \    /|\/|\/ \
+;;         #   #   ####### #
+;;
+;;             ...O...
 ;;            /       \
 ;;           O        .O.
 ;;           |       / | \
 ;;     >    [*]     O  O  O
 ;;          /|\    /|\/|\/ \
-;;        (U)# #   ####### #
+;;         U # #   ####### #
 ;;
-;;              ..O..
-;;             /     \
+;; Apply updates to the remaining two partitions, deleting one and creating a
+;; second underflowing partition:
+;;
+;;             ...O...
 ;;            /       \
 ;;           O        .O.
 ;;           |       / | \
@@ -310,6 +347,118 @@
 ;;          /|\    /|\/|\/ \
 ;;     >   U x[U]  ####### #
 ;;
+;; Two underflowing partitions need to be merged into a valid partition:
+;;
+;;             ...O...
+;;            /       \
+;;           O        .O.
+;;           |       / | \
+;;           *      O  O  O
+;;           |     /|\/|\/ \
+;;     >  [->@<-]  ####### #
+;;
+;;             ...O...
+;;            /       \
+;;           O        .O.
+;;           |       / | \
+;;     >    [@]     O  O  O
+;;                 /|\/|\/ \
+;;                 ####### #
+;;
+;;             ...O...
+;;            /       \
+;;     >    [@]       .O.
+;;                   / | \
+;;                  O  O  O
+;;                 /|\/|\/ \
+;;                 ####### #
+;;
+;;     >     (@)[O]
+;;               |
+;;             ..O..
+;;            /  |  \
+;;           O   O   O
+;;          /|\ /|\ / \
+;;          ### ### # #
+;;
+;;               O
+;;               |
+;;     >    (@).[O].
+;;            /  |  \
+;;           O   O   O
+;;          /|\ /|\ / \
+;;          ### ### # #
+;;
+;;               O
+;;               |
+;;             ..O..
+;;            /  |  \
+;;     > (@)[O]  O   O
+;;          /|\ /|\ / \
+;;          ### ### # #
+;;
+;;               O
+;;               |
+;;             ..O..
+;;            /  |  \
+;;     >    [O]  O   O
+;;         //|\ /|\ / \
+;;         @### ### # #
+;;
+;;
+;;               O
+;;               |
+;;             ..O..
+;;            /  |  \
+;;           O   O   O
+;;         //|\ /|\ / \
+;;     >  @##[U]### # #
+;;
+;;              O
+;;              |
+;;            ..O..
+;;           /  |  \
+;;          O   O   O
+;;         /|\ /|\ / \
+;;     >  [@#@]### # #
+;;
+;;              O
+;;              |
+;;            ..O..
+;;           /  |  \
+;;     >   [*]  O   O
+;;         /|\ /|\ / \
+;;         @#@ ### # #
+;;
+;;              O
+;;              |
+;;     >      .[*].
+;;           /  |  \
+;;          *   O   O
+;;         /|\ /|\ / \
+;;         @#@ ### # #
+;;
+;; Fast forward, skipping a subtree...
+;;
+;;              O
+;;              |
+;;            ..*..
+;;           /  |  \
+;;     >    *   O  [O]
+;;         /|\ /|\ / \
+;;         @#@ ### # #
+;;
+;; Insert nodes into right subtree, resulting in splitting multiple partitions.
+;;
+;;              O
+;;              |
+;;           ...*...
+;;          /   |   \
+;;         *    O    *
+;;        /|\  /|\ //|\\
+;;     >  @#@  ###[#@@@@]
+
+
 ;; ### Redistribute Children
 ;;
 ;; In the **distribution** phase, any candidate children which have over or
@@ -323,160 +472,65 @@
 ;; to the pool to redistribute. Use the link after if the run includes the
 ;; first child.
 ;;
-;; Two underflowing partitions need to be merged, but still form an
-;; underflowing partition:
+;;               O
+;;               |
+;;           ....*....
+;;          /   / \   \
+;;     >   *   O  [*   *]
+;;        /|\ /|\ / \ /|\
+;;        @#@ ### # @ @@@
 ;;
-;;              ..O..
-;;             /     \
-;;            /       \
-;;           O        .O.
-;;           |       / | \
-;;           *      O  O  O
-;;           |     /|\/|\/ \
-;;     >  [->U<-]  ####### #
+;;               *
+;;               |
+;;     >     ...[*]...
+;;          /   / \   \
+;;         *   O   *   *
+;;        /|\ /|\ / \ /|\
+;;        @#@ ### # @ @@@
 ;;
-;;              ..O..
-;;             /     \
-;;            /       \
-;;           O        .O.
-;;           |       / | \
-;;     >    [U]     O  O  O
-;;                 /|\/|\/ \
-;;                 ####### #
+;;     >        [*]
+;;               |
+;;           ....*....
+;;          /   / \   \
+;;         *   O   *   *
+;;        /|\ /|\ / \ /|\
+;;        @#@ ### # @ @@@
+
+
+;; ### Serialize
 ;;
-;;              ..O..
-;;             /     \
-;;            /       \
-;;     >    [U]       .O.
-;;                   / | \
-;;                  O  O  O
-;;                 /|\/|\/ \
-;;                 ####### #
+;; Now that we're back at the root, we can serialize out the resulting tree of
+;; index nodes. One branch is reused entirely from the original tree, since it
+;; hasn't been changed. All the partition leaves are serialized already at this
+;; point.
 ;;
-;;     >       [O](U)
-;;              |
-;;            ..O..
-;;           /  |  \
-;;          O   O   O
-;;         /|\ /|\ / \
-;;         ### ### # #
-;;
-;;              O
-;;              |
-;;     >      .[O]. (U)
-;;           /  |  \
-;;          O   O   O
-;;         /|\ /|\ / \
-;;         ### ### # #
-;;
-;;              O
-;;              |
-;;            ..O..
-;;           /  |  \
-;;     >   [O]  O   O
-;;        // \\/|\ / \
-;;        U# U@### # #
-;;
-;; Again, redistribute the records in the underflowing partitions.
-;;
-;;              O
-;;              |
-;;            ..O..
-;;           /  |  \
-;;          O   O   O
-;;         /|\ /|\ / \
-;;     >  [@@@]### # #
-;;
-;;              O
-;;              |
-;;            ..O..
-;;           /  |  \
-;;     >   [*]  O   O
-;;         /|\ /|\ / \
-;;         @@@ ### # #
-;;
-;;              O
-;;              |
-;;     >      .[*].
-;;           /  |  \
-;;          *   O   O
-;;         /|\ /|\ / \
-;;         @@@ ### # #
-;;
-;; Fast forward, deleting a subtree...
-;;
-;;              O
-;;              |
-;;            ..*..
-;;           /  |  \
-;;     >    *  [x]  O
-;;         /|\ /|\ / \
-;;     >   @@@[xxx]# #
-;;
-;; Insert nodes into right subtree, resulting in splitting multiple partitions.
-;;
-;;              O
-;;              |
-;;            ..*..
-;;           /     \
-;;          *       *
-;;         /|\    //|\\
-;;     >  @ @ @  [#@@@@]
-;;
-;; Back to distribution phase, fix overflow by splitting the node:
-;;              O
-;;              |
-;;            ..*..
-;;           /  |  \
-;;     >    *  [*   *]
-;;         /|\ / \ /|\
-;;         @@@ # @ @@@
-;;
-;;              *
-;;              |
-;;     >      .[*].
-;;           /  |  \
-;;          *   *   *
-;;         /|\ / \ /|\
-;;         @@@ # @ @@@
-;;
-;;     >       [*]
-;;              |
-;;            ..*..
-;;           /  |  \
-;;          *   *   *
-;;         /|\ / \ /|\
-;;         @@@ # @ @@@
-;;
-;; Now that we're back at the root, we can serialize out the resulting tree.
-;;
-;;              *
-;;              |
-;;     >      .[+].
-;;           /  |  \
-;;          +   +   +
-;;         /|\ / \ /|\
-;;         @@@ # @ @@@
+;;               *
+;;               |
+;;     >     ...[+]...
+;;          /   / \   \
+;;     >  [+]  O  [+] [+]
+;;        /|\ /|\ / \ /|\
+;;        @#@ ### # @ @@@
 ;;
 ;; If the upward recursion reaches a branch with a single child, we're on a path
 ;; up to the root, so return the subtree directly, decreasing the height of the
 ;; tree.
 ;;
-;;     >       [*]
-;;              |
-;;            ..+..
-;;           /  |  \
-;;          +   +   +
-;;         /|\ / \ /|\
-;;         @@@ # @ @@@
+;;     >        [*]
+;;               |
+;;           ....+....
+;;          /   / \   \
+;;         +   O   +   +
+;;        /|\ /|\ / \ /|\
+;;        @#@ ### # @ @@@
 ;;
 ;; Resulting balanced tree:
 ;;
-;;            ..+..
-;;           /  |  \
-;;          +   +   +
-;;         /|\ / \ /|\
-;;         @@@ # @ @@@
+;;           ....+....
+;;          /   / \   \
+;;         +   O   +   +
+;;        /|\ /|\ / \ /|\
+;;        @#@ ### # @ @@@
 
 
 ;; ### References
@@ -549,3 +603,75 @@
 
 ; TODO: remove-range?
 ; TODO: drop-partition?
+
+
+
+
+
+;; TODO: what happens if the final child is orphaned?
+;;
+;;            ..*..
+;;           /  |  \
+;;     >    *   O  [O]
+;;         /|\ /|\ / \
+;;         @#@ ### # #
+;;
+;;            ..*..
+;;           /  |  \
+;;          *   O   O
+;;         /|\ /|\ / \
+;;     >   @#@ ###[x]#
+;;
+;;            ..*..
+;;           /  |  \
+;;          *   O   O
+;;         /|\ /|\  |
+;;     >   @#@ ### [#]
+;;
+;;            ..*..
+;;           /  |  \
+;;     >    *   O  [#]
+;;         /|\ /|\
+;;         @#@ ###
+;;
+;;     >      [*](#)
+;;           /   \
+;;          *     O
+;;         /|\   /|\
+;;         @#@   ###
+;;
+;; Higher-level node needs to recognize the orphan and do another pass down the
+;; (now final) child node:
+;;
+;;            .*.
+;;           /   \
+;;     >    *    [O](#)
+;;         /|\   /|\
+;;         @#@   ###
+;;
+;;            .*.
+;;           /   \
+;;     >    *    [*]
+;;         /|\  // \\
+;;         @#@  ## ##
+;;
+;; Say that node had been full:
+;;
+;;            .*.
+;;           /   \
+;;     >    *    [*]
+;;         /|\  //|\\
+;;         @#@  #####
+;;
+;;            ..*..
+;;           /  |  \
+;;     >    *  [*   *]
+;;         /|\ / \ /|\
+;;         @#@ # # ###
+;;
+;;     >      .[*].
+;;           /  |  \
+;;          *   *   *
+;;         /|\ / \ /|\
+;;         @#@ # # ###
+;;

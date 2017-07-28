@@ -4064,15 +4064,6 @@ than <code>::partition/limit</code> records.</li>
 <li>An index, which is treated as the root node of the tree.</li>
 </ul>
 
-<p>At each node, the update proceeds in a number of phases. The algorithm
-described below uses three terms for nodes:</p>
-
-<ul>
-<li>The "parent" is the current top level node we're recursing on.</li>
-<li>The "children" are the direct descendants of the parent node.</li>
-<li>The "candidates" are changed but unstored descendant nodes.</li>
-</ul>
-
 <p>The batch-update algorithm has the following goals:</p>
 
 <ul>
@@ -4082,7 +4073,8 @@ tree.</li>
 <li><strong>Deduplication:</strong> reuse existing stored nodes where possible.</li>
 </ul>
 
-<p>In the following diagrams, these symbols are used:</p>
+<p>In the following diagrams, these symbols are used to represent a tree with
+branching-factor of 4:</p>
 
 <ul>
 <li><code>O</code> - unchanged index node</li>
@@ -4093,46 +4085,52 @@ tree.</li>
 <li><code>U</code> - underflowing partition leaf</li>
 <li><code>x</code> - node which has had all children deleted</li>
 </ul>
+
+<p>Algorithm Phases:</p>
+
+<ul>
+<li>divide changes (downward)</li>
+<li>apply changes (to partition leaves)</li>
+<li>carry orphans (upward/sideways)</li>
+<li>redistribute children</li>
+<li>serialize the tree</li>
+</ul>
 </td><td class="codes"></td></tr><tr><td class="docs"><h3>Divide Changes</h3>
 
 <p>In the first <strong>downward</strong> phase, changes at the parent are grouped by the
 child which links to the subtree containing the referenced keys.</p>
 
-<pre><code>&gt;        .[O].         [????|?????]
-        /     \
+<pre><code>&gt;       ..[O]..        [????|?????]
        /       \
       O        .O.
      / \      / | \
     O   O    O  O  O
-   /|\  |\  / \/|\/ \
-  # # # # # # ##### #
+   /|\ / \  / \/|\/ \
+   ### # #  # ##### #
 
-         ..O..              |?????]
-        /     \
+        ...O...             |?????]
        /       \
 &gt;    [O]       .O.     [??|???]
      / \      / | \
     O   O    O  O  O
    /|\  |\  / \/|\/ \
-  # # # # # # ##### #
+   ###  ##  # ##### #
 
-         ..O..              |?????]
-        /     \
+        ...O...             |?????]
        /       \
       O        .O.        |???]
      / \      / | \
 &gt;  [O]  O    O  O  O   [?|?]
    /|\  |\  / \/|\/ \
-  # # # # # # ##### #
+   ###  ##  # ##### #
 
-         ..O..              |?????]
-        /     \
+        ...O...             |?????]
        /       \
       O        .O.        |???]
      / \      / | \
     O   O    O  O  O     |?]
    /|\  |\  / \/|\/ \
-&gt;[#]# # # # # ##### #  [?]
+&gt;[#]##  ##  # ##### #  [?]
 </code></pre>
 </td><td class="codes"></td></tr><tr><td class="docs"><h3>Apply Changes</h3>
 
@@ -4142,21 +4140,47 @@ resulting node would be empty. The resulting candidate node may have any
 number of children, meaning it can either underflow, be valid, or overflow,
 depending on the changes applied.</p>
 
-<pre><code>         ..O..
-        /     \
+<p>As an optimization when writing partitions out, keep the last-touched
+partition in memory until we're sure the next one won't need to be merged
+into it. If the last partition underflowed, hang onto it and merge in
+partitions until at least 150% of the partition limit has been reached, then
+emit a partition that is 75% full, leaving (at worst) another 75% full
+partition if there are no more adjacent to process.</p>
+
+<p>Here, updates have deleted one partition entirely and created an pair of
+partitions, which are merged and written out as a (still underflowing)
+partition.</p>
+
+<pre><code>        ...O...
        /       \
       O        .O.
      / \      / | \
     O   O    O  O  O
    /|\  |\  /|\/|\/ \
-&gt; x x[U]# # ####### #
+&gt;  Ux[U]##  ####### #
+
+        ...O...
+       /       \
+      O        .O.
+     / \      / | \
+    O   O    O  O  O
+   / \  |\  /|\/|\/ \
+&gt; [U U] ##  ####### #
+
+        ...O...
+       /       \
+      O        .O.
+     / \      / | \
+    O   O    O  O  O
+    |   |\  /|\/|\/ \
+&gt;  [U]  ##  ####### #
 </code></pre>
+</td><td class="codes"></td></tr><tr><td class="docs"><h3>Carry Orphans</h3>
 
 <p>When a node has only a single child, it is 'carried' up the tree recursively
 so it can be passed down the next branch for merging into the next branch.</p>
 
-<pre><code>         ..O..
-        /     \
+<pre><code>        ...O...
        /       \
       O        .O.
      / \      / | \
@@ -4164,31 +4188,40 @@ so it can be passed down the next branch for merging into the next branch.</p>
         |\  /|\/|\/ \
         # # ####### #
 
-         ..O..
-        /     \
+        ...O...
        /       \
-&gt;    [O](U)    .O.
+&gt; (U)[O]       .O.
       |       / | \
       O      O  O  O
      / \    /|\/|\/ \
     #   #   ####### #
 </code></pre>
 
-<p>When a subtree is being passed to the next branch, and the current node's
-height is one more than the subtree root, insert it as a child of the
+<p>When an orphaned subtree is being passed to the next branch, and the current
+node's height is one more than the subtree root, insert it as a child of the
 current node:</p>
 
-<pre><code>         ..O..
-        /     \
+<pre><code>        ...O...
+       /       \
+      O        .O.
+      |       / | \
+&gt; (U)[*]     O  O  O
+     / \    /|\/|\/ \
+    #   #   ####### #
+
+        ...O...
        /       \
       O        .O.
       |       / | \
 &gt;    [*]     O  O  O
      /|\    /|\/|\/ \
-   (U)# #   ####### #
+    U # #   ####### #
+</code></pre>
 
-         ..O..
-        /     \
+<p>Apply updates to the remaining two partitions, deleting one and creating a
+second underflowing partition:</p>
+
+<pre><code>        ...O...
        /       \
       O        .O.
       |       / | \
@@ -4197,7 +4230,120 @@ current node:</p>
 &gt;   U x[U]  ####### #
 </code></pre>
 
-<h3>Redistribute Children</h3>
+<p>Two underflowing partitions need to be merged into a valid partition:</p>
+
+<pre><code>        ...O...
+       /       \
+      O        .O.
+      |       / | \
+      *      O  O  O
+      |     /|\/|\/ \
+&gt;  [-&gt;@&lt;-]  ####### #
+
+        ...O...
+       /       \
+      O        .O.
+      |       / | \
+&gt;    [@]     O  O  O
+            /|\/|\/ \
+            ####### #
+
+        ...O...
+       /       \
+&gt;    [@]       .O.
+              / | \
+             O  O  O
+            /|\/|\/ \
+            ####### #
+
+&gt;     (@)[O]
+          |
+        ..O..
+       /  |  \
+      O   O   O
+     /|\ /|\ / \
+     ### ### # #
+
+          O
+          |
+&gt;    (@).[O].
+       /  |  \
+      O   O   O
+     /|\ /|\ / \
+     ### ### # #
+
+          O
+          |
+        ..O..
+       /  |  \
+&gt; (@)[O]  O   O
+     /|\ /|\ / \
+     ### ### # #
+
+          O
+          |
+        ..O..
+       /  |  \
+&gt;    [O]  O   O
+    //|\ /|\ / \
+    @### ### # #
+
+
+          O
+          |
+        ..O..
+       /  |  \
+      O   O   O
+    //|\ /|\ / \
+&gt;  @##[U]### # #
+
+         O
+         |
+       ..O..
+      /  |  \
+     O   O   O
+    /|\ /|\ / \
+&gt;  [@#@]### # #
+
+         O
+         |
+       ..O..
+      /  |  \
+&gt;   [*]  O   O
+    /|\ /|\ / \
+    @#@ ### # #
+
+         O
+         |
+&gt;      .[*].
+      /  |  \
+     *   O   O
+    /|\ /|\ / \
+    @#@ ### # #
+</code></pre>
+
+<p>Fast forward, skipping a subtree...</p>
+
+<pre><code>         O
+         |
+       ..*..
+      /  |  \
+&gt;    *   O  [O]
+    /|\ /|\ / \
+    @#@ ### # #
+</code></pre>
+
+<p>Insert nodes into right subtree, resulting in splitting multiple partitions.</p>
+
+<pre><code>         O
+         |
+      ...*...
+     /   |   \
+    *    O    *
+   /|\  /|\ //|\\
+&gt;  @#@  ###[#@@@@]
+</code></pre>
+</td><td class="codes"></td></tr><tr><td class="docs"><h3>Redistribute Children</h3>
 
 <p>In the <strong>distribution</strong> phase, any candidate children which have over or
 overflowed must split, merge with a neighbor, or borrow some elements from
@@ -4210,172 +4356,66 @@ of valid nodes. Otherwise, resolve the last link before the run and add it
 to the pool to redistribute. Use the link after if the run includes the
 first child.</p>
 
-<p>Two underflowing partitions need to be merged, but still form an
-underflowing partition:</p>
+<pre><code>          O
+          |
+      ....*....
+     /   / \   \
+&gt;   *   O  [*   *]
+   /|\ /|\ / \ /|\
+   @#@ ### # @ @@@
 
-<pre><code>         ..O..
-        /     \
-       /       \
-      O        .O.
-      |       / | \
-      *      O  O  O
-      |     /|\/|\/ \
-&gt;  [-&gt;U&lt;-]  ####### #
+          *
+          |
+&gt;     ...[*]...
+     /   / \   \
+    *   O   *   *
+   /|\ /|\ / \ /|\
+   @#@ ### # @ @@@
 
-         ..O..
-        /     \
-       /       \
-      O        .O.
-      |       / | \
-&gt;    [U]     O  O  O
-            /|\/|\/ \
-            ####### #
-
-         ..O..
-        /     \
-       /       \
-&gt;    [U]       .O.
-              / | \
-             O  O  O
-            /|\/|\/ \
-            ####### #
-
-&gt;       [O](U)
-         |
-       ..O..
-      /  |  \
-     O   O   O
-    /|\ /|\ / \
-    ### ### # #
-
-         O
-         |
-&gt;      .[O]. (U)
-      /  |  \
-     O   O   O
-    /|\ /|\ / \
-    ### ### # #
-
-         O
-         |
-       ..O..
-      /  |  \
-&gt;   [O]  O   O
-   // \\/|\ / \
-   U# U@### # #
+&gt;        [*]
+          |
+      ....*....
+     /   / \   \
+    *   O   *   *
+   /|\ /|\ / \ /|\
+   @#@ ### # @ @@@
 </code></pre>
+</td><td class="codes"></td></tr><tr><td class="docs"><h3>Serialize</h3>
 
-<p>Again, redistribute the records in the underflowing partitions.</p>
+<p>Now that we're back at the root, we can serialize out the resulting tree of
+index nodes. One branch is reused entirely from the original tree, since it
+hasn't been changed. All the partition leaves are serialized already at this
+point.</p>
 
-<pre><code>         O
-         |
-       ..O..
-      /  |  \
-     O   O   O
-    /|\ /|\ / \
-&gt;  [@@@]### # #
-
-         O
-         |
-       ..O..
-      /  |  \
-&gt;   [*]  O   O
-    /|\ /|\ / \
-    @@@ ### # #
-
-         O
-         |
-&gt;      .[*].
-      /  |  \
-     *   O   O
-    /|\ /|\ / \
-    @@@ ### # #
-</code></pre>
-
-<p>Fast forward, deleting a subtree...</p>
-
-<pre><code>         O
-         |
-       ..*..
-      /  |  \
-&gt;    *  [x]  O
-    /|\ /|\ / \
-&gt;   @@@[xxx]# #
-</code></pre>
-
-<p>Insert nodes into right subtree, resulting in splitting multiple partitions.</p>
-
-<pre><code>         O
-         |
-       ..*..
-      /     \
-     *       *
-    /|\    //|\\
-&gt;  @ @ @  [#@@@@]
-</code></pre>
-
-<p>Back to distribution phase, fix overflow by splitting the node:
-             O
-             |
-           ..*..
-          /  |  \</p>
-
-<blockquote>
-  <ul>
-  <li>[*   *]
-      /|\ / \ /|\
-      @@@ # @ @@@</li>
-  </ul>
-</blockquote>
-
-<pre><code>         *
-         |
-&gt;      .[*].
-      /  |  \
-     *   *   *
-    /|\ / \ /|\
-    @@@ # @ @@@
-
-&gt;       [*]
-         |
-       ..*..
-      /  |  \
-     *   *   *
-    /|\ / \ /|\
-    @@@ # @ @@@
-</code></pre>
-
-<p>Now that we're back at the root, we can serialize out the resulting tree.</p>
-
-<pre><code>         *
-         |
-&gt;      .[+].
-      /  |  \
-     +   +   +
-    /|\ / \ /|\
-    @@@ # @ @@@
+<pre><code>          *
+          |
+&gt;     ...[+]...
+     /   / \   \
+&gt;  [+]  O  [+] [+]
+   /|\ /|\ / \ /|\
+   @#@ ### # @ @@@
 </code></pre>
 
 <p>If the upward recursion reaches a branch with a single child, we're on a path
 up to the root, so return the subtree directly, decreasing the height of the
 tree.</p>
 
-<pre><code>&gt;       [*]
-         |
-       ..+..
-      /  |  \
-     +   +   +
-    /|\ / \ /|\
-    @@@ # @ @@@
+<pre><code>&gt;        [*]
+          |
+      ....+....
+     /   / \   \
+    +   O   +   +
+   /|\ /|\ / \ /|\
+   @#@ ### # @ @@@
 </code></pre>
 
 <p>Resulting balanced tree:</p>
 
-<pre><code>       ..+..
-      /  |  \
-     +   +   +
-    /|\ / \ /|\
-    @@@ # @ @@@
+<pre><code>      ....+....
+     /   / \   \
+    +   O   +   +
+   /|\ /|\ / \ /|\
+   @#@ ### # @ @@@
 </code></pre>
 </td><td class="codes"></td></tr><tr><td class="docs"><h3>References</h3>
 
@@ -4432,6 +4472,75 @@ minimizes repeated changes to the same node path.</p>
       (throw (ex-info (str &quot;Unsupported index-tree node type: &quot;
                            (pr-str (:data/type (::node/data root))))
                       {:data/type (:data/type (::node/data root))})))))</pre></td></tr><tr><td class="docs"><h2>Deletion Functions</h2>
+</td><td class="codes"></td></tr><tr><td class="docs"><p>TODO: what happens if the final child is orphaned?</p>
+
+<pre><code>       ..*..
+      /  |  \
+&gt;    *   O  [O]
+    /|\ /|\ / \
+    @#@ ### # #
+
+       ..*..
+      /  |  \
+     *   O   O
+    /|\ /|\ / \
+&gt;   @#@ ###[x]#
+
+       ..*..
+      /  |  \
+     *   O   O
+    /|\ /|\  |
+&gt;   @#@ ### [#]
+
+       ..*..
+      /  |  \
+&gt;    *   O  [#]
+    /|\ /|\
+    @#@ ###
+
+&gt;      [*](#)
+      /   \
+     *     O
+    /|\   /|\
+    @#@   ###
+</code></pre>
+
+<p>Higher-level node needs to recognize the orphan and do another pass down the
+(now final) child node:</p>
+
+<pre><code>       .*.
+      /   \
+&gt;    *    [O](#)
+    /|\   /|\
+    @#@   ###
+
+       .*.
+      /   \
+&gt;    *    [*]
+    /|\  // \\
+    @#@  ## ##
+</code></pre>
+
+<p>Say that node had been full:</p>
+
+<pre><code>       .*.
+      /   \
+&gt;    *    [*]
+    /|\  //|\\
+    @#@  #####
+
+       ..*..
+      /  |  \
+&gt;    *  [*   *]
+    /|\ / \ /|\
+    @#@ # # ###
+
+&gt;      .[*].
+      /  |  \
+     *   *   *
+    /|\ / \ /|\
+    @#@ # # ###
+</code></pre>
 </td><td class="codes"></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#merkle-db.partition" name="merkle-db.partition"><h1 class="project-name">merkle-db.partition</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>Partitions contain non-overlapping ranges of the records witin a table.
   Partition nodes contain metadata about the contained records and links to the
   tablets where the data for each field family is stored.</p>

@@ -114,5 +114,5 @@
   (gen/bind
     (gen/tuple
       (gen/not-empty (gen/set field-key))
-      gen/nat)
+      (gen/such-that pos? gen/nat))
     (partial apply data-context*)))

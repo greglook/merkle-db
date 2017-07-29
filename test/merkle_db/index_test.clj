@@ -48,5 +48,4 @@
           (index/validate-tree store
                                {::record/count 5
                                 ::part/limit 10}
-                               part))
-        ))))
+                               part))))))

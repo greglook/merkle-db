@@ -98,10 +98,10 @@
           tablets (into {}
                         (map (juxt key #(mdag/get-data store (val %))))
                         (::part/tablets part))]
-      (is (valid? :merkle-db/partition part)
+      (is (valid? ::part/node-data part)
           "partition data should match schema")
       (doseq [[family-key tablet] tablets]
-        (is (valid? :merkle-db/tablet tablet)
+        (is (valid? ::tablet/node-data tablet)
             (str "partition tablet " family-key " should match schema")))
       (let [all-keys (set (map first (mapcat tablet/read-all (vals tablets))))]
         (is (contains? tablets :base)

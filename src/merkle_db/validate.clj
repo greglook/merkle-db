@@ -76,8 +76,6 @@
 
 
 (defmacro check
-  ([type-key test-form]
-   `(check ~type-key ~test-form (pr-str (list 'not '~test-form))))
   ([type-key test-form message]
    `(check ~type-key ~test-form ~message :fail))
   ([type-key test-form message bad-state]

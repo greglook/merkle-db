@@ -375,6 +375,7 @@
 
 
 (defn- -list-tables
+  "Internal `list-tables` implementation."
   ([db]
    (-list-tables db nil))
   ([^Database db opts]
@@ -390,6 +391,7 @@
 
 
 (defn- -get-table
+  "Internal `get-table` implementation."
   [^Database db table-name]
   (when-let [value (get (.tables db) table-name)]
     (if (link/merkle-link? value)
@@ -400,6 +402,7 @@
 
 
 (defn- -set-table
+  "Internal `set-table` implementation."
   [^Database db table-name value]
   (let [table (if (table/dirty? value)
                 (table/set-backing value (.store db) table-name)
@@ -413,6 +416,7 @@
 
 
 (defn- -drop-table
+  "Internal `drop-table` implementation."
   [^Database db table-name]
   (->Database
     (.store db)
@@ -437,6 +441,7 @@
 
 
 (defn- -flush!
+  "Internal `flush!` implementation."
   [^Database db]
   (let [tables (flush-tables! (.tables db))
         root-data (assoc (.root-data db)

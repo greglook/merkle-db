@@ -105,6 +105,7 @@
 
 
 (defn- -list-dbs
+  "Internal `list-dbs` implementation."
   ([conn]
    (-list-dbs conn nil))
   ([^Connection conn opts]
@@ -125,6 +126,7 @@
 
 
 (defn- -get-db-history
+  "Internal `get-db-history` implementation."
   ([conn db-name]
    (-get-db-history conn db-name nil))
   ([^Connection conn db-name opts]
@@ -140,6 +142,7 @@
 
 
 (defn- -create-db!
+  "Internal `create-db!` implementation."
   [^Connection conn db-name attrs]
   ; TODO: lock db
   (when (::ref/value (ref/get-ref (.tracker conn) db-name))
@@ -161,6 +164,7 @@
 
 
 (defn- -drop-db!
+  "Internal `drop-db!` implementation."
   [^Connection conn db-name]
   ; TODO: lock db
   (->>
@@ -170,6 +174,7 @@
 
 
 (defn- -open-db
+  "Internal `open-db` implementation."
   ([conn db-name]
    (-open-db conn db-name nil))
   ([^Connection conn db-name opts]
@@ -189,6 +194,7 @@
 
 
 (defn- -commit!
+  "Internal `commit!` implementation."
   ([conn db]
    (-commit! conn (::db/name db) db nil))
   ([conn db-name db]

@@ -430,6 +430,7 @@
 
 
 (defn- -scan
+  "Internal `scan` implementation."
   ([table]
    (-scan table nil))
   ([^Table table opts]
@@ -470,6 +471,7 @@
 
 
 (defn- -get-records
+  "Internal `get-records` implementation."
   ([table id-keys]
    (-get-records table id-keys nil))
   ([^Table table id-keys opts]
@@ -542,6 +544,7 @@
 
 
 (defn- -insert
+  "Internal `insert` implementation."
   ([table records]
    (-insert table records nil))
   ([table records opts]
@@ -561,6 +564,7 @@
 
 
 (defn- -delete
+  "Internal `delete` implementation."
   [table id-keys]
   (let [lexicoder (key/lexicoder (::key/lexicoder table :bytes))
         extant (-get-records table id-keys {:fields {}})]

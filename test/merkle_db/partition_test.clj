@@ -72,8 +72,8 @@
                   k4 {:z 4, :d 4}})]
     (testing "partition construction"
       (is (= 5 (::record/count part)))
-      (is (= k0 (::part/first-key part)))
-      (is (= k4 (::part/last-key part)))
+      (is (= k0 (::record/first-key part)))
+      (is (= k4 (::record/last-key part)))
       (is (= #{:base :ab :cd} (set (keys (::part/tablets part)))))
       (is (= #{:a :b} (get-in part [::record/families :ab])))
       (is (= #{:c :d} (get-in part [::record/families :cd]))))
@@ -122,10 +122,10 @@
       (is (= (count (part/read-all store part nil)) (::record/count part))
           "::count attribute is accurate")
       (is (= (first (tablet/keys (:base tablets)))
-             (::part/first-key part))
+             (::record/first-key part))
           "::first-key is first key in the base tablet")
       (is (= (last (tablet/keys (:base tablets)))
-             (::part/last-key part))
+             (::record/last-key part))
           "::last-key is last key in the base tablet")
       (is (every? (::part/membership part) (tablet/keys (:base tablets)))
           "every record key tests true against the ::membership filter"))))

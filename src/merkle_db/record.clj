@@ -23,6 +23,12 @@
 ;; Record key bytes.
 (s/def ::key key/key?)
 
+;; Marker for the first key value present in a range.
+(s/def ::first-key ::key)
+
+;; Marker for the last key value present in a range.
+(s/def ::last-key ::key)
+
 ;; Valid field key values.
 (s/def ::field-key any?)
 

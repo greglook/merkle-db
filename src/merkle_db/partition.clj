@@ -31,29 +31,23 @@
 ;; Maximum number of records to allow in each partition.
 (s/def ::limit pos-int?)
 
+;; Map of family keys (and `:base`) to links to the corresponding tablets.
+(s/def ::tablets (s/map-of keyword? link/merkle-link?))
+
 ;; Bloom filter providing probable membership testing for record keys contained
 ;; in the partition.
 (s/def ::membership bloom/filter?)
 
-;; First key present in the partition.
-(s/def ::first-key key/key?)
-
-;; Last key present in the partition.
-(s/def ::last-key key/key?)
-
-;; Map of family keys (and `:base`) to links to the corresponding tablets.
-(s/def ::tablets (s/map-of keyword? link/merkle-link?))
-
 ;; Partition node.
 (s/def ::node-data
   (s/and
-    (s/keys :req [::record/count
-                  ::record/families
-                  ::limit
+    (s/keys :req [::limit
+                  ::tablets
                   ::membership
-                  ::first-key
-                  ::last-key
-                  ::tablets])
+                  ::record/count
+                  ::record/families
+                  ::record/first-key
+                  ::record/last-key])
     #(= data-type (:data/type %))))
 
 
@@ -77,13 +71,14 @@
     ; TODO: first-key matches actual first record key
     ; TODO: last-key matches actual last record key
     ; TODO: record/count is accurate
+    ; TODO: every key present tests true against membership filter
     (when (::record/first-key params)
-      (validate/check ::first-key
-        (not (key/before? (::first-key part) (::record/first-key params)))
+      (validate/check ::record/first-key
+        (not (key/before? (::record/first-key part) (::record/first-key params)))
         "First key in partition is within the subtree boundary"))
     (when (::record/last-key params)
-      (validate/check ::last-key
-        (not (key/after? (::last-key part) (::record/last-key params)))
+      (validate/check ::record/last-key
+        (not (key/after? (::record/last-key part) (::record/last-key params)))
         "Last key in partition is within the subtree boundary"))
     (validate/check ::base-tablet
       (:base (::tablets part))
@@ -94,7 +89,8 @@
             (assoc params
                    ::record/families (::record/families part)
                    ::record/family-key tablet-family)
-           %)))))
+           %))))
+  {::record/count (::record/count part)})
 
 
 
@@ -148,13 +144,13 @@
   than the split key will be contained in the first partition, all others in
   the second."
   [store part split-key]
-  (when-not (and (key/after? split-key (::first-key part))
-                 (key/before? split-key (::last-key part)))
+  (when-not (and (key/after? split-key (::record/first-key part))
+                 (key/before? split-key (::record/last-key part)))
     (throw (ex-info (format "Cannot split partition with key %s which falls outside the contained range [%s, %s]"
-                            split-key (::first-key part) (::last-key part))
+                            split-key (::record/first-key part) (::record/last-key part))
                     {:split-key split-key
-                     :first-key (::first-key part)
-                     :last-key (::last-key part)})))
+                     :first-key (::record/first-key part)
+                     :last-key (::record/last-key part)})))
   (let [defaults (select-keys part [:data/type ::record/families ::limit])]
     ; Construct new partitions from left and right tablet maps.
     (map
@@ -162,11 +158,11 @@
         [tablets]
         (let [base-keys (tablet/keys (mdag/get-data store (:base tablets)))]
           (assoc defaults
-                 ::record/count (count base-keys)
+                 ::tablets tablets
                  ::membership (into (bloom/create (::limit part)) base-keys)
-                 ::first-key (first base-keys)
-                 ::last-key (last base-keys)
-                 ::tablets tablets)))
+                 ::record/count (count base-keys)
+                 ::record/first-key (first base-keys)
+                 ::record/last-key (last base-keys))))
       (divide-tablets store (::tablets part) split-key))))
 
 
@@ -293,22 +289,29 @@
       (map
         (fn make-partition
           [partition-records]
-          (->>
+          (->
             {:data/type data-type
-             ::record/families families
-             ::record/count (count partition-records)
              ::limit limit
-             ::membership (into (bloom/create limit) (map first partition-records))
-             ::first-key (first (first partition-records))
-             ::last-key (first (last partition-records))
              ::tablets (->>
                          partition-records
                          (record/split-data families)
                          (map (juxt key #(tablet/from-records (val %))))
                          (map (partial apply store-tablet! store))
-                         (into {}))}
-            (mdag/store-node! store nil)
-            (::node/data))))
+                         (into {}))
+             ::membership (into (bloom/create limit)
+                                (map first)
+                                partition-records)
+             ::record/count (count partition-records)
+             ::record/families families
+             ::record/first-key (first (first partition-records))
+             ::record/last-key (first (last partition-records))}
+            (->> (mdag/store-node! store nil))
+            (as-> node
+              (vary-meta (::node/data node)
+                         merge
+                         (select-keys node [::node/id
+                                            ::node/size
+                                            ::node/links]))))))
       (record/partition-limited limit records))))
 
 
@@ -336,8 +339,8 @@
                   ::record/count record-count
                   ::tablets tablets
                   ::membership (into (::membership part) added-keys)
-                  ::first-key (apply key/min (::first-key part) added-keys)
-                  ::last-key (apply key/max (::last-key part) added-keys))
+                  ::record/first-key (apply key/min (::record/first-key part) added-keys)
+                  ::record/last-key (apply key/max (::record/last-key part) added-keys))
            (mdag/store-node! store nil)
            (::node/data))]
         ; Partition must be split into multiple.

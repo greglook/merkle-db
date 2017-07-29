@@ -53,7 +53,9 @@
     (s/keys :req [::height
                   ::keys
                   ::children
-                  ::record/count])
+                  ::record/count
+                  ::record/first-key
+                  ::record/last-key])
     #(= data-type (:data/type %))
     #(= (count (::children %))
         (inc (count (::keys %))))))
@@ -607,15 +609,41 @@
 
 (defn build-index
   "Given a sequence of partitions, builds an index tree with the given
-  parameters incorporating the partitions. Returns ???"
-  ; TODO: document return type
+  parameters incorporating the partitions. Returns the final, persisted root
+  node data."
   [store parameters partitions]
-  (cond
-    (empty? partitions) nil
-    (= 1 (count partitions)) (first partitions)
-    :else
-    ; TODO: implement
-    (throw (UnsupportedOperationException. "NYI: build-index over partition sequence"))))
+  (letfn [(store-child
+            [height children]
+            (let [link-format (str "%0" (count (pr-str (dec (count children)))) "d")]
+              (->
+                {:data/type data-type
+                 ::height height
+                 ::keys (vec (drop 1 (map ::record/first-key children)))
+                 ::children (->>
+                              children
+                              (map-indexed
+                                #(mdag/link (format link-format %1) (meta %2)))
+                              (vec))
+                 ::record/count (reduce + 0 (map ::record/count children))
+                 ::record/first-key (::record/first-key (first children))
+                 ::record/last-key (::record/last-key (last children))}
+                ; TODO: factor out this pattern
+                (->> (mdag/store-node! store nil))
+                (as-> node
+                  (vary-meta (::node/data node)
+                             merge
+                             (select-keys node [::node/id
+                                                ::node/size
+                                                ::node/links]))))))]
+    (loop [layer partitions
+           height 1]
+      (if (<= (count layer) 1)
+        (first layer)
+        (let [index-groups (record/partition-limited
+                             (::branching-factor parameters)
+                             layer)]
+          (recur (mapv (partial store-child height) index-groups)
+                 (inc height)))))))
 
 
 (defn- update-empty

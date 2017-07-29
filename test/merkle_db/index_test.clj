@@ -49,3 +49,20 @@
                                {::record/count 5
                                 ::part/limit 10}
                                part))))))
+
+
+(deftest ^:generative index-construction
+  (checking "valid properties" 20
+    [[field-keys families records] mdgen/data-context
+     part-limit (gen/large-integer* {:min 4})
+     branch-fac (gen/large-integer* {:min 4})]
+    (is (valid? ::record/families families))
+    (let [store (mdag/init-store :types record/codec-types)
+          params {::record/families families
+                  ::record/count (count records)
+                  ::index/branching-factor branch-fac
+                  ::part/limit part-limit}
+          parts (part/from-records store params records)
+          root (index/build-index store params parts)]
+      (check-asserts
+        (index/validate-tree store params root)))))

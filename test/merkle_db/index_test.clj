@@ -2,91 +2,51 @@
   (:require
     [clojure.set :as set]
     [clojure.spec :as s]
+    [clojure.string :as str]
     [clojure.test :refer :all]
     [clojure.test.check.generators :as gen]
     [com.gfredericks.test.chuck.clojure-test :refer [checking]]
     [merkledag.core :as mdag]
+    [merkledag.link :as link]
+    [merkledag.node :as node]
     (merkle-db
       [generators :as mdgen]
       [index :as index]
       [key :as key]
       [partition :as part]
-      [record :as record])))
+      [record :as record]
+      [validate :as validate])))
 
 
-(defn validate-partition-node
-  [store params part]
-  (is (valid? ::part/node-data part)
-      "partition node data spec is valid")
-  ; TODO: warn when partition limit or families don't match params
-  (when (<= (::part/limit part) (::record/count params))
-    (is (<= (Math/ceil (/ (::part/limit part) 2)) (::record/count part))
-            "partition is at least half full if tree has at least :merkle-db.partition/limit records"))
-  (when (::first-key params)
-    (is (not (key/before? (::part/first-key part) (::first-key params)))
-        "first key in partition is not before the subtree boundary"))
-  (when (::last-key params)
-    (is (not (key/after? (::part/last-key part) (::last-key params)))
-        "last key in partition is not after the subtree boundary"))
-  ; TODO: check tablets for validity
-  ,,,)
+(defmacro check-asserts
+  [& body]
+  `(doseq [result# (validate/collect-results ~@body)]
+     (do-report
+       {:type (::validate/state result#)
+        :message (::validate/message result#)
+        :expected [(::validate/type result#)
+                   (str/join \/ (::validate/path result#))
+                   (::node/id result#)]
+        :actual (::validate/state result#)})))
 
 
-(defn validate-index-node
-  [store params index]
-  (is (valid? ::index/node-data index)
-      "index node data spec is valid")
-  (if (::root? params)
-    (is (<= 2
-            (count (::index/children index))
-            (::index/branching-factor params))
-        "root index node has at between [2, b] children")
-    (is (<= (int (Math/ceil (/ (::index/branching-factor params) 2)))
-            (count (::index/children index)))
-        "internal index node has between [ceil(b/2), b] children"))
-  (is (= (dec (count (::index/children index)))
-         (count (::index/keys index)))
-      "index nodes have one fewer key than child links")
-  (is (= (::height params) (::index/height index))
-      "index node has expected height")
-  (let [result (reduce
-                 (fn test-child
-                   [result [first-key child-link last-key]]
-                   (let [params' (assoc params
-                                        ::root? false
-                                        ::height (dec (::index/height index))
-                                        ::first-key first-key
-                                        ::last-key last-key)
-                         child (mdag/get-data store child-link)
-                         child-result (if (zero? (::height params'))
-                                        (validate-partition-node store params' child)
-                                        (validate-index-node store params' child))]
-                     (update result ::record/count + (::record/count child-result))))
-                 {::record/count 0}
-                 (map vector
-                      (cons (::first-key params) (::index/keys index))
-                      (::index/children index)
-                      (conj (::index/keys index) (::last-key params))))]
-    (is (= (::record/count result) (::record/count index))
-        "index ::record/count matches actual subtree count")))
-
-
-(defn validate-tree
-  [store params root-id]
-  (let [root (mdag/get-data store root-id)]
-    (cond
-      (zero? (::record/count params))
-        (is (nil? root-id) "root node is nil if tree is empty")
-      (<= (::record/count params) (::part/limit params))
-        (do (is (= part/data-type (:data/type root))
-                "root node is a partition if tree has fewer than :merkle-db.partition/limit records")
-            (validate-partition-node store params root))
-      :else
-        (do (is (= index/data-type (:data/type root))
-                "root node is an index node if tree has more than one partition")
-            (validate-index-node
-              store
-              (assoc params
-                     ::root? true
-                     ::height (::index/height root))
-              root)))))
+(deftest tree-validation
+  (let [store (mdag/init-store :types record/codec-types)]
+    (testing "empty tree"
+      (check-asserts
+        (index/validate-tree store {::record/count 0} nil)))
+    (testing "partition tree"
+      (let [[part] (part/from-records
+                     store
+                     {::record/families {:ab #{:a :b}, :cd #{:c :d}}}
+                     {(key/create [0 1 2]) {:x 0, :y 0, :a 0, :c 0}
+                      (key/create [1 2 3]) {:x 1, :c 1, :d 1, }
+                      (key/create [2 3 4]) {:b 2, :c 2}
+                      (key/create [3 4 5]) {:x 3, :y 3, :a 3, :b 3}
+                      (key/create [4 5 6]) {:z 4, :d 4}})]
+        (check-asserts
+          (index/validate-tree store
+                               {::record/count 5
+                                ::part/limit 10}
+                               part))
+        ))))

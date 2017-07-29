@@ -3,8 +3,11 @@
   (:refer-clojure :exclude [keys])
   (:require
     [clojure.spec :as s]
-    [merkle-db.key :as key]
-    [merkle-db.record :as record]))
+    [clojure.string :as str]
+    (merkle-db
+      [key :as key]
+      [record :as record]
+      [validate :as validate])))
 
 
 ;; ## Specs
@@ -18,10 +21,35 @@
   (s/coll-of ::record/entry :kind vector?))
 
 ;; Tablet node.
-(s/def :merkle-db/tablet
+(s/def ::node-data
   (s/and
     (s/keys :req [::records])
     #(= data-type (:data/type %))))
+
+
+(defn validate
+  [params tablet]
+  (when (validate/check :data/type
+          (= data-type (:data/type tablet))
+          (str "Expected tablet to have :data/type of " data-type
+               " but got: " (pr-str (:data/type tablet))))
+    (validate/check ::spec
+      (s/valid? ::node-data tablet)
+      (s/explain-str ::node-data tablet))
+    (when-let [family-keys (get (::record/families params)
+                                (::record/family-key params))]
+      (let [bad-fields (->> (::records tablet)
+                            (mapcat (comp clojure.core/keys second))
+                            (remove (set family-keys)))]
+        (validate/check ::record/families
+          (empty? bad-fields)
+          (format "Tablet record data only contains values for fields in family %s (%s)"
+                  (::record/family-key params)
+                  family-keys))))
+    ; TODO: all records are within partition boundary
+    ; TODO: records are sorted by key
+    ; TODO: all records are readable?
+    ))
 
 
 

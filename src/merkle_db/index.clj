@@ -19,7 +19,8 @@
     (merkle-db
       [key :as key]
       [partition :as part]
-      [record :as record])))
+      [record :as record]
+      [validate :as validate])))
 
 
 ;; ## Specs
@@ -56,6 +57,70 @@
     #(= data-type (:data/type %))
     #(= (count (::children %))
         (inc (count (::keys %))))))
+
+
+(defn validate
+  [store params index]
+  (when (validate/check :data/type
+          (= data-type (:data/type index))
+          (str "Index should have :data/type of " data-type))
+    (validate/check ::node-data
+      (s/valid? ::node-data index)
+      (s/explain-str ::node-data index))
+    (validate/check ::keys
+      (= (dec (count (::children index)))
+         (count (::keys index)))
+      "Index nodes have one fewer key than child links")
+    (if (::root? params)
+      (validate/check ::branching-factor
+        (<= 2 (count (::children index)) (::branching-factor params))
+        "Root index node has at between [2, b] children")
+      (validate/check ::branching-factor
+        (<= (int (Math/ceil (/ (::branching-factor params) 2)))
+            (count (::children index))
+            (::branching-factor params))
+        "Internal index node has between [ceil(b/2), b] children"))
+    (validate/check ::height
+      (= (::height params) (::height index))
+      "Index node has expected height")
+    (let [result (reduce
+                   (fn test-child
+                     [result [first-key child-link last-key]]
+                     (let [params' (assoc params
+                                          ::root? false
+                                          ::height (dec (::height index))
+                                          ::record/first-key first-key
+                                          ::record/last-key last-key)
+                           child-result (validate/check-link store child-link
+                                          (if (zero? (::height params'))
+                                            #(part/validate store params' %)
+                                            #(validate store params' %)))]
+                       (update result ::record/count + (::record/count child-result))))
+                   {::record/count 0}
+                   (map vector
+                        (cons (::record/first-key params) (::keys index))
+                        (::children index)
+                        (conj (::keys index) (::record/last-key params))))]
+      (validate/check ::record/count
+        (= (::record/count result) (::record/count index))
+        "Aggregate record count matches actual subtree count"))))
+
+
+(defn validate-tree
+  [store params root]
+  (cond
+    (zero? (::record/count params))
+      (validate/check ::empty
+        (nil? root)
+        "Empty tree has nil root ")
+    (<= (::record/count params) (::part/limit params))
+      (part/validate store params root)
+    :else
+      (validate store
+                (assoc params
+                       ::root? true
+                       ::height (::height root))
+                root)))
 
 
 

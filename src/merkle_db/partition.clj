@@ -14,7 +14,8 @@
       [key :as key]
       [patch :as patch]
       [record :as record]
-      [tablet :as tablet])))
+      [tablet :as tablet]
+      [validate :as validate])))
 
 
 ;; ## Specs
@@ -44,7 +45,7 @@
 (s/def ::tablets (s/map-of keyword? link/merkle-link?))
 
 ;; Partition node.
-(s/def :merkle-db/partition
+(s/def ::node-data
   (s/and
     (s/keys :req [::record/count
                   ::record/families
@@ -54,6 +55,46 @@
                   ::last-key
                   ::tablets])
     #(= data-type (:data/type %))))
+
+
+(defn validate
+  [store params part]
+  (when (validate/check :data/type
+          (= data-type (:data/type part))
+          (str "Expected partition to have :data/type of " data-type
+               " but got: " (pr-str (:data/type part))))
+    (validate/check ::spec
+      (s/valid? ::node-data part)
+      (s/explain-str ::node-data part))
+    ; TODO: warn when partition limit or families don't match params
+    (when (<= (::limit part) (::record/count params))
+      (validate/check ::underflow
+        (<= (Math/ceil (/ (::limit part) 2)) (::record/count part))
+        "Partition is at least half full if tree has at least :merkle-db.partition/limit records"))
+    (validate/check ::overflow
+      (<= (::record/count part) (::limit part))
+      "Partition has at most :merkle-db.partition/limit records") 
+    ; TODO: first-key matches actual first record key
+    ; TODO: last-key matches actual last record key
+    ; TODO: record/count is accurate
+    (when (::record/first-key params)
+      (validate/check ::first-key
+        (not (key/before? (::first-key part) (::record/first-key params)))
+        "First key in partition is within the subtree boundary"))
+    (when (::record/last-key params)
+      (validate/check ::last-key
+        (not (key/after? (::last-key part) (::record/last-key params)))
+        "Last key in partition is within the subtree boundary"))
+    (validate/check ::base-tablet
+      (:base (::tablets part))
+      "Partition contains a base tablet")
+    (doseq [[tablet-family link] (::tablets part)]
+      (validate/check-link store link
+        #(tablet/validate
+            (assoc params
+                   ::record/families (::record/families part)
+                   ::record/family-key tablet-family)
+           %)))))
 
 
 

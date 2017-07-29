@@ -68,10 +68,15 @@
        (gen/map primitive-value primitive-value)])))
 
 
-(defn record
+(defn record-data
+  [field-keys]
+  (gen/map (gen/elements field-keys) field-value))
+
+
+(defn record-entry
   "Generates record key/data pairs using the given set of fields."
   [field-keys]
-  (gen/tuple record-key (gen/map (gen/elements field-keys) field-value)))
+  (gen/tuple record-key (record-data field-keys)))
 
 
 (defn families
@@ -89,16 +94,25 @@
       (gen/bind tcgen/sub-map)))
 
 
+(defn data-context*
+  "Generator for context data and configuration with a specific number of records."
+  [field-keys n]
+  (gen/tuple
+    (gen/return field-keys)
+    (families field-keys)
+    (gen/fmap
+      (partial apply zipmap)
+      (gen/tuple
+        (gen/set record-key {:num-elements n})
+        (gen/vector (record-data field-keys) n)))))
+
+
 (def data-context
   "Generator for context data and configuration. Generates tuples containing
   the set of field keys, the field families, and a vector of record key/data
   pairs."
   (gen/bind
-    (gen/not-empty (gen/set field-key))
-    (fn [field-keys]
-      (gen/tuple
-        (gen/return field-keys)
-        (families field-keys)
-        (gen/fmap
-          (partial into (sorted-map))
-          (gen/not-empty (gen/vector (record field-keys))))))))
+    (gen/tuple
+      (gen/not-empty (gen/set field-key))
+      gen/nat)
+    (partial apply data-context*)))

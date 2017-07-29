@@ -62,7 +62,7 @@
   (str
     (when-let [title (get-in node [::node/data :data/title])]
       (str title \newline))
-    ;(get-in node [::node/data :data/type] "???") \newline
+    (get-in node [::node/data :data/type] "???") \newline
     (some-> node ::node/id multihash/base58 (subs 0 8))
     (when-let [size (::node/size node)]
       (format " (%d B)" size))))
@@ -79,7 +79,7 @@
         ; idea: show short record count
         {:shape :ellipse
          :label (str (node-label node)
-                     (when-let [rc (:merkle-db.data/count (::node/data node))]
+                     (when-let [rc (:merkle-db.record/count (::node/data node))]
                        (format "\n%d records" rc)))}
       :merkle-db/patch
         {:shape :hexagon
@@ -87,16 +87,19 @@
                      (when-let [changes (:merkle-db.patch/changes (::node/data node))]
                        (format "\n%d changes" (count changes))))}
       :merkle-db/index
-        ; idea: show start/end keys
         {:shape :trapezium
-         :label (node-label node)}
+         :label (str (node-label node)
+                     (when-let [rc (:merkle-db.record/count (::node/data node))]
+                       (format "\n%d records" rc))
+                     \newline (:merkle-db.record/first-key (::node/data node))
+                     \newline (:merkle-db.record/last-key (::node/data node)))}
       :merkle-db/partition
-        ; idea: show start/end keys
-        ; idea: show short record count
         {:shape :rect
          :label (str (node-label node)
-                     (when-let [rc (:merkle-db.data/count (::node/data node))]
-                       (format "\n%d records" rc)))}
+                     (when-let [rc (:merkle-db.record/count (::node/data node))]
+                       (format "\n%d records" rc))
+                     \newline (:merkle-db.record/first-key (::node/data node))
+                     \newline (:merkle-db.record/last-key (::node/data node)))}
       :merkle-db/tablet
         {:shape :hexagon
          :label (node-label node)}
@@ -124,18 +127,10 @@
   {:label (link-label from to)})
 
 
-(defn view-database
-  [db]
-  (when-not (::node/id db)
-    (throw (IllegalArgumentException.
-             (str "Cannot vizualize database with no node id: "
-                  (pr-str db)))))
-  (let [nodes (find-nodes
-                (.store db)
-                {}
-                (mdag/get-node (.store db) (::node/id db))
-                (constantly true))]
-    (rhizome/view-graph
+(defn graph-tree
+  [rf store root-id follow? & args]
+  (let [nodes (find-nodes store {} (mdag/get-node store root-id) follow?)]
+    (apply rf
       (vals nodes)
       (fn adjacent
         [node]
@@ -144,8 +139,29 @@
               (::node/links node)))
       :node->descriptor node->descriptor
       :edge->descriptor edge->descriptor
-      ; :options
+      :options {:dpi 64}
       ; :node->cluster
       ; :cluster->parent
       ; :cluster->descriptor
-      )))
+      args)))
+
+
+(defn view-tree
+  [store root-id follow? & args]
+  (apply graph-tree rhizome/view-graph store root-id follow? args))
+
+
+(defn save-tree
+  [store root-id follow? filename & args]
+  (apply graph-tree rhizome/save-graph store root-id follow? :filename filename args))
+
+
+(defn view-database
+  ([db]
+   (view-database db (constantly true)))
+  ([db follow?]
+   (when-not (::node/id db)
+     (throw (IllegalArgumentException.
+              (str "Cannot vizualize database with no node id: "
+                   (pr-str db)))))
+   (view-tree (.store db) (::node/id db) follow?)))

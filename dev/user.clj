@@ -18,11 +18,12 @@
     (merkle-db
       [bloom :as bloom]
       [connection :as conn]
-      [data :as data]
       [db :as db]
       [generators :as mdgen]
+      [index :as index]
       [key :as key]
       [partition :as part]
+      [record :as record]
       [table :as table]
       [tablet :as tablet]
       [viz :as viz])
@@ -36,7 +37,7 @@
     (mdag/init-store
       :store (file-block-store "var/db/blocks")
       :cache {:total-size-limit (* 32 1024)}
-      :types data/codec-types)
+      :types record/codec-types)
     (doto (mrf/file-ref-tracker "var/db/refs.tsv")
       (mrf/load-history!))))
 
@@ -51,3 +52,28 @@
 (defn alter-db
   [f & args]
   (apply alter-var-root #'db f args))
+
+
+
+;; ## visualization dev utils
+
+(defn viz-index-build
+  [filename branch-factor part-limit n]
+  (let [field-keys #{:a :b :c :d :e :f}
+        record-keys (map (partial key/encode key/long-lexicoder) (range n))
+        record-data (rand-nth (gen/sample (gen/vector (mdgen/record-data field-keys) n)))
+        records (zipmap record-keys record-data)
+        ;families (rand-nth (gen/sample (mdgen/families field-keys)))
+        families {:bc #{:b :c}, :de #{:d :e}}
+        store (mdag/init-store :types record/codec-types)
+        params {::record/count n
+                ::record/families families
+                ::index/branching-factor branch-factor
+                ::part/limit part-limit}
+        parts (part/from-records store params records)
+        root (index/build-index store params parts)]
+    (viz/save-tree store
+                   (::node/id (meta root))
+                   (constantly true)
+                   filename)
+    [store root]))

@@ -97,7 +97,7 @@
                                           (if (zero? (::height params'))
                                             #(part/validate store params' %)
                                             #(validate store params' %)))]
-                       (update result ::record/count + (::record/count child-result))))
+                       (update result ::record/count + (::record/count child-result 0))))
                    {::record/count 0}
                    (map vector
                         (cons (::record/first-key params) (::keys index))

@@ -50,7 +50,7 @@
   {:tag-types
    {'blocks.data.Block {'blocks.data.Block (partial into {})}
     'merkledag.link.MerkleLink {'merkledag/link 'merkledag.link/link->form}
-    'merkle_db.bloom.BloomFilter {'merkle-db/bloom-filter #(select-keys % [:bits :k])}
+    'merkle_db.bloom.BloomFilter {'merkle-db/bloom-filter (juxt :bits :k)}
     'merkle_db.db.Database {'merkle-db/db (partial into {})}
     'merkle_db.key.Key {'merkle-db/key 'merkle-db.key/hex}
     'merkle_db.table.Table {'merkle-db/table (partial into {})}

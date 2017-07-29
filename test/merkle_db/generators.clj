@@ -38,7 +38,7 @@
 (def field-key
   "Generates field key values."
   (gen/one-of
-    [(gen/such-that not-empty gen/string)
+    [(gen/such-that not-empty gen/string-ascii)
      gen/keyword
      gen/keyword-ns
      gen/symbol
@@ -99,4 +99,6 @@
       (gen/tuple
         (gen/return field-keys)
         (families field-keys)
-        (gen/not-empty (gen/vector (record field-keys)))))))
+        (gen/fmap
+          (partial into (sorted-map))
+          (gen/not-empty (gen/vector (record field-keys))))))))

@@ -681,14 +681,14 @@
     ; Empty tree.
     (update-empty store parameters changes)
     ; Check root node type.
-    (condp = (get-in root [::node/data :data/type])
+    (condp = (:data/type root)
       part/data-type
         (update-partition store parameters root changes)
       data-type
         (update-index store parameters root changes)
       (throw (ex-info (str "Unsupported index-tree node type: "
-                           (pr-str (:data/type (::node/data root))))
-                      {:data/type (:data/type (::node/data root))})))))
+                           (pr-str (:data/type root)))
+                      {:data/type (:data/type root)})))))
 
 
 

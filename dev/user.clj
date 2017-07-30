@@ -23,12 +23,14 @@
       [index :as index]
       [key :as key]
       [partition :as part]
+      [patch :as patch]
       [record :as record]
       [table :as table]
       [tablet :as tablet]
       [viz :as viz])
     [multihash.core :as multihash]
-    [multihash.digest :as digest]))
+    [multihash.digest :as digest]
+    [rhizome.viz :as rhizome]))
 
 
 ; TODO: replace this with reloaded repl
@@ -57,14 +59,29 @@
 
 ;; ## visualization dev utils
 
+(defn sample-record-data
+  "Generates a vector of `n` maps of record data using the given field keys."
+  [field-keys n]
+  (rand-nth (gen/sample (gen/vector (mdgen/record-data field-keys) n))))
+
+
+(defn sample-subset
+  "Given a sequence of values, returns a subset of them in the same order, where
+  each element has the given chance of being in the subset."
+  [p xs]
+  (->> (repeatedly #(< (rand) p))
+       (map vector xs)
+       (filter second)
+       (mapv first)))
+
+
 (defn viz-index-build
   [filename branch-factor part-limit n]
   (let [field-keys #{:a :b :c :d :e :f}
-        record-keys (map (partial key/encode key/long-lexicoder) (range n))
-        record-data (rand-nth (gen/sample (gen/vector (mdgen/record-data field-keys) n)))
-        records (zipmap record-keys record-data)
-        ;families (rand-nth (gen/sample (mdgen/families field-keys)))
         families {:bc #{:b :c}, :de #{:d :e}}
+        record-keys (map (partial key/encode key/long-lexicoder) (range n))
+        record-data (sample-record-data field-keys n)
+        records (zipmap record-keys record-data)
         store (mdag/init-store :types record/codec-types)
         params {::record/count n
                 ::record/families families
@@ -77,3 +94,34 @@
                    (constantly true)
                    filename)
     [store root]))
+
+
+(defn gen-update!
+  [field-keys families n]
+  (let [record-keys (map (partial key/encode key/long-lexicoder) (range n))
+        extant-keys (sample-subset 0.5 record-keys)
+        records (zipmap extant-keys
+                        (sample-record-data
+                          field-keys
+                          (count extant-keys)))
+        changes (merge
+                  (let [ins-keys (sample-subset 0.25 record-keys)]
+                    (zipmap ins-keys (sample-record-data field-keys (count ins-keys))))
+                  (let [del-keys (sample-subset 0.25 record-keys)]
+                    (zipmap del-keys (repeat ::patch/tombstone))))]
+    {:families families
+     :records records
+     :changes changes}))
+
+
+(defn viz-update
+  [update-map branch-factor part-limit]
+  (let [{:keys [families records changes]} update-map
+        store (mdag/init-store :types record/codec-types)
+        params {::record/families families
+                ::index/branching-factor branch-factor
+                ::part/limit part-limit}
+        parts (part/from-records store params records)
+        root (index/build-index store params parts)
+        root' (index/update-tree store params root changes)]
+    [store root root']))

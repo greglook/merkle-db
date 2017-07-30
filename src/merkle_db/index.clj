@@ -651,14 +651,22 @@
   [store parameters changes]
   ; Divide up added records into a sequence of partitions and build an index
   ; over them.
-  (->> (part/from-records store parameters)
+  (->> changes
+       (part/from-records store parameters)
        (build-index store parameters)))
 
 
 (defn- update-partition
   "Apply changes to a partition root, returning an updated root node data."
   [store parameters part changes]
-  (when-let [parts (seq (part/apply-patch! store (merge part parameters) changes))]
+  (when-let [parts (seq (part/apply-patch!
+                          store
+                          (merge part
+                                 (select-keys
+                                   parameters
+                                   [::part/limit
+                                    ::record/families]))
+                          changes))]
     (build-index store parameters parts)))
 
 

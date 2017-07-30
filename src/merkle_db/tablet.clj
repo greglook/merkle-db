@@ -36,6 +36,9 @@
     (validate/check ::spec
       (s/valid? ::node-data tablet)
       (s/explain-str ::node-data tablet))
+    (validate/check ::record/count
+      (seq (::records tablet))
+      "Tablet is non-empty")
     (when-let [family-keys (get (::record/families params)
                                 (::record/family-key params))]
       (let [bad-fields (->> (::records tablet)

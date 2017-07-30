@@ -329,20 +329,28 @@
                         (::tablets part)
                         family-updates)
         added-keys (map first additions)
-        record-count (count (tablet/read-all (mdag/get-data store (:base tablets))))
+        record-keys (map first (tablet/read-all (mdag/get-data store (:base tablets))))
+        record-count (count record-keys)
         part-count (int (Math/ceil (/ record-count limit)))]
     (when (pos? record-count)
       (if (= 1 part-count)
         ; Records still fit into one partition
-        [(->>
+        [(->
            (assoc part
                   ::record/count record-count
                   ::tablets tablets
-                  ::membership (into (::membership part) added-keys)
-                  ::record/first-key (apply key/min (::record/first-key part) added-keys)
-                  ::record/last-key (apply key/max (::record/last-key part) added-keys))
-           (mdag/store-node! store nil)
-           (::node/data))]
+                  ::membership (if (empty? deletions)
+                                 (into (::membership part) added-keys)
+                                 (into (empty (::membership part)) record-keys))
+                  ::record/first-key (first record-keys)
+                  ::record/last-key (last record-keys))
+           (->> (mdag/store-node! store nil))
+           (as-> node
+             (vary-meta (::node/data node)
+                        merge
+                        (select-keys node [::node/id
+                                           ::node/size
+                                           ::node/links]))))]
         ; Partition must be split into multiple.
         (->>
           (read-all store part nil)

@@ -57,7 +57,7 @@
       visited)))
 
 
-(defn- node-label
+(defn node-label
   [node]
   (str
     (when-let [title (get-in node [::node/data :data/title])]
@@ -68,7 +68,7 @@
       (format " (%d B)" size))))
 
 
-(defn- node->descriptor
+(defn node->descriptor
   [node]
   (let [data-type (get-in node [::node/data :data/type])]
     (case data-type
@@ -112,7 +112,7 @@
          :label (node-label node)})))
 
 
-(defn- link-label
+(defn link-label
   [from to]
   (or
     (::link/name (meta to))
@@ -121,7 +121,7 @@
           (::node/links from))))
 
 
-(defn- edge->descriptor
+(defn edge->descriptor
   [from to]
   ; color links by something?
   {:label (link-label from to)})

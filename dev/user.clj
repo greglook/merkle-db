@@ -5,6 +5,7 @@
     [blocks.store.file :refer [file-block-store]]
     [clojure.java.io :as io]
     [clojure.repl :refer :all]
+    [clojure.set :as set]
     [clojure.stacktrace :refer [print-cause-trace]]
     [clojure.string :as str]
     [clojure.test.check.generators :as gen]
@@ -123,5 +124,36 @@
                 ::part/limit part-limit}
         parts (part/from-records store params records)
         root (index/build-index store params parts)
-        root' (index/update-tree store params root changes)]
-    [store root root']))
+        root' (index/update-tree store params root changes)
+        old-nodes (viz/find-nodes store {}
+                                  (mdag/get-node store (::node/id (meta root)))
+                                  (constantly true))
+        new-nodes (viz/find-nodes store {}
+                                  (mdag/get-node store (::node/id (meta root')))
+                                  (constantly true))
+        all-nodes (merge old-nodes new-nodes)
+        shared-ids (set/intersection (set (keys old-nodes)) (set (keys new-nodes)))]
+    (rhizome/view-graph
+      (vals all-nodes)
+      (fn adjacent
+        [node]
+        (keep #(when-let [target (get all-nodes (::link/target %))]
+                 (vary-meta target assoc ::link/name (::link/name %)))
+              (::node/links node)))
+      :node->descriptor (fn [node]
+                          (assoc (viz/node->descriptor node)
+                                 :color (cond
+                                          (shared-ids (::node/id node)) :blue
+                                          (new-nodes (::node/id node)) :green
+                                          :else :black)))
+      :edge->descriptor viz/edge->descriptor
+      :options {:dpi 64})
+    ['context
+     update-map
+     'original-root
+     root
+     'updated-root
+     root'
+     'updated-tablets
+     (mdag/get-data store (get-in root' [::part/tablets :base]))
+     (mdag/get-data store (get-in root' [::part/tablets :bc]))]))

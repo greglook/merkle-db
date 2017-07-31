@@ -67,7 +67,7 @@
         "Partition is at least half full if tree has at least :merkle-db.partition/limit records"))
     (validate/check ::overflow
       (<= (::record/count part) (::limit part))
-      "Partition has at most :merkle-db.partition/limit records") 
+      "Partition has at most :merkle-db.partition/limit records")
     ; TODO: first-key matches actual first record key
     ; TODO: last-key matches actual last record key
     ; TODO: record/count is accurate
@@ -95,6 +95,12 @@
 
 
 ;; ## Utilities
+
+(defn- get-tablet
+  "Return the tablet data for the given family key."
+  [store part family-key]
+  (mdag/get-data store (get (::tablets part) family-key)))
+
 
 (defn- store-tablet!
   "Store the given tablet data and return the family key and updated id."
@@ -201,7 +207,7 @@
   [field-seqs]
   (lazy-seq
     (when-let [next-key (some->> (seq (keep ffirst field-seqs))
-                                 (apply key/min))]
+                                 (apply key/min))] ; TODO: key/max for reverse
       (let [has-next? #(= next-key (ffirst %))
             next-data (->> field-seqs
                            (filter has-next?)
@@ -219,13 +225,12 @@
   which are combined into a single sequence of key/record pairs."
   [store part fields read-fn & args]
   ; OPTIMIZE: use transducer instead of intermediate sequences.
-  (->> (set fields)
-       (choose-tablets (::record/families part))
-       (map (::tablets part))
-       (map (partial mdag/get-data store))
-       (map #(apply read-fn % args))
-       (record-seq)
-       (map (juxt first #(select-keys (second %) fields)))))
+  (let [tablets (choose-tablets (::record/families part) (set fields))
+        field-seqs (map #(apply read-fn (get-tablet store part %) args) tablets)
+        records (record-seq field-seqs)]
+    (cond->> records
+      (seq fields)
+        (map (juxt first #(select-keys (second %) fields))))))
 
 
 (defn read-all
@@ -254,6 +259,17 @@
 
 ;; ## Update Functions
 
+(defn- store-node!
+  [store data]
+  (let [node (mdag/store-node! store nil data)]
+    (vary-meta
+      (::node/data node)
+      merge
+      (select-keys node [::node/id
+                         ::node/size
+                         ::node/links]))))
+
+
 (defn- update-tablet!
   "Apply inserts and tombstone deletions to the data contained in the given
   tablet. Returns an updated map with a link to the new tablet."
@@ -271,7 +287,7 @@
       ; Create new tablet and store it.
       (tablet/from-records additions))
     (as-> tablet'
-      (if (seq (tablet/read-all tablet'))
+      (if (seq (tablet/keys tablet'))
         (conj tablets (store-tablet! store family-key tablet'))
         (dissoc tablets family-key)))))
 
@@ -289,69 +305,49 @@
       (map
         (fn make-partition
           [partition-records]
-          (->
+          (prn :from-records/make-partition partition-records)
+          (store-node!
+            store
             {:data/type data-type
              ::limit limit
-             ::tablets (->>
-                         partition-records
-                         (record/split-data families)
-                         (map (juxt key #(tablet/from-records (val %))))
-                         (map (partial apply store-tablet! store))
-                         (into {}))
+             ::tablets (into {}
+                             (map #(store-tablet! store (key %) (tablet/from-records (val %))))
+                             (record/split-data families partition-records))
              ::membership (into (bloom/create limit)
                                 (map first)
                                 partition-records)
              ::record/count (count partition-records)
              ::record/families families
              ::record/first-key (first (first partition-records))
-             ::record/last-key (first (last partition-records))}
-            (->> (mdag/store-node! store nil))
-            (as-> node
-              (vary-meta (::node/data node)
-                         merge
-                         (select-keys node [::node/id
-                                            ::node/size
-                                            ::node/links]))))))
+             ::record/last-key (first (last partition-records))})))
       (record/partition-limited limit records))))
 
 
 (defn apply-patch!
-  "Performs an update across the tablets in the partition to merge in the given
-  patch changes. Returns a sequence of zero or more persisted partitions."
+  "Performs an update across the tablets in the given partition to merge in the
+  patch changes. Returns three possible values:
+
+  - If the changes deleted every record in the partition, returns `nil`.
+  - If there are fewer than `(/ (::limit part) 2)` records left, a single
+    *unserialized* tablet map containing the full record data.
+  - Otherwise, a sequence of *serialized* partition nodes."
   [store part changes]
-  ; OPTIMIZE: don't write out too-large tablets
   (let [limit (or (::limit part) default-limit)
-        additions (remove (comp patch/tombstone? second) changes)
-        deletions (set (map first (filter (comp patch/tombstone? second)
-                                          changes)))
-        family-updates (record/split-data (::record/families part) additions)
-        tablets (reduce (partial update-tablet! store deletions)
-                        (::tablets part)
-                        family-updates)
-        added-keys (map first additions)
-        record-keys (map first (tablet/read-all (mdag/get-data store (:base tablets))))
-        record-count (count record-keys)
-        part-count (int (Math/ceil (/ record-count limit)))]
-    (when (pos? record-count)
-      (if (= 1 part-count)
-        ; Records still fit into one partition
-        [(->
-           (assoc part
-                  ::record/count record-count
-                  ::tablets tablets
-                  ::membership (if (empty? deletions)
-                                 (into (::membership part) added-keys)
-                                 (into (empty (::membership part)) record-keys))
-                  ::record/first-key (first record-keys)
-                  ::record/last-key (last record-keys))
-           (->> (mdag/store-node! store nil))
-           (as-> node
-             (vary-meta (::node/data node)
-                        merge
-                        (select-keys node [::node/id
-                                           ::node/size
-                                           ::node/links]))))]
-        ; Partition must be split into multiple.
-        (->>
-          (read-all store part nil)
-          (from-records store part))))))
+        deletion? (comp patch/tombstone? second)
+        additions (remove deletion? changes)
+        deleted-keys (set (map first (filter deletion? changes)))
+        virtual-tablet (-> (read-all store part nil)
+                           (tablet/from-records)
+                           (tablet/update-records additions deleted-keys))
+        record-count (count (tablet/read-all virtual-tablet))]
+    (prn :apply-patch/virtual-tablet virtual-tablet)
+    (cond
+      ; Empty partitions are not valid, so return nil.
+      (zero? record-count) nil
+
+      ; Partition would be less than half full - return virtual tablet for
+      ; carrying.
+      (< record-count (int (Math/ceil (/ limit 2)))) virtual-tablet
+
+      ; Otherwise, divide up into one or more valid serialized partitions.
+      :else (from-records store part (tablet/read-all virtual-tablet)))))

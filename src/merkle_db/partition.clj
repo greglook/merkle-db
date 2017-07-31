@@ -305,7 +305,6 @@
       (map
         (fn make-partition
           [partition-records]
-          (prn :from-records/make-partition partition-records)
           (store-node!
             store
             {:data/type data-type
@@ -340,7 +339,6 @@
                            (tablet/from-records)
                            (tablet/update-records additions deleted-keys))
         record-count (count (tablet/read-all virtual-tablet))]
-    (prn :apply-patch/virtual-tablet virtual-tablet)
     (cond
       ; Empty partitions are not valid, so return nil.
       (zero? record-count) nil

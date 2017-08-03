@@ -102,20 +102,19 @@
 
 
 (defn- store-tablet!
-  "Store the given tablet data and return the family key and updated id."
+  "Store the given tablet data. Returns a tuple of the family key and named
+  link to the new node."
   [store family-key tablet]
-  (let [node (mdag/store-node!
-               store
-               nil
-               (cond-> tablet
+  (let [tablet (cond-> tablet
                  (not= family-key :base)
-                 (tablet/prune-records)))]
-    [family-key
-     (mdag/link
-       (if (namespace family-key)
-         (str (namespace family-key) ":" (name family-key))
-         (name family-key))
-       node)]))
+                 (tablet/prune-records))]
+    (when (seq (tablet/read-all tablet))
+      [family-key
+       (mdag/link
+         (if (namespace family-key)
+           (str (namespace family-key) ":" (name family-key))
+           (name family-key))
+         (mdag/store-node! store nil tablet))])))
 
 
 (defn- divide-tablets
@@ -258,17 +257,6 @@
 
 ;; ## Update Functions
 
-(defn- store-node!
-  [store data]
-  (let [node (mdag/store-node! store nil data)]
-    (vary-meta
-      (::node/data node)
-      merge
-      (select-keys node [::node/id
-                         ::node/size
-                         ::node/links]))))
-
-
 (defn- update-tablet!
   "Apply inserts and tombstone deletions to the data contained in the given
   tablet. Returns an updated map with a link to the new tablet."
@@ -296,7 +284,7 @@
   will be split into tablets matching the given families, if provided. Returns
   a sequence of persisted partitions."
   [store parameters records]
-  (let [records (sort-by first (patch/remove-tombstones records))
+  (let [records (vec (sort-by first (patch/remove-tombstones records))) ; TODO: don't sort?
         limit (or (::limit parameters) default-limit)
         families (or (::record/families parameters) {})]
     (into
@@ -304,8 +292,7 @@
       (map
         (fn make-partition
           [partition-records]
-          (store-node!
-            store
+          (->>
             {:data/type data-type
              ::limit limit
              ::tablets (into {}
@@ -317,7 +304,9 @@
              ::record/count (count partition-records)
              ::record/families families
              ::record/first-key (first (first partition-records))
-             ::record/last-key (first (last partition-records))})))
+             ::record/last-key (first (last partition-records))}
+            (mdag/store-node! store nil)
+            (::node/data))))
       (record/partition-limited limit records))))
 
 

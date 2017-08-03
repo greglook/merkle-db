@@ -278,18 +278,6 @@
 ;; - redistribute children
 ;; - serialize the tree
 
-; TODO: don't duplicate this with part/store-node!
-(defn- store-node!
-  [store data]
-  (let [node (mdag/store-node! store nil data)]
-    (vary-meta
-      (::node/data node)
-      merge
-      (select-keys node [::node/id
-                         ::node/size
-                         ::node/links]))))
-
-
 (defn build-index
   "Given a sequence of partitions, builds an index tree with the given
   parameters incorporating the partitions. Returns the final, persisted root
@@ -298,8 +286,7 @@
   (letfn [(store-child
             [height children]
             (let [link-format (str "%0" (count (pr-str (dec (count children)))) "d")]
-              (store-node!
-                store
+              (->>
                 {:data/type data-type
                  ::height height
                  ::keys (vec (drop 1 (map ::record/first-key children)))
@@ -310,7 +297,9 @@
                               (vec))
                  ::record/count (reduce + 0 (map ::record/count children))
                  ::record/first-key (::record/first-key (first children))
-                 ::record/last-key (::record/last-key (last children))})))]
+                 ::record/last-key (::record/last-key (last children))}
+                (mdag/store-node! store nil)
+                (::node/data))))]
     (loop [layer partitions
            height 1]
       (if (<= (count layer) 1)
@@ -371,7 +360,8 @@
 
 (defn group-changes
   "Divides up a sorted sequence of changes into a lazy sequence of tuples of
-  the child link, associated changes, and key "
+  the first key in the subtree, the child link, and the associated changes, if
+  any."
   [child-keys child-links changes]
   ; all arguments must be sorted
   ; return lazy sequence of ([nil link-0 child-changes] [key-0 link-1 changes] ...)

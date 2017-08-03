@@ -8,7 +8,6 @@
     [clojure.string :as str]
     (merkledag
       [core :as mdag]
-      [link :as link]
       [node :as node])
     (merkle-db
       [index :as index]
@@ -37,10 +36,10 @@
          #(<= 1 (count %) 127)))
 
 ;; Table data is a link to the root of the data tree.
-(s/def ::record link/merkle-link?)
+(s/def ::record mdag/link?)
 
 ;; Tables may have a patch tablet containing recent unmerged data.
-(s/def ::patch link/merkle-link?)
+(s/def ::patch mdag/link?)
 
 ;; Time the table was last modified.
 (s/def ::modified-at #(instance? Instant %))

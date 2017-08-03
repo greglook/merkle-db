@@ -40,7 +40,7 @@
 (s/def ::committed-at inst?)
 
 ;; Map of table names to node links.
-(s/def ::tables (s/map-of ::table/name link/merkle-link?))
+(s/def ::tables (s/map-of ::table/name mdag/link?))
 
 ;; Database root node.
 (s/def ::node-data
@@ -365,7 +365,7 @@
 (defn- link-or-table->info
   "Coerce either a link value or a table record to a map of information."
   [[table-name value]]
-  (if (link/merkle-link? value)
+  (if (mdag/link? value)
     {::node/id (::link/target value)
      ::table/name table-name
      ::record/size (::link/rsize value)}
@@ -394,7 +394,7 @@
   "Internal `get-table` implementation."
   [^Database db table-name]
   (when-let [value (get (.tables db) table-name)]
-    (if (link/merkle-link? value)
+    (if (mdag/link? value)
       ; Resolve link to stored table root.
       (table/load-table (.store db) table-name value)
       ; Loaded table value.
@@ -434,7 +434,7 @@
     (fn [acc table-name value]
       (assoc
         acc table-name
-        (if (link/merkle-link? value)
+        (if (mdag/link? value)
           value
           (table-link table-name (table/flush! value false)))))
     {} tables))

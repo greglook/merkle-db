@@ -7,7 +7,6 @@
     [clojure.spec :as s]
     (merkledag
       [core :as mdag]
-      [link :as link]
       [node :as node])
     (merkle-db
       [bloom :as bloom]
@@ -32,7 +31,7 @@
 (s/def ::limit pos-int?)
 
 ;; Map of family keys (and `:base`) to links to the corresponding tablets.
-(s/def ::tablets (s/map-of keyword? link/merkle-link?))
+(s/def ::tablets (s/map-of keyword? mdag/link?))
 
 ;; Bloom filter providing probable membership testing for record keys contained
 ;; in the partition.

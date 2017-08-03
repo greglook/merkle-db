@@ -98,6 +98,8 @@
 
 
 (defn gen-update!
+  "Generate an example update case for the given set of fields, families, and
+  number of contextual records."
   [field-keys families n]
   (let [record-keys (map (partial key/encode key/long-lexicoder) (range n))
         extant-keys (sample-subset 0.5 record-keys)
@@ -155,5 +157,19 @@
      'updated-root
      root'
      'updated-tablets
-     (mdag/get-data store (get-in root' [::part/tablets :base]))
-     (mdag/get-data store (get-in root' [::part/tablets :bc]))]))
+     (mdag/get-data store (meta root') "0/base")
+     (mdag/get-data store (meta root') "0/bc")
+     (mdag/get-data store (meta root') "1/base")
+     (mdag/get-data store (meta root') "1/bc")
+     #_ (mdag/get-data store (get-in root' [::part/tablets :base]))
+     #_ (mdag/get-data store (get-in root' [::part/tablets :bc]))]))
+
+
+(def promote-reuse-example
+  {:families {:bc #{:b :c}}
+   :records {(key/create [0]) {:a 0 :b 0 :c 0}
+             (key/create [1]) {:a 1, :c 1}
+             (key/create [2]) {:a 2, :b 2, :d 2}}
+   :changes {(key/create [5]) {:a 5}
+             (key/create [6]) {:x 6}
+             (key/create [7]) {:y 7}}})

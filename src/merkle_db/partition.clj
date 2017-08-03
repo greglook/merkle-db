@@ -286,8 +286,8 @@
       ; Create new tablet and store it.
       (tablet/from-records additions))
     (as-> tablet'
-      (if (seq (tablet/keys tablet'))
-        (conj tablets (store-tablet! store family-key tablet'))
+      (if-let [entry (store-tablet! store family-key tablet')]
+        (conj tablets entry)
         (dissoc tablets family-key)))))
 
 

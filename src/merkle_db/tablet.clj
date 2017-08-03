@@ -89,8 +89,9 @@
   "Constructs a new bare-bones tablet node. Does not ensure that the records
   are sorted."
   [records]
-  {:data/type data-type
-   ::records (vec records)})
+  (when (seq (filter (comp map? second) records))
+    {:data/type data-type
+     ::records (vec records)}))
 
 
 (defn fields-present

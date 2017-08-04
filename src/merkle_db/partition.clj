@@ -1,7 +1,11 @@
 (ns merkle-db.partition
   "Partitions contain non-overlapping ranges of the records witin a table.
   Partition nodes contain metadata about the contained records and links to the
-  tablets where the data for each field family is stored."
+  tablets where the data for each field family is stored.
+
+  Some functions in this namespace use the term 'virtual tablet' to mean a
+  tablet map in memory which contains the full record data for a partition.
+  They are used as temporary ways to represent unserialized record data."
   (:require
     [clojure.future :refer [pos-int?]]
     [clojure.spec :as s]
@@ -107,7 +111,7 @@
   [store family-key tablet]
   (let [tablet (cond-> tablet
                  (not= family-key :base)
-                 (tablet/prune-records))]
+                 (tablet/prune))]
     (when (seq (tablet/read-all tablet))
       [family-key
        (mdag/link

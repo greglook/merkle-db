@@ -129,7 +129,7 @@
                               left-bound right-bound)
                       {:left-bound left-bound
                        :right-bound right-bound}))))
-  (update left ::records (comp vec concat) (::records right)))
+  (update left ::records into (::records right)))
 
 
 
@@ -182,26 +182,13 @@
     (assoc tablet ::records (vec records))))
 
 
-(defn insert-records
-  "Update a tablet by inserting record data into it."
-  [tablet records]
-  (update-records tablet records nil))
-
-
-(defn prune-records
+(defn prune
   "Update a tablet by removing empty records from the data."
   [tablet]
   (update tablet ::records #(vec (remove (comp empty? second) %))))
 
 
-(defn remove-batch
-  "Update the tablet by removing certain record keys from it. Returns nil if
-  the resulting tablet is empty."
-  [tablet record-keys]
-  {:pre [(every? key/key? record-keys)]}
-  (update-records tablet nil record-keys))
-
-
+#_
 (defn remove-range
   "Update the tablet by removing a range of record keys from it. Returns nil
   if the resulting tablet is empty."

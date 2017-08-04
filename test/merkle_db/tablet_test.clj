@@ -58,6 +58,7 @@
           (tablet/read-range tablet (key/create [2]) (key/create [3]))))))
 
 
+#_
 (deftest record-addition
   (let [k1 (key/create [1 2 3])
         r1 {:foo 123}
@@ -92,8 +93,9 @@
     (testing "pruning"
       (is (= [[k1 r1]]
              (tablet/read-all
-               (tablet/prune-records
+               (tablet/prune
                  (tablet/from-records {k1 r1, k2 {}}))))))
+    #_
     (testing "by batch"
       (is (nil? (tablet/remove-batch empty-tablet #{})))
       (is (= [[k1 r1] [k2 r2] [k3 r3]]
@@ -106,6 +108,7 @@
              (tablet/read-all
                (tablet/remove-batch tablet #{k2 k3}))))
       (is (nil? (tablet/remove-batch tablet #{k1 k2 k3}))))
+    #_
     (testing "by range"
       (is (= [k1 k3]
              (tablet/keys
@@ -130,6 +133,7 @@
     (is (= k2 (tablet/last-key tablet)))))
 
 
+#_
 (deftest tablet-splitting
   (let [k1 (key/create [1 2 3])
         r1 {:foo 123}

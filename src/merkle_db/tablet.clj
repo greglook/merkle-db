@@ -100,6 +100,7 @@
   (set (mapcat (comp clojure.core/keys second) (::records tablet))))
 
 
+#_
 (defn split
   "Split the tablet into two tablets at the given key. All records less than the
   split key will be contained in the first tablet, all others in the second. "

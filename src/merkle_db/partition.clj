@@ -121,6 +121,7 @@
          (mdag/store-node! store nil tablet))])))
 
 
+#_
 (defn- divide-tablets
   "Take a map of tablet links and a split key and returns a vector of two
   tablet maps, each containing the left and right tablet splits, respectively."
@@ -147,6 +148,7 @@
     tablets))
 
 
+#_
 (defn split
   "Split the partition into two partitions at the given key. All records less
   than the split key will be contained in the first partition, all others in
@@ -174,6 +176,7 @@
       (divide-tablets store (::tablets part) split-key))))
 
 
+#_
 (defn join
   "Join two partitions into a single partition. The partition key ranges must
   not overlap."
@@ -261,6 +264,7 @@
 
 ;; ## Update Functions
 
+#_
 (defn- update-tablet!
   "Apply inserts and tombstone deletions to the data contained in the given
   tablet. Returns an updated map with a link to the new tablet."

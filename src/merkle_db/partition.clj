@@ -345,3 +345,99 @@
 
       ; Otherwise, divide up into one or more valid serialized partitions.
       :else (from-records store part (tablet/read-all virtual-tablet)))))
+
+
+(defn update-partitions!
+  "Consume a sequence of tuples containing partitions and associated patch
+  changes to return an updated sequence of partitions. Each tuple has the form
+  `[first-key partition-data changes]`. The partition data may be either a link
+  to an existing node or a virtual tablet which was carried into the inputs.
+
+  The result of the update is one of:
+
+  - `nil` if all partitions were removed by the changes.
+  - A virtual tablet if there are not enough records in the result to create a
+    valid half-full partition.
+  - A sequence of tuples of `[first-key partition-link]` giving the updated
+    serialized partitions."
+  [store params partitions]
+  (let [limit (or (::limit params) default-limit)
+        half-full (int (Math/ceil (/ limit 2)))
+        valid? #(or (mdag/link? %) (<= half-full (::record/count %) limit))
+        to-tablet (fn to-tablet
+                    [x]
+                    (cond
+                      (mdag/link? x)
+                        (-> (mdag/get-data store x)
+                            (read-all)
+                            (tablet/from-records))
+                      (= tablet/data-type (:data/type x))
+                        x
+                      (= data-type (:data/type x))
+                        (tablet/from-records (read-all x))
+                      nil nil))
+        merge-parts (fn merge-parts
+                      [a b]
+                      (if (and a b)
+                        (tablet/join (to-tablet a) (to-tablet b))
+                        (or a b)))]
+    (loop [result []
+           pending nil
+           inputs partitions]
+      (if (seq inputs)
+        ; Process next partition in the sequence.
+        (let [[first-key part changes] (first inputs)]
+          ; pending: nil, underflow, intermediate, overflow-by-half
+          ; part: link, tablet
+          ; changes: nil, some
+          ; part+changes: nil, link, tablet
+
+          ; case [pending part changes]:
+          ;
+          ; [nil link nil]
+          ; no changes to the already-serialized partition, add directly to result
+          ;
+          ; [pending link changes]
+          ; load link, apply changes and join with pending:
+          ; - identical to the original records from link => emit renamed link
+          ; - empty => (recur result nil (next inputs))
+          ; - underflow => (recur result tablet (next inputs))
+          ; - overflow by half => make a full partition and recur with half-full tablet
+          ;
+          ; [pending tablet changes]
+          ; apply changes to tablet and join with pending:
+          ; - empty => (recur result nil (next inputs))
+          ; - underflow => (recur result tablet (next inputs))
+          ; - overflow by half => make a full partition and recur with half-full tablet
+          ,,,)
+
+        ; No more partitions to process.
+        (cond
+          ; No pending data to handle, we're done.
+          (nil? pending)
+            result
+
+          ; Not enough records left to create a valid partition!
+          (< (count (tablet/read-all pending)) half-full)
+            (if-let [prev (peek result)]
+              ; Load last result link and redistribute into two valid partitions.
+              (->> (merge-parts prev pending)
+                   (tablet/read-all)
+                   (from-records store params)
+                   (map-indexed
+                     #(vector (::record/first-key %1)
+                              (mdag/link (format "part-%03d" (+ (count result) %2))
+                                         (meta %))))
+                   (into result))
+              ; No siblings, so return virtual tablet for carrying.
+              pending)
+
+          ; Enough records to make one or more valid partitions.
+          :else
+            (->> (tablet/read-all pending)
+                 (from-records store params)
+                 (map-indexed
+                   #(vector (::record/first-key %1)
+                            (mdag/link (format "part-%03d" (+ (count result) %2))
+                                       (meta %))))
+                 (into result)))))))

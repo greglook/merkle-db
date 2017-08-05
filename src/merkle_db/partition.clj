@@ -287,14 +287,26 @@
         (dissoc tablets family-key)))))
 
 
+(defn- load-tablet
+  "Loads data from the given value into a tablet."
+  [store x]
+  (let [x (if (mdag/link? x)
+            (mdag/get-data store x)
+            x)]
+    (condp = (:data/type x)
+      tablet/data-type x
+      data-type (tablet/from-records (read-all store x nil))
+      nil nil)))
+
+
 (defn from-records
   "Constructs new partitions from the given map of record data. The records
   will be split into tablets matching the given families, if provided. Returns
   a sequence of persisted partitions."
-  [store parameters records]
+  [store params records]
   (let [records (vec (sort-by first (patch/remove-tombstones records))) ; TODO: don't sort?
-        limit (or (::limit parameters) default-limit)
-        families (or (::record/families parameters) {})]
+        limit (or (::limit params) default-limit)
+        families (or (::record/families params) {})]
     (into
       []
       (map
@@ -316,6 +328,18 @@
             (mdag/store-node! store nil)
             (::node/data))))
       (record/partition-limited limit records))))
+
+
+(defn- apply-patch
+  "Performs an update on the tablet by applying the patch changes. Returns an
+  updated tablet, or nil if the result was empty."
+  [tablet changes]
+  (if (seq changes)
+    (let [deletion? (comp patch/tombstone? second)
+          additions (remove deletion? changes)
+          deleted-keys (set (map first (filter deletion? changes)))]
+      (tablet/update-records tablet additions deleted-keys))
+    tablet))
 
 
 (defn apply-patch!
@@ -364,52 +388,75 @@
   (let [limit (or (::limit params) default-limit)
         half-full (int (Math/ceil (/ limit 2)))
         valid? #(or (mdag/link? %) (<= half-full (::record/count %) limit))
-        to-tablet (fn to-tablet
-                    [x]
-                    (cond
-                      (mdag/link? x)
-                        (-> (mdag/get-data store x)
-                            (read-all)
-                            (tablet/from-records))
-                      (= tablet/data-type (:data/type x))
-                        x
-                      (= data-type (:data/type x))
-                        (tablet/from-records (read-all x))
-                      nil nil))
         merge-parts (fn merge-parts
                       [a b]
                       (if (and a b)
-                        (tablet/join (to-tablet a) (to-tablet b))
-                        (or a b)))]
+                        (tablet/join (load-tablet store a)
+                                     (load-tablet store b))
+                        (or a b)))
+        link-into (fn link-into
+                    [result partitions]
+                    (into
+                      result
+                      (map-indexed
+                        #(vector
+                           (::record/first-key %2)
+                           (mdag/link (format "%03d" (+ (count result) %1))
+                                      (if (mdag/link? %2) %2 (meta %2)))))
+                      partitions))]
     (loop [result []
            pending nil
            inputs partitions]
       (if (seq inputs)
         ; Process next partition in the sequence.
-        (let [[first-key part changes] (first inputs)]
-          ; pending: nil, underflow, intermediate, overflow-by-half
-          ; part: link, tablet
-          ; changes: nil, some
-          ; part+changes: nil, link, tablet
+        (let [[first-key part changes] (first inputs)
+              link-name (format "part-%03d" (count result))]
+          (if (and (nil? pending) (empty? changes))
+            ; No pending records or changes, so use "pass through" logic.
+            (if (mdag/link? part)
+              ; No changes to the stored partition, add directly to result.
+              (recur (conj result [first-key (mdag/link link-name part)])
+                     nil
+                     (next inputs))
+              ; No changes to virtual tablet, recur with pending records.
+              (recur result part (next inputs)))
+            ; Load partition data or use virtual tablet records.
+            (let [tablet (load-tablet store part)
+                  tablet' (merge-parts pending (apply-patch tablet changes))]
+              (cond
+                ; All data was removed from the partition.
+                (empty? (tablet/read-all tablet'))
+                  (recur result nil (next inputs))
 
-          ; case [pending part changes]:
-          ;
-          ; [nil link nil]
-          ; no changes to the already-serialized partition, add directly to result
-          ;
-          ; [pending link changes]
-          ; load link, apply changes and join with pending:
-          ; - identical to the original records from link => emit renamed link
-          ; - empty => (recur result nil (next inputs))
-          ; - underflow => (recur result tablet (next inputs))
-          ; - overflow by half => make a full partition and recur with half-full tablet
-          ;
-          ; [pending tablet changes]
-          ; apply changes to tablet and join with pending:
-          ; - empty => (recur result nil (next inputs))
-          ; - underflow => (recur result tablet (next inputs))
-          ; - overflow by half => make a full partition and recur with half-full tablet
-          ,,,)
+                ; Original partition data was unchanged by updates.
+                (= tablet tablet')
+                  (if (mdag/link? part)
+                    ; Original linked partition remains unchanged by update.
+                    (recur (conj result [first-key (mdag/link link-name part)])
+                           nil
+                           (next inputs))
+                    ; Original pending data hasn't changed
+                    (recur result tablet (next inputs)))
+
+                ; Accumulated enough records to output full partitions.
+                (<= (+ limit half-full) (count (tablet/read-all tablet')))
+                  (let [[result' remnant]
+                        (loop [result result
+                               records (tablet/read-all tablet')]
+                          (if (<= (+ limit half-full) (count records))
+                            ; Serialize a full partition using the pending records.
+                            (let [[output remnant] (split-at limit records)
+                                  part' (first (from-records store params output))
+                                  link (mdag/link (format "part-%03d" (count result))
+                                                  (meta part'))]
+                              (recur (conj result [(ffirst output) link]) remnant))
+                            ; Not enough to guarantee validity, so continue.
+                            [result records]))]
+                    (recur result' (tablet/from-records remnant) (next inputs)))
+
+                ; Not enough data to output a partition yet, keep pending.
+                :else
+                  (recur result tablet' (next inputs))))))
 
         ; No more partitions to process.
         (cond
@@ -424,11 +471,7 @@
               (->> (merge-parts prev pending)
                    (tablet/read-all)
                    (from-records store params)
-                   (map-indexed
-                     #(vector (::record/first-key %1)
-                              (mdag/link (format "part-%03d" (+ (count result) %2))
-                                         (meta %))))
-                   (into result))
+                   (link-into result))
               ; No siblings, so return virtual tablet for carrying.
               pending)
 
@@ -436,8 +479,4 @@
           :else
             (->> (tablet/read-all pending)
                  (from-records store params)
-                 (map-indexed
-                   #(vector (::record/first-key %1)
-                            (mdag/link (format "part-%03d" (+ (count result) %2))
-                                       (meta %))))
-                 (into result)))))))
+                 (link-into result)))))))

@@ -19,6 +19,7 @@
       [key :as key]
       [partition :as part]
       [record :as record]
+      [tablet :as tablet] ; would be nice if this weren't needed
       [validate :as validate])))
 
 
@@ -282,30 +283,29 @@
   "Given a sequence of partitions, builds an index tree with the given
   parameters incorporating the partitions. Returns the final, persisted root
   node data."
-  [store parameters partitions]
+  [store params partitions]
   (letfn [(store-child
             [height children]
-            (let [link-format (str "%0" (count (pr-str (dec (count children)))) "d")]
-              (->>
-                {:data/type data-type
-                 ::height height
-                 ::keys (vec (drop 1 (map ::record/first-key children)))
-                 ::children (->>
-                              children
-                              (map-indexed
-                                #(mdag/link (format link-format %1) (meta %2)))
-                              (vec))
-                 ::record/count (reduce + 0 (map ::record/count children))
-                 ::record/first-key (::record/first-key (first children))
-                 ::record/last-key (::record/last-key (last children))}
-                (mdag/store-node! store nil)
-                (::node/data))))]
+            (->>
+              {:data/type data-type
+               ::height height
+               ::keys (vec (drop 1 (map ::record/first-key children)))
+               ::children (->>
+                            children
+                            (map-indexed
+                              #(mdag/link (format "%03d" %1) (meta %2)))
+                            (vec))
+               ::record/count (reduce + 0 (map ::record/count children))
+               ::record/first-key (::record/first-key (first children))
+               ::record/last-key (::record/last-key (last children))}
+              (mdag/store-node! store nil)
+              (::node/data)))]
     (loop [layer partitions
            height 1]
       (if (<= (count layer) 1)
         (first layer)
         (let [index-groups (record/partition-limited
-                             (::branching-factor parameters)
+                             (::branching-factor params)
                              layer)]
           (recur (mapv (partial store-child height) index-groups)
                  (inc height)))))))
@@ -313,12 +313,12 @@
 
 (defn- update-empty
   "Apply changes to an empty tree, returning an updated root node data."
-  [store parameters changes]
+  [store params changes]
   ; Divide up added records into a sequence of partitions and build an index
   ; over them.
-  (->> changes
-       (part/from-records store parameters)
-       (build-index store parameters)))
+  (let [parts (part/from-records store params changes)]
+     ; TODO: if result is a virtual tablet, need to turn it into a partition
+     (build-index store params parts)))
 
 
 ;; ### Divide Changes
@@ -442,12 +442,13 @@
 (defn- update-partition
   "Apply changes to a partition root, returning a sequence of updated partition
   nodes."
-  [store parameters part changes]
+  [store params part changes]
+  ; TODO: update this to use `update-partitions!`
   (->>
     changes
     (part/apply-patch!
       store
-      (merge part (select-keys parameters
+      (merge part (select-keys params
                                [::part/limit
                                 ::record/families])))
     (seq)))
@@ -776,7 +777,7 @@
 ;; minimizes repeated changes to the same node path.
 
 (defn- update-index-node
-  [store parameters carry [first-key node-link changes]]
+  [store params carry [first-key node-link changes]]
   (if (seq changes)
     (let [index (mdag/get-data store node-link)
           child-changes (group-changes
@@ -784,36 +785,61 @@
                           (::children index)
                           changes)]
       (if (= 1 (::height index))
-        ; TODO update children as partitions
-        '...
+        ; Update children as partitions.
+        (let [result (part/update-partitions! store params child-changes)]
+          (if (sequential? result)
+            (if (= 1 (count result))
+              ; Single partition to carry up the tree.
+              (first result)
+              (let [child-keys (into [] (comp (drop 1) (map first)) result)
+                    child-links (into [] (map second) result)
+                    ; TODO: this feels inefficient
+                    record-count (reduce + 0 (map (comp ::record/count (partial mdag/get-data store))
+                                                  child-links))
+                    first-key (ffirst result)
+                    last-key (if (= (:target (peek (::children index)))
+                                    (:target (peek child-links)))
+                               (::record/last-key index)
+                               (::record/last-key (mdag/get-data store (peek child-links))))]
+                [first-key
+                 (assoc index
+                        ::keys child-keys
+                        ::children child-links
+                        ::record/count record-count
+                        ::record/first-key first-key
+                        ::record/last-key last-key)]))
+            ; Virtual tablet, return for carrying.
+            [(tablet/first-key result) result]))
         ; Update child index nodes.
-        (let [new-children (mapcat #(update-index-node store parameters %)
-                                   child-changes)
+        (let [result (mapcat #(update-index-node store params %) child-changes)
               ; TODO: redistribute children
-              new-keys (into [] (comp (drop 1) (map first)) new-children)
-              new-children (into [] (map second) new-children)
-              ]
-          (assoc index
-                 ::keys new-keys
-                 ::children new-keys
-                 ::record/count 0 ; TODO
-                 ::record/first-key
-                  (if (map? (first new-children))
-                    (::record/first-key (first new-children))
-                    (::record/first-key index))
-                 ::record/last-key
-                  (if (map? (peek new-children))
-                    (::record/last-key (peek new-children))
-                    (::record/last-key index))
-                 ))))
+              child-keys (into [] (comp (drop 1) (map first)) result)
+              children (into [] (map second) result)
+              record-count 0 ; FIXME
+              first-key (if (map? (first children))
+                          (::record/first-key (first children))
+                          (::record/first-key index))
+              last-key (if (map? (peek children))
+                         (::record/last-key (peek children))
+                         (::record/last-key index))]
+          [first-key
+           (assoc index
+                  ::keys child-keys
+                  ::children children
+                  ::record/count record-count
+                  ::record/first-key first-key
+                  ::record/last-key last-key)])))
     ; No changes, return key and link unchanged.
     [[first-key node-link]]))
 
 
 (defn- update-index
   "Apply changes to an index subtree, returning data for the updated root node."
-  [store parameters index changes]
-  (throw (UnsupportedOperationException. "NYI: update data index tree")))
+  [store params index changes]
+  (prn :update-index index changes)
+  ; FIXME: no way this is right
+  (let [root' (second (update-index-node store params nil [nil index changes]))]
+    (::node/data (mdag/store-node! store nil root'))))
 
 
 (defn update-tree
@@ -822,20 +848,20 @@
   tombstones. Parameters may include `:merkle-db.partition/limit` and
   `:merkle-db.data/families`. Returns an updated persisted root node if any
   records remain in the tree."
-  [store parameters root changes]
+  [store params root changes]
   (if (nil? root)
     ; Empty tree.
-    (update-empty store parameters changes)
+    (update-empty store params changes)
     ; Check root node type.
     (condp = (:data/type root)
       part/data-type
         (if (seq changes)
           (some->>
-            (update-partition store parameters root changes)
-            (build-index store parameters))
+            (update-partition store params root changes)
+            (build-index store params))
           root)
       data-type
-        (update-index store parameters root changes)
+        (update-index store params root changes)
       (throw (ex-info (str "Unsupported index-tree node type: "
                            (pr-str (:data/type root)))
                       {:data/type (:data/type root)})))))

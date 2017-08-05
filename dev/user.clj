@@ -151,19 +151,9 @@
                                               :else :black)))
           :edge->descriptor viz/edge->descriptor
           :options {:dpi 64})
-        ['context
-         update-map
-         'original-root
-         root
-         'updated-root
-         root'
-         'updated-tablets
-         (mdag/get-data store (meta root') "0/base")
-         (mdag/get-data store (meta root') "0/bc")
-         (mdag/get-data store (meta root') "1/base")
-         (mdag/get-data store (meta root') "1/bc")
-         #_ (mdag/get-data store (get-in root' [::part/tablets :base]))
-         #_ (mdag/get-data store (get-in root' [::part/tablets :bc]))])
+        ['context update-map
+         'original-root (link/identify root) root
+         'updated-root (link/identify root') root'])
       (catch Exception ex
         (throw (ex-info "Error updating tree!"
                         {:context update-map
@@ -172,7 +162,18 @@
                         ex))))))
 
 
-(def promote-reuse-example
+(def example-reuse
+  {:families {:bc #{:b :c}},
+   :records {(key/create [0]) {},
+             (key/create [5]) {:a true
+                               :b :abc
+                               :c #{"g" "h" "i"}
+                               :d #uuid "348f877b-eb00-4bf2-bced-0ea47991f627"}}
+   :changes {(key/create [0]) {}
+             (key/create [2]) {}}})
+
+
+(def example-subtree
   {:families {:bc #{:b :c}}
    :records {(key/create [0]) {:a 0 :b 0 :c 0}
              (key/create [1]) {:a 1, :c 1}
@@ -180,3 +181,26 @@
    :changes {(key/create [5]) {:a 5}
              (key/create [6]) {:x 6}
              (key/create [7]) {:y 7}}})
+
+
+(def example-delete
+  {:families {:bc #{:b :c}}
+   :records {(key/create [0]) {:b true, :d "abc"}
+             (key/create [3]) {:a :t, :c "qqq"}}
+   :changes {(key/create [0]) patch/tombstone
+             (key/create [1]) {:a 123}
+             (key/create [3]) patch/tombstone,
+             (key/create [5]) patch/tombstone}})
+
+
+(def example-index-shared
+  {:families {:bc #{:b :c}},
+   :records {(key/create [0]) {},
+             (key/create [2]) {:b {:Ec -1.0}},
+             (key/create [4]) {},
+             (key/create [7]) {},
+             (key/create [8]) {},
+             (key/create [9]) {:b #{3.0}}}
+   :changes {(key/create [0]) patch/tombstone,
+             (key/create [3]) {}
+             (key/create [4]) {:a true, :x 45}}})

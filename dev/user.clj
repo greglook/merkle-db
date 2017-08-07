@@ -124,7 +124,7 @@
         params {::record/families families
                 ::index/branching-factor branch-factor
                 ::part/limit part-limit}
-        parts (part/from-records store params records)
+        parts (part/partition-records store params records)
         root (index/build-index store params parts)]
     (try
       (let [root' (index/update-tree store params root changes)

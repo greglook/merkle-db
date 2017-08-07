@@ -78,6 +78,8 @@ sizing.
 ```clojure
 {:data/type :merkle-db/index
  :merkle-db.record/count Long
+ :merkle-db.record/first-key key-bytes
+ :merkle-db.record/last-key key-bytes
  :merkle-db.index/height Long
  :merkle-db.index/keys
  [key-bytes-A  ; encoded key A
@@ -118,10 +120,10 @@ sure that the full sequence of keys can be enumerated with only the base.
 {:data/type :merkle-db/partition
  :merkle-db.record/count Long
  :merkle-db.record/families {Keyword #{field-key}}
+ :merkle-db.record/first-key key-bytes
+ :merkle-db.record/last-key key-bytes
  :merkle-db.partition/limit Long
  :merkle-db.partition/membership BloomFilter
- :merkle-db.partition/first-key key-bytes
- :merkle-db.partition/last-key key-bytes
  :merkle-db.partition/tablets
  {:base MerkleLink
   family-key MerkleLink}}

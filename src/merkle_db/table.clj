@@ -439,7 +439,7 @@
      (->
        (patch/patch-seq
          ; Merged patch data to apply to the records.
-         (patch/filter-patch
+         (patch/filter-changes
            (load-changes table)
            {:fields (:fields opts)
             :start-key start-key
@@ -459,7 +459,6 @@
                (.store table)
                data-node
                (:fields opts)))))
-       (patch/remove-tombstones)
        (cond->>
          (and (:offset opts) (pos? (:offset opts)))
            (drop (:offset opts))
@@ -477,9 +476,9 @@
    (let [lexicoder (table-lexicoder table)
          id-keys (into #{} (map (partial key/encode lexicoder)) id-keys)
          patch-map (load-changes table)
-         patch-entries (select-keys patch-map id-keys)
-         extra-keys (apply disj id-keys (keys patch-entries))
-         patch-entries (patch/filter-patch patch-entries {:fields (:fields opts)})
+         patch-changes (select-keys patch-map id-keys)
+         extra-keys (apply disj id-keys (keys patch-changes))
+         patch-changes (patch/filter-changes patch-changes {:fields (:fields opts)})
          data-entries (when-let [data-node (and (seq extra-keys)
                                                 (mdag/get-data
                                                   (.store table)
@@ -489,7 +488,7 @@
                           data-node
                           (:fields opts)
                           extra-keys))]
-     (->> (concat patch-entries data-entries)
+     (->> (concat patch-changes data-entries)
           (patch/remove-tombstones)
           (map (key-decoder lexicoder))))))
 

@@ -11,7 +11,7 @@
 
 ;; ## Tombstones
 
-(def tombstone
+(def ^:const tombstone
   "Value which marks the deletion of a record."
   ::tombstone)
 
@@ -70,7 +70,7 @@
   (remove (comp tombstone? second) rs))
 
 
-(defn filter-patch
+(defn filter-changes
   "Takes a full set of patch data and returns a filtered sequence based on the
   given options."
   [patch opts]
@@ -88,23 +88,27 @@
 (defn patch-seq
   "Combines an ordered sequence of patch data with a lazy sequence of record
   keys and data. Any records present in the patch will appear in the output
-  sequence, replacing any equivalent keys from the sequence. The result may
-  contain tombstones."
+  sequence, replacing any equivalent keys from the sequence. If the changed
+  value is a tombstone, the record will not appear in the sequence."
   [patch records]
-  (lazy-seq
-    (cond
-      ; No more patch data, return records directly.
-      (empty? patch)
-        records
-      ; No more records, return remaining patch data.
-      (empty? records)
-        patch
-      ; Next key is in both patch and records.
-      (= (ffirst patch) (ffirst records))
-        (cons (first patch) (patch-seq (next patch) (next records)))
-      ; Next key is in patch, not in records.
-      (key/before? (ffirst patch) (ffirst records))
-        (cons (first patch) (patch-seq (next patch) records))
-      ; Next key is in records, not in patch.
-      :else
-        (cons (first records) (patch-seq patch (next records))))))
+  (let [maybe-cons (fn maybe-cons
+                     [[patch-key patch-val :as entry] more-records]
+                     (let [tail (patch-seq (next patch) more-records)]
+                       (if (tombstone? patch-val) tail (cons entry tail))))]
+    (lazy-seq
+      (cond
+        ; No more patch data, return records directly.
+        (empty? patch)
+          records
+        ; No more records, return remaining patch data.
+        (empty? records)
+          patch
+        ; Next key is in both patch and records.
+        (= (ffirst patch) (ffirst records))
+          (maybe-cons (first patch) (next records))
+        ; Next key is in patch, not in records.
+        (key/before? (ffirst patch) (ffirst records))
+          (maybe-cons (first patch) records)
+        ; Next key is in records, not in patch.
+        :else
+          (cons (first records) (patch-seq patch (next records)))))))

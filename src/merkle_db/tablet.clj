@@ -31,14 +31,13 @@
   [params tablet]
   (when (validate/check :data/type
           (= data-type (:data/type tablet))
-          (str "Expected tablet to have :data/type of " data-type
-               " but got: " (pr-str (:data/type tablet))))
+          "Node data type should be correct")
     (validate/check ::spec
       (s/valid? ::node-data tablet)
       (s/explain-str ::node-data tablet))
     (validate/check ::record/count
       (seq (::records tablet))
-      "Tablet is non-empty")
+      "Tablet should not be empty")
     (when-let [family-keys (get (::record/families params)
                                 (::record/family-key params))]
       (let [bad-fields (->> (::records tablet)
@@ -46,7 +45,7 @@
                             (remove (set family-keys)))]
         (validate/check ::record/families
           (empty? bad-fields)
-          (format "Tablet record data only contains values for fields in family %s (%s)"
+          (format "Tablet record data should only contain values for fields in family %s (%s)"
                   (::record/family-key params)
                   family-keys))))
     ; TODO: all records are within partition boundary

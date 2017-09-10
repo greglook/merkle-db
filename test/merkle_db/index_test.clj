@@ -30,6 +30,7 @@
         :actual (::validate/state result#)})))
 
 
+#_
 (deftest tree-validation
   (let [store (mdag/init-store :types record/codec-types)]
     (testing "empty tree"

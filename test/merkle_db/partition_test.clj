@@ -62,14 +62,14 @@
         k2 (key/create [2 3 4])
         k3 (key/create [3 4 5])
         k4 (key/create [4 5 6])
-        [part] (part/from-records
-                 store
-                 {::record/families {:ab #{:a :b}, :cd #{:c :d}}}
-                 {k0 {:x 0, :y 0, :a 0, :c 0}
-                  k1 {:x 1, :c 1, :d 1, }
-                  k2 {:b 2, :c 2}
-                  k3 {:x 3, :y 3, :a 3, :b 3}
-                  k4 {:z 4, :d 4}})]
+        part (part/from-records
+               store
+               {::record/families {:ab #{:a :b}, :cd #{:c :d}}}
+               {k0 {:x 0, :y 0, :a 0, :c 0}
+                k1 {:x 1, :c 1, :d 1, }
+                k2 {:b 2, :c 2}
+                k3 {:x 3, :y 3, :a 3, :b 3}
+                k4 {:z 4, :d 4}})]
     (testing "partition construction"
       (is (= 5 (::record/count part)))
       (is (= k0 (::record/first-key part)))
@@ -94,7 +94,7 @@
     [[field-keys families records] mdgen/data-context]
     (is (valid? ::record/families families))
     (let [store (mdag/init-store :types record/codec-types)
-          [part] (part/from-records store {::record/families families} records)
+          part (part/from-records store {::record/families families} records)
           tablets (into {}
                         (map (juxt key #(mdag/get-data store (val %))))
                         (::part/tablets part))]

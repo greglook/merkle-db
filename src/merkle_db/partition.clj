@@ -55,7 +55,7 @@
 
 
 (defn validate
-  [store params part]
+  [part params]
   (when (validate/check :data/type
           (= data-type (:data/type part))
           (str "Expected partition to have :data/type of " data-type
@@ -87,13 +87,12 @@
       (:base (::tablets part))
       "Partition contains a base tablet")
     (doseq [[tablet-family link] (::tablets part)]
-      (validate/check-link store link
-        #(tablet/validate
-            (assoc params
-                   ::record/families (::record/families part)
-                   ::record/family-key tablet-family)
-           %))))
-  {::record/count (::record/count part)})
+      (validate/check-next!
+        tablet/validate
+        link
+        (assoc params
+               ::record/families (::record/families part)
+               ::record/family-key tablet-family)))))
 
 
 

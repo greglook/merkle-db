@@ -62,7 +62,7 @@
 
 
 (defn validate
-  [store params index]
+  [index params]
   (when (validate/check :data/type
           (= data-type (:data/type index))
           (str "Index should have :data/type of " data-type))
@@ -85,27 +85,22 @@
     (validate/check ::height
       (= (::height params) (::height index))
       "Index node has expected height")
-    (let [result (reduce
-                   (fn test-child
-                     [result [first-key child-link last-key]]
-                     (let [params' (assoc params
-                                          ::root? false
-                                          ::height (dec (::height index))
-                                          ::record/first-key first-key
-                                          ::record/last-key last-key)
-                           child-result (validate/check-link store child-link
-                                          (if (zero? (::height params'))
-                                            #(part/validate store params' %)
-                                            #(validate store params' %)))]
-                       (update result ::record/count + (::record/count child-result 0))))
-                   {::record/count 0}
-                   (map vector
-                        (cons (::record/first-key params) (::keys index))
-                        (::children index)
-                        (conj (::keys index) (::record/last-key params))))]
-      (validate/check ::record/count
-        (= (::record/count result) (::record/count index))
-        "Aggregate record count matches actual subtree count"))))
+    (doseq [[first-key child-link last-key]
+              (map vector
+                   (cons (::record/first-key params) (::keys index))
+                   (::children index)
+                   (conj (::keys index) (::record/last-key params)))
+              :let [height' (dec (::height index))]]
+      (validate/check-next!
+        (if (zero? height')
+          part/validate
+          validate)
+        child-link
+        (assoc params
+               ::root? false
+               ::height height'
+               ::record/first-key first-key
+               ::record/last-key last-key)))))
 
 
 (defn validate-tree

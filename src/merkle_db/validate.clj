@@ -37,16 +37,23 @@
 
 (defmacro collect-results
   [& body]
-  `(binding [*context* {:results (atom []), :next (atom [])}]
-     ~@body
-     {:results @(:results *context*)
-      :next @(:next *context*)}))
+  `(binding [*context* {::results (atom [])
+                        ::next (atom [])}]
+     (let [value# (do ~@body)]
+       {:value value#
+        :results @(::results *context*)
+        :next @(::next *context*)})))
 
 
-(defn check-link
+(defn check-next!
   "Register a validation function to run against the linked node."
-  [link check-fn params]
-  (swap! (:next *context*) conj [link check-fn params]))
+  [check-fn link params]
+  (swap! (::next *context*)
+         conj
+         {::check check-fn
+          ::node/id (:target link)
+          ::link link
+          ::params params}))
 
 
 (defn report!
@@ -57,7 +64,8 @@
   (when-let [results (::results *context*)]
     (swap! results
            conj
-           {::type type-key
+           {::path (::path *context*)
+            ::type type-key
             ::state state
             ::message message
             ::expected expected
@@ -106,3 +114,31 @@
                       (.getMessage t#))
                  '~test-form t#)
         nil))))
+
+
+(defn validate!
+  [store root-check root-id params]
+  (loop [checks (conj clojure.lang.PersistentQueue/EMPTY
+                      {::path []
+                       ::check root-check
+                       ::node/id root-id
+                       ::params params})
+         results {}]
+    (if-let [next-check (first checks)]
+      (let [data (mdag/get-data store (::node/id next-check) ::missing-node)]
+        (if (identical? ::missing-node data)
+          ; Node not found
+          ; TODO: add missing-node warning
+          (recur (next checks) results)
+          ; Run check function.
+          (let [check (::check next-check)
+                output (collect-results (check data (::params next-check)))]
+            (recur (into (next checks)
+                         (map #(-> %
+                                   (assoc ::path (conj (::path next-check) (:name (::link %))))
+                                   (dissoc ::link)))
+                         (:next output))
+                   (-> results
+                       (update-in [(::node/id next-check) ::paths] (fnil conj #{}) (::path next-check))
+                       (update-in [(::node/id next-check) ::results (fnil into []) (:results output)]))))))
+      results)))

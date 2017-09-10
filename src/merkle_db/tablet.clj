@@ -28,7 +28,7 @@
 
 
 (defn validate
-  [params tablet]
+  [tablet params]
   (when (validate/check :data/type
           (= data-type (:data/type tablet))
           "Node data type should be correct")

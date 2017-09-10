@@ -8,7 +8,23 @@ the table.
 
 ## Attributes
 
-Every node in the tree must maintain three bookkeeping properties which define
+There are three groups of attributes which are used in the index tree structure.
+At the table level, two input parameters control how the data tree is shaped:
+
+- `:merkle-db.index/branching-factor`
+  An integer which restricts the _maximum_ number of children an index node can
+  have. In a tree with branching factor `b`, every index node except the root
+  must have between `ceiling(b/2)` and `b` children. The root is allowed to have
+  between 2 and `b` children. The branching factor must be at least 4, but is
+  often much higher to reduce fanout (default: 256).
+- `:merkle-db.partition/limit`
+  This limit restricts the maximum number of records a single partition can
+  hold. This effectively scales the size of the units of parallelism available
+  to batch jobs. In a tree with partition limit `p` every partition must contain
+  between `ceiling(p/2)` and `p` records, unless the root is a partition
+  (implying that there are fewer than `p` records total).
+
+Inside the tree, every node maintains three bookkeeping properties which define
 the scope of the subtree under that node:
 
 - `:merkle-db.record/count`
@@ -21,12 +37,6 @@ about their children:
 - `:merkle-db.index/height`
 - `:merkle-db.index/keys`
 - `:merkle-db.index/children`
-
-Finally, the input parameters which control how the resulting tree is shaped
-are:
-
-- `:merkle-db.index/branching-factor`
-- `:merkle-db.partition/limit`
 
 
 ## Reading Data
@@ -52,13 +62,6 @@ node once the first record from that subtree is requested.
 Updating an index tree starts with the root node and a batch of changes to
 apply to it. The changes may be either insertions supplying new field data for a
 certain record key or deletions which remove a record.
-
-The _leaves_ of the tree are partitions, and all other nodes
-are index nodes. In a tree with branching factor `b`, every index node
-except the root must have between `ceiling(b/2)` and `b` children. The root
-is allowed to have between 2 and `b` children. If the tree has more than
-`:merkle-db.partition/limit` records, then each partition in the tree must
-contain between `ceiling(limit/2)` and `limit` records.
 
 The batch-update algorithm has the following goals:
 
@@ -150,17 +153,21 @@ which links to the subtree containing the referenced keys.
 #### Apply Changes
 
 In the **apply** phase, changes are applied to the _children_ to produce
-new child nodes. This call returns an unpersisted candidate, or nil if the
-resulting node would be empty. The resulting candidate node may have any
-number of children, meaning it can either underflow, be valid, or overflow,
-depending on the changes applied.
+new child nodes. The behavior is slightly different depending on whether the
+children of the node are partitions or another layer of index nodes.
 
-As an optimization when writing partitions out, keep the last-touched
-partition in memory until we're sure the next one won't need to be merged
-into it. If the last partition underflowed, hang onto it and merge in
-partitions until at least 150% of the partition limit has been reached, then
-emit a partition that is 75% full, leaving (at worst) another 75% full
-partition if there are no more adjacent to process.
+Updating partitions actually requires loading data into memory, so the algorithm
+constrains the total number of partitions loaded to double the partition limit
+`p`. Updated sets of records are buffered as the children are processed,
+emitting full partitions where possible, merging in underflowing partitions as
+needed. The buffer is filled until at least 150% of the partition limit has been
+reached, then a 75% full partition is emitted, leaving (at worst) another 75%
+full partition if there are no more adjacent to process.
+
+For index nodes, this call returns an unpersisted candidate node, or nil if the
+resulting node would be empty. The candidate may have any number of children,
+meaning it can either underflow, be valid, or overflow, depending on the changes
+applied.
 
 Here, updates have deleted one partition entirely and created an pair of
 partitions, which are merged and written out as a (still underflowing)
@@ -172,15 +179,7 @@ partition.
          / \      / | \
         O   O    O  O  O
        /|\  |\  /|\/|\/ \
-    >  Ux[U]##  ####### #
-
-            ...O...
-           /       \
-          O        .O.
-         / \      / | \
-        O   O    O  O  O
-       / \  |\  /|\/|\/ \
-    > [U U] ##  ####### #
+    > [UxU] ##  ####### #
 
             ...O...
            /       \
@@ -189,13 +188,6 @@ partition.
         O   O    O  O  O
         |   |\  /|\/|\/ \
     >  [U]  ##  ####### #
-
-If the node is at height 1, the children are partitions, so use serialization
-logic. Don't hold more than 2 partitions in memory at a time. Return an
-updated index node (may be invalid).
-
-If the node has height > 1, then divide up children and recursively apply
-downward. Update function returns an updated (possibly invalid) index node.
 
 When a node has only a single child, it is 'carried' up the tree recursively
 so it can be passed down the next branch for merging into the next branch.
@@ -245,9 +237,9 @@ second underflowing partition:
           |       / | \
           *      O  O  O
          /|\    /|\/|\/ \
-    >   U x[U]  ####### #
+    >  [U x U]  ####### #
 
-Two underflowing partitions need to be merged into a valid partition:
+The resulting buffer contains enough records to make a single valid partition:
 
             ...O...
            /       \
@@ -255,15 +247,7 @@ Two underflowing partitions need to be merged into a valid partition:
           |       / | \
           *      O  O  O
           |     /|\/|\/ \
-    >  [->@<-]  ####### #
-
-            ...O...
-           /       \
-          O        .O.
-          |       / | \
-    >    [@]     O  O  O
-                /|\/|\/ \
-                ####### #
+    >    [@]    ####### #
 
             ...O...
            /       \
@@ -319,8 +303,8 @@ Two underflowing partitions need to be merged into a valid partition:
            ..O..
           /  |  \
          O   O   O
-        /|\ /|\ / \
-    >  [@#@]### # #
+       //|  /|\ / \
+    > @#[@] ### # #
 
              O
              |

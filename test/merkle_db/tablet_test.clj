@@ -58,70 +58,6 @@
           (tablet/read-range tablet (key/create [2]) (key/create [3]))))))
 
 
-#_
-(deftest record-addition
-  (let [k1 (key/create [1 2 3])
-        r1 {:foo 123}
-        k2 (key/create [4 5 6])
-        r2 {:foo 456}
-        tablet (tablet/from-records {k1 r1})]
-    (is (= [[k1 {:foo 124}]]
-           (tablet/read-all
-             (tablet/insert-records
-               tablet
-               {k1 {:foo 124}}))))
-    (is (= [[k1 {:bar true}]]
-           (tablet/read-all
-             (tablet/insert-records
-               tablet
-               {k1 {:bar true}}))))
-    (is (= [[k1 r1] [k2 r2]]
-           (tablet/read-all
-             (tablet/insert-records
-               tablet
-               {k2 r2}))))))
-
-
-(deftest record-removal
-  (let [k1 (key/create [1 2 3])
-        r1 {:foo 123}
-        k2 (key/create [4 5 6])
-        r2 {:foo 456}
-        k3 (key/create [7 8 9])
-        r3 {:foo 789}
-        tablet (tablet/from-records {k1 r1, k2 r2, k3 r3})]
-    (testing "pruning"
-      (is (= [[k1 r1]]
-             (tablet/read-all
-               (tablet/prune
-                 (tablet/from-records {k1 r1, k2 {}}))))))
-    #_
-    (testing "by batch"
-      (is (nil? (tablet/remove-batch empty-tablet #{})))
-      (is (= [[k1 r1] [k2 r2] [k3 r3]]
-             (tablet/read-all
-               (tablet/remove-batch tablet nil))))
-      (is (= [[k2 r2] [k3 r3]]
-             (tablet/read-all
-               (tablet/remove-batch tablet #{k1}))))
-      (is (= [[k1 r1]]
-             (tablet/read-all
-               (tablet/remove-batch tablet #{k2 k3}))))
-      (is (nil? (tablet/remove-batch tablet #{k1 k2 k3}))))
-    #_
-    (testing "by range"
-      (is (= [k1 k3]
-             (tablet/keys
-               (tablet/remove-range tablet (key/create [3]) (key/create [5])))))
-      (is (= [k2 k3]
-             (tablet/keys
-               (tablet/remove-range tablet nil (key/create [2])))))
-      (is (= [k1]
-             (tablet/keys
-               (tablet/remove-range tablet (key/create [2]) nil))))
-      (is (nil? (tablet/remove-range tablet nil nil))))))
-
-
 (deftest tablet-utilities
   (let [k1 (key/create [1 2 3])
         r1 {:foo 123}
@@ -131,22 +67,6 @@
     (is (= #{:foo :bar} (tablet/fields-present tablet)))
     (is (= k1 (tablet/first-key tablet)))
     (is (= k2 (tablet/last-key tablet)))))
-
-
-#_
-(deftest tablet-splitting
-  (let [k1 (key/create [1 2 3])
-        r1 {:foo 123}
-        k2 (key/create [2 3 4])
-        r2 {:bar "baz"}
-        tablet (tablet/from-records {k1 r1, k2 r2})]
-    (is (thrown? Exception
-          (tablet/split tablet (key/create [1 2 0]))))
-    (is (thrown? Exception
-          (tablet/split tablet (key/create [2 4 0]))))
-    (let [[t1 t2] (tablet/split tablet (key/create [2 0]))]
-      (is (= [[k1 r1]] (tablet/read-all t1)))
-      (is (= [[k2 r2]] (tablet/read-all t2))))))
 
 
 (deftest tablet-joining

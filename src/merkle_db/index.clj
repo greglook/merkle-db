@@ -248,7 +248,6 @@
   each child to calculate the aggregate first-key, last-key, and count
   attributes. Returns persisted index node data."
   [store height children]
-  (prn :store-index! height children)
   (loop [record-count 0
          new-children []
          child-keys []
@@ -289,7 +288,6 @@
   parameters incorporating the partitions. Returns the final, persisted root
   node data."
   [store params partitions]
-  (prn :build-index partitions)
   (loop [layer partitions
          height 1]
     (if (<= (count layer) 1)

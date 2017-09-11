@@ -46,7 +46,6 @@
              ::part/limit 10}))))))
 
 
-#_
 (deftest ^:generative index-construction
   (checking "valid properties" 20
     [[field-keys families records] mdgen/data-context
@@ -58,7 +57,7 @@
                   ::record/count (count records)
                   ::index/branching-factor branch-fac
                   ::part/limit part-limit}
-          parts (part/from-records store params records)
+          parts (part/partition-records store params records)
           root (index/build-index store params parts)]
       (tu/check-asserts
         (validate/run!

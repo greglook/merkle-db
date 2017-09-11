@@ -99,25 +99,6 @@
   (set (mapcat (comp clojure.core/keys second) (::records tablet))))
 
 
-#_
-(defn split
-  "Split the tablet into two tablets at the given key. All records less than the
-  split key will be contained in the first tablet, all others in the second. "
-  [tablet split-key]
-  (let [fkey (first-key tablet)
-        lkey (last-key tablet)]
-    (when-not (and (key/after? split-key fkey)
-                   (key/before? split-key lkey))
-      (throw (ex-info (format "Cannot split tablet with key %s which falls outside the contained range [%s, %s]"
-                              split-key fkey lkey)
-                      {:split-key split-key
-                       :first-key fkey
-                       :last-key lkey}))))
-  (->> (::records tablet)
-       (split-with #(key/before? (first %) split-key))
-       (mapv from-records)))
-
-
 (defn join
   "Join two tablets into a single tablet. The tablets key ranges must not
   overlap."
@@ -166,6 +147,12 @@
 
 ;; ## Update Functions
 
+(defn prune
+  "Update a tablet by removing empty records from the data."
+  [tablet]
+  (update tablet ::records #(vec (remove (comp empty? second) %))))
+
+
 (defn update-records
   "Update a tablet by inserting the records in `additions` (a collection of
   key/data map entries) and removing the records whose keys are in
@@ -180,29 +167,3 @@
                              (as-> rs (apply dissoc rs deletions)))
                          (seq))]
     (assoc tablet ::records (vec records))))
-
-
-(defn prune
-  "Update a tablet by removing empty records from the data."
-  [tablet]
-  (update tablet ::records #(vec (remove (comp empty? second) %))))
-
-
-#_
-(defn remove-range
-  "Update the tablet by removing a range of record keys from it. Returns nil
-  if the resulting tablet is empty."
-  [tablet start-key end-key]
-  (->
-    (into
-      []
-      (remove (fn in-range?
-                [[key-bytes data]]
-                (and (or (nil? start-key)
-                         (not (key/before? key-bytes start-key)))
-                     (or (nil? end-key)
-                         (not (key/after? key-bytes end-key))))))
-      (::records tablet))
-    (as-> records
-      (when (seq records)
-        (assoc tablet ::records records)))))

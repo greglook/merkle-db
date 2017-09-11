@@ -15,43 +15,38 @@
       [key :as key]
       [partition :as part]
       [record :as record]
-      [validate :as validate])))
+      [validate :as validate]
+      [test-utils :as tu])))
 
 
-(defmacro check-asserts
-  [& body]
-  `(doseq [result# (validate/collect-results ~@body)]
-     (do-report
-       {:type (::validate/state result#)
-        :message (::validate/message result#)
-        :expected [(::validate/type result#)
-                   (str/join \/ (::validate/path result#))
-                   (::node/id result#)]
-        :actual (::validate/state result#)})))
-
-
-#_
 (deftest tree-validation
   (let [store (mdag/init-store :types record/codec-types)]
     (testing "empty tree"
-      (check-asserts
-        (index/validate-tree store {::record/count 0} nil)))
+      (tu/check-asserts
+        (validate/run!
+          store
+          nil
+          index/validate-tree
+          {::record/count 0})))
     (testing "partition tree"
-      (let [[part] (part/from-records
-                     store
-                     {::record/families {:ab #{:a :b}, :cd #{:c :d}}}
-                     {(key/create [0 1 2]) {:x 0, :y 0, :a 0, :c 0}
-                      (key/create [1 2 3]) {:x 1, :c 1, :d 1, }
-                      (key/create [2 3 4]) {:b 2, :c 2}
-                      (key/create [3 4 5]) {:x 3, :y 3, :a 3, :b 3}
-                      (key/create [4 5 6]) {:z 4, :d 4}})]
-        (check-asserts
-          (index/validate-tree store
-                               {::record/count 5
-                                ::part/limit 10}
-                               part))))))
+      (let [part (part/from-records
+                   store
+                   {::record/families {:ab #{:a :b}, :cd #{:c :d}}}
+                   {(key/create [0 1 2]) {:x 0, :y 0, :a 0, :c 0}
+                    (key/create [1 2 3]) {:x 1, :c 1, :d 1, }
+                    (key/create [2 3 4]) {:b 2, :c 2}
+                    (key/create [3 4 5]) {:x 3, :y 3, :a 3, :b 3}
+                    (key/create [4 5 6]) {:z 4, :d 4}})]
+        (tu/check-asserts
+          (validate/run!
+            store
+            (::node/id (meta part))
+            index/validate-tree
+            {::record/count 5
+             ::part/limit 10}))))))
 
 
+#_
 (deftest ^:generative index-construction
   (checking "valid properties" 20
     [[field-keys families records] mdgen/data-context
@@ -65,5 +60,9 @@
                   ::part/limit part-limit}
           parts (part/from-records store params records)
           root (index/build-index store params parts)]
-      (check-asserts
-        (index/validate-tree store params root)))))
+      (tu/check-asserts
+        (validate/run!
+          store
+          (::node/id (meta root))
+          index/validate-tree
+          params)))))

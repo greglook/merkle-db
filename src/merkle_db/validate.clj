@@ -1,5 +1,6 @@
 (ns merkle-db.validate
   "Validation framework for testing database MerkleDAG structures."
+  (:refer-clojure :exclude [run!])
   (:require
     [clojure.future :refer [any? qualified-keyword?]]
     [clojure.set :as set]
@@ -47,12 +48,12 @@
 
 (defn check-next!
   "Register a validation function to run against the linked node."
-  [check-fn link params]
+  [link check-fn params]
   (swap! (::next *context*)
          conj
          {::check check-fn
           ::node/id (:target link)
-          ::link link
+          ::link-name (:name link)
           ::params params}))
 
 
@@ -98,7 +99,9 @@
                   state# (if condition# :pass ~bad-state)]
               (report! ~type-key state# ~message
                        '~test-form
-                       (list ~'not (list '~(first test-form) actual#)))
+                       (if condition#
+                         condition#
+                         (list '~'not (list '~(first test-form) actual#))))
               condition#)
 
          :else
@@ -116,29 +119,39 @@
         nil))))
 
 
-(defn validate!
-  [store root-check root-id params]
+(defn run!
+  "Validate a full graph structure by walking the nodes and links with
+  validation functions. Returns a map from node ids to information maps, which
+  contain a `:paths` set and a `:results` vector with assertion result maps."
+  [store root-id root-check params]
   (loop [checks (conj clojure.lang.PersistentQueue/EMPTY
                       {::path []
                        ::check root-check
                        ::node/id root-id
                        ::params params})
          results {}]
-    (if-let [next-check (first checks)]
-      (let [data (mdag/get-data store (::node/id next-check) ::missing-node)]
+    (if-let [next-check (peek checks)]
+      ; Process next check task.
+      (let [node-id (::node/id next-check)
+            path (::path next-check)
+            data (mdag/get-data store node-id nil ::missing-node)]
         (if (identical? ::missing-node data)
-          ; Node not found
-          ; TODO: add missing-node warning
-          (recur (next checks) results)
-          ; Run check function.
+          ; Node not found, add error result.
+          (recur (pop checks)
+                 (assoc results node-id
+                        {::paths #{path}
+                         ::results [{::type ::missing-node, ::status :error}]}))
+          ; Run check function on node data.
           (let [check (::check next-check)
+                ;_ (prn ::run-check check data (::params next-check))
                 output (collect-results (check data (::params next-check)))]
-            (recur (into (next checks)
+            (recur (into (pop checks)
                          (map #(-> %
-                                   (assoc ::path (conj (::path next-check) (:name (::link %))))
-                                   (dissoc ::link)))
+                                   (assoc ::path (conj path (::link-name %)))
+                                   (dissoc ::link-name)))
                          (:next output))
                    (-> results
-                       (update-in [(::node/id next-check) ::paths] (fnil conj #{}) (::path next-check))
-                       (update-in [(::node/id next-check) ::results (fnil into []) (:results output)]))))))
+                       (update-in [node-id ::paths] (fnil conj #{}) path)
+                       (update-in [node-id ::results] (fnil into []) (:results output)))))))
+      ; No more checks, return result aggregate.
       results)))

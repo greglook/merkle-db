@@ -92,10 +92,10 @@
                    (conj (::keys index) (::record/last-key params)))
               :let [height' (dec (::height index))]]
       (validate/check-next!
+        child-link
         (if (zero? height')
           part/validate
           validate)
-        child-link
         (assoc params
                ::root? false
                ::height height'
@@ -104,20 +104,19 @@
 
 
 (defn validate-tree
-  [store params root]
+  [root params]
   (cond
     (zero? (::record/count params))
       (validate/check ::empty
         (nil? root)
         "Empty tree has nil root")
     (<= (::record/count params) (::part/limit params))
-      (part/validate store params root)
+      (part/validate root params)
     :else
-      (validate store
+      (validate root
                 (assoc params
                        ::root? true
-                       ::height (::height root))
-                root)))
+                       ::height (::height root)))))
 
 
 

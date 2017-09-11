@@ -58,8 +58,7 @@
   [part params]
   (when (validate/check :data/type
           (= data-type (:data/type part))
-          (str "Expected partition to have :data/type of " data-type
-               " but got: " (pr-str (:data/type part))))
+          "Node has expected data type.")
     (validate/check ::spec
       (s/valid? ::node-data part)
       (s/explain-str ::node-data part))
@@ -88,8 +87,8 @@
       "Partition contains a base tablet")
     (doseq [[tablet-family link] (::tablets part)]
       (validate/check-next!
-        tablet/validate
         link
+        tablet/validate
         (assoc params
                ::record/families (::record/families part)
                ::record/family-key tablet-family)))))

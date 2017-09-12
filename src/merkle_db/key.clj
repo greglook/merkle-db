@@ -20,17 +20,6 @@
     javax.xml.bind.DatatypeConverter))
 
 
-;; ## Specs
-
-;; Lexicoders can be specified either as a simple type keyword or a vector of
-;; a type keyword and some parameters.
-(s/def ::lexicoder
-  (s/or :simple keyword?
-        :params (s/and vector? (s/cat :type keyword?
-                                      :args (s/* any?)))))
-
-
-
 ;; ## Comparators
 
 (defn- compare-bytes
@@ -88,8 +77,6 @@
    (if (neg? (compare y x)) x y))
   ([x y & more]
    (reduce max x (cons y more))))
-
-
 
 
 
@@ -239,24 +226,31 @@
      (decode* coder byte-data offset len))))
 
 
-(defmulti lexicoder
-  "Construct a lexicoder from a configuration data structure. The structure
-  should be either a keyword or a vector with the first element a keyword
-  providing the dispatch value."
-  (fn dispatch
-    [config]
-    (if (keyword? config)
-      config
-      (if (and (vector? config) (keyword? (first config)))
-        (first config)
-        (throw (ex-info
-                 (str "Cannot construct lexicoder from invalid config; expecting a keyword or vector with keyword, got: "
-                      (pr-str config))
-                 {:config config}))))))
+
+;; ## Lexicoder Construction
+
+;; Lexicoders can be specified either as a simple type keyword or a vector of
+;; a type keyword and some parameters.
+(s/def ::lexicoder
+  (s/or :simple keyword?
+        :params (s/and vector? (s/cat :type keyword?
+                                      :args (s/* any?)))))
 
 
+(defn- config-type
+  "Determine the lexicoder type specified by a configuration data structure.
+  The structure should be either a keyword or a vector with the first element a
+  keyword providing the type value."
+  [config]
+  (if (keyword? config)
+    config
+    (if (and (vector? config) (keyword? (first config)))
+      (first config)
+      (throw (ex-info
+               (str "Cannot determine lexicoder type from invalid config; expecting a keyword or vector with keyword, got: "
+                    (pr-str config))
+               {:config config})))))
 
-;; ## Lexicoder Utilities
 
 (defn- config-params
   "Returns the parameters given to a lexicoder spec. For simple keyword, this
@@ -266,6 +260,16 @@
   (when (vector? config)
     (next config)))
 
+
+(defmulti lexicoder
+  "Construct a lexicoder from a configuration data structure. The structure
+  should be either a keyword or a vector with the first element a keyword
+  providing the dispatch value."
+  #'config-type)
+
+
+
+;; ## Key Encoding Utilities
 
 (defn- escape-bytes
   "Escape the given byte sequence, replacing any 0x00 bytes with 0x0101 and any
@@ -420,11 +424,9 @@
     (when (or (empty? data) (zero? len))
       (throw (IllegalArgumentException.
                "BytesLexicoder cannot decode empty byte arrays")))
-    (if (and (zero? offset) (= len (count data)))
-      data
-      (let [data' (byte-array len)]
-        (System/arraycopy data offset data' 0 len)
-        data'))))
+    (let [data' (byte-array len)]
+      (System/arraycopy data offset data' 0 len)
+      data')))
 
 
 

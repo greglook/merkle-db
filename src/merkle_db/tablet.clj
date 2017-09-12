@@ -27,33 +27,6 @@
     #(= data-type (:data/type %))))
 
 
-(defn validate
-  [tablet params]
-  (when (validate/check :data/type
-          (= data-type (:data/type tablet))
-          "Node data type should be correct")
-    (validate/check ::spec
-      (s/valid? ::node-data tablet)
-      (s/explain-str ::node-data tablet))
-    (validate/check ::record/count
-      (seq (::records tablet))
-      "Tablet should not be empty")
-    (when-let [family-keys (get (::record/families params)
-                                (::record/family-key params))]
-      (let [bad-fields (->> (::records tablet)
-                            (mapcat (comp clojure.core/keys second))
-                            (remove (set family-keys)))]
-        (validate/check ::record/families
-          (empty? bad-fields)
-          (format "Tablet record data should only contain values for fields in family %s (%s)"
-                  (::record/family-key params)
-                  family-keys))))
-    ; TODO: all records are within partition boundary
-    ; TODO: records are sorted by key
-    ; TODO: all records are readable?
-    ))
-
-
 
 ;; ## Key Functions
 
@@ -83,6 +56,40 @@
 
 
 ;; ## Utilities
+
+(defn validate
+  [tablet params]
+  (when (validate/check :data/type
+          (= data-type (:data/type tablet))
+          "Node data type should be correct")
+    (validate/check ::spec
+      (s/valid? ::node-data tablet)
+      (s/explain-str ::node-data tablet))
+    (validate/check ::record/count
+      (seq (::records tablet))
+      "Tablet should not be empty")
+    (when-let [family-keys (get (::record/families params)
+                                (::record/family-key params))]
+      (let [bad-fields (->> (::records tablet)
+                            (mapcat (comp clojure.core/keys second))
+                            (remove (set family-keys))
+                            (set))]
+        (validate/check ::record/families
+          (empty? bad-fields)
+          (format "Tablet record data should only contain values for fields in family %s (%s)"
+                  (::record/family-key params)
+                  family-keys))))
+    (when-let [boundary (::record/first-key params)]
+      (validate/check ::record/first-key
+        (not (key/before? (first-key tablet) boundary))
+        "First key in partition is within the subtree boundary"))
+    (when-let [boundary (::record/last-key params)]
+      (validate/check ::record/last-key
+        (not (key/after? (last-key tablet) boundary))
+        "Last key in partition is within the subtree boundary"))
+    ; TODO: records are sorted by key
+    ))
+
 
 (defn from-records
   "Constructs a new bare-bones tablet node. Does not ensure that the records

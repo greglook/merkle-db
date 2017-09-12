@@ -9,11 +9,14 @@
       [record :as record])))
 
 
-;; ## Tombstones
+(def ^:const data-type
+  "Value of `:data/type` that indicates a patch tablet node."
+  :merkle-db/patch)
 
-(def ^:const tombstone
-  "Value which marks the deletion of a record."
-  ::tombstone)
+
+(def default-limit
+  "The default number of changes to hold in a patch tablet."
+  100)
 
 
 (defn tombstone?
@@ -21,17 +24,6 @@
   [x]
   (identical? ::tombstone x))
 
-
-
-;; ## Specs
-
-(def ^:const data-type
-  "Value of `:data/type` that indicates a patch tablet node."
-  :merkle-db/patch)
-
-(def default-limit
-  "The default number of changes to hold in a patch tablet."
-  100)
 
 ;; Maximum number of changes to allow in a patch tablet.
 (s/def ::limit pos-int?)

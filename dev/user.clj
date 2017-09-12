@@ -187,10 +187,10 @@
   {:families {:bc #{:b :c}}
    :records {(key/create [0]) {:b true, :d "abc"}
              (key/create [3]) {:a :t, :c "qqq"}}
-   :changes {(key/create [0]) patch/tombstone
+   :changes {(key/create [0]) ::patch/tombstone
              (key/create [1]) {:a 123}
-             (key/create [3]) patch/tombstone,
-             (key/create [5]) patch/tombstone}})
+             (key/create [3]) ::patch/tombstone,
+             (key/create [5]) ::patch/tombstone}})
 
 
 (def example-index-shared
@@ -201,6 +201,6 @@
              (key/create [7]) {},
              (key/create [8]) {},
              (key/create [9]) {:b #{3.0}}}
-   :changes {(key/create [0]) patch/tombstone,
+   :changes {(key/create [0]) ::patch/tombstone,
              (key/create [3]) {}
              (key/create [4]) {:a true, :x 45}}})

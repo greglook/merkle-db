@@ -571,7 +571,7 @@
           into
           (comp
             (map first)
-            (map (fn [k] [(key/encode lexicoder k) patch/tombstone])))
+            (map (fn [k] [(key/encode lexicoder k) ::patch/tombstone])))
           extant)
         (update ::record/count - (count extant)))))
 

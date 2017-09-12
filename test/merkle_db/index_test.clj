@@ -46,6 +46,7 @@
              ::part/limit 10}))))))
 
 
+#_
 (deftest ^:generative index-construction
   (checking "valid properties" 20
     [[field-keys families records] mdgen/data-context

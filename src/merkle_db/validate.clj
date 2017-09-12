@@ -7,7 +7,12 @@
     [clojure.spec :as s]
     [merkledag.core :as mdag]
     [merkledag.link :as link]
-    [merkledag.node :as node]))
+    [merkledag.node :as node]
+    [merkle-db.index :as index]
+    [merkle-db.key :as key]
+    [merkle-db.partition :as part]
+    [merkle-db.record :as record]
+    [merkle-db.tablet :as tablet]))
 
 
 ;; Path from the validation root to the node being checked.
@@ -48,7 +53,7 @@
 
 (defn check-next!
   "Register a validation function to run against the linked node."
-  [link check-fn params]
+  [check-fn link params]
   (swap! (::next *context*)
          conj
          {::check check-fn
@@ -155,3 +160,142 @@
                        (update-in [node-id ::results] (fnil into []) (:results output)))))))
       ; No more checks, return result aggregate.
       results)))
+
+
+
+;; ## Validation Functions
+
+(defn validate-tablet
+  [tablet params]
+  (when (check :data/type
+          (= tablet/data-type (:data/type tablet))
+          "Node has expected data type")
+    (check ::spec
+      (s/valid? ::tablet/node-data tablet)
+      (s/explain-str ::tablet/node-data tablet))
+    (check ::record/count
+      (seq (tablet/read-all tablet))
+      "Tablet should not be empty")
+    (when-let [family-keys (get (::record/families params)
+                                (::record/family-key params))]
+      (let [bad-fields (->> (::records tablet)
+                            (mapcat (comp clojure.core/keys second))
+                            (remove (set family-keys))
+                            (set))]
+        (check ::record/families
+          (empty? bad-fields)
+          (format "Tablet record data should only contain values for fields in family %s (%s)"
+                  (::record/family-key params)
+                  family-keys))))
+    (when-let [boundary (::record/first-key params)]
+      (check ::record/first-key
+        (not (key/before? (tablet/first-key tablet) boundary))
+        "First key in partition is within the subtree boundary"))
+    (when-let [boundary (::record/last-key params)]
+      (check ::record/last-key
+        (not (key/after? (tablet/last-key tablet) boundary))
+        "Last key in partition is within the subtree boundary"))
+    ; TODO: records are sorted by key
+    ))
+
+
+(defn validate-partition
+  [part params]
+  (when (check :data/type
+          (= part/data-type (:data/type part))
+          "Node has expected data type")
+    (check ::spec
+      (s/valid? ::part/node-data part)
+      (s/explain-str ::part/node-data part))
+    ; TODO: warn when partition limit or families don't match params
+    (when (and (::part/limit params)
+               (::record/count params)
+               (<= (::part/limit params) (::record/count params)))
+      (check ::part/underflow
+        (<= (Math/ceil (/ (::part/limit params) 2)) (::record/count part))
+        "Partition is at least half full if tree has at least :merkle-db.partition/limit records"))
+    (check ::part/overflow
+      (<= (::record/count part) (::part/limit params))
+      "Partition has at most :merkle-db.partition/limit records")
+    (when-let [boundary (::record/first-key params)]
+      (check ::record/first-key
+        (not (key/before? (::record/first-key part) boundary))
+        "First key in partition is within the subtree boundary"))
+    (when-let [boundary (::record/last-key params)]
+      (check ::record/last-key
+        (not (key/after? (::record/last-key part) boundary))
+        "Last key in partition is within the subtree boundary"))
+    (check ::base-tablet
+      (:base (::part/tablets part))
+      "Partition contains a base tablet")
+    ; TODO: partition first-key matches actual first record key in base tablet
+    ; TODO: partition last-key matches actual last record key in base tablet
+    ; TODO: record/count is accurate
+    ; TODO: every key present tests true against membership filter
+    (doseq [[tablet-family link] (::part/tablets part)]
+      (check-next!
+        validate-tablet link
+        (assoc params
+               ::record/families (::record/families part)
+               ::record/family-key tablet-family
+               ::record/first-key (::record/first-key part)
+               ::record/last-key (::record/last-key part))))))
+
+
+(defn validate-index
+  [index params]
+  (when (check :data/type
+          (= index/data-type (:data/type index))
+          "Node has expected data type")
+    (check ::spec
+      (s/valid? ::index/node-data index)
+      (s/explain-str ::index/node-data index))
+    (check ::index/keys
+      (= (dec (count (::index/children index)))
+         (count (::index/keys index)))
+      "Index nodes have one fewer key than child links")
+    (if (::index/root? params)
+      (check ::index/branching-factor
+        (<= 2 (count (::index/children index)) (::index/branching-factor params))
+        "Root index node has at between [2, b] children")
+      (check ::index/branching-factor
+        (<= (int (Math/ceil (/ (::index/branching-factor params) 2)))
+            (count (::index/children index))
+            (::index/branching-factor params))
+        "Internal index node has between [ceil(b/2), b] children"))
+    (check ::index/height
+      (= (::index/height params) (::index/height index))
+      "Index node has expected height")
+    (doseq [[first-key child-link last-key]
+              (map vector
+                   (cons (::record/first-key params) (::index/keys index))
+                   (::index/children index)
+                   (conj (::index/keys index) (::record/last-key params)))
+              :let [height' (dec (::index/height index))]]
+      (check-next!
+        (if (zero? height')
+          validate-partition
+          validate-index)
+        child-link
+        (assoc params
+               ::index/root? false
+               ::index/height height'
+               ::record/first-key first-key
+               ::record/last-key last-key)))))
+
+
+(defn validate-data-tree
+  [root params]
+  (cond
+    (zero? (::record/count params))
+      (check ::index/empty
+        (nil? root)
+        "Empty tree has nil root")
+    (<= (::record/count params) (::part/limit params))
+      (validate-partition root params)
+    :else
+      (validate-index
+        root
+        (assoc params
+               ::index/root? true
+               ::index/height (::index/height root)))))

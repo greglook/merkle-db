@@ -18,9 +18,7 @@
     (merkle-db
       [key :as key]
       [partition :as part]
-      [record :as record]
-      [tablet :as tablet] ; would be nice if this weren't needed
-      [validate :as validate])))
+      [record :as record])))
 
 
 ;; ## Specs
@@ -59,64 +57,6 @@
     #(= data-type (:data/type %))
     #(= (count (::children %))
         (inc (count (::keys %))))))
-
-
-(defn validate
-  [index params]
-  (when (validate/check :data/type
-          (= data-type (:data/type index))
-          (str "Index should have :data/type of " data-type))
-    (validate/check ::node-data
-      (s/valid? ::node-data index)
-      (s/explain-str ::node-data index))
-    (validate/check ::keys
-      (= (dec (count (::children index)))
-         (count (::keys index)))
-      "Index nodes have one fewer key than child links")
-    (if (::root? params)
-      (validate/check ::branching-factor
-        (<= 2 (count (::children index)) (::branching-factor params))
-        "Root index node has at between [2, b] children")
-      (validate/check ::branching-factor
-        (<= (int (Math/ceil (/ (::branching-factor params) 2)))
-            (count (::children index))
-            (::branching-factor params))
-        "Internal index node has between [ceil(b/2), b] children"))
-    (validate/check ::height
-      (= (::height params) (::height index))
-      "Index node has expected height")
-    (doseq [[first-key child-link last-key]
-              (map vector
-                   (cons (::record/first-key params) (::keys index))
-                   (::children index)
-                   (conj (::keys index) (::record/last-key params)))
-              :let [height' (dec (::height index))]]
-      (validate/check-next!
-        child-link
-        (if (zero? height')
-          part/validate
-          validate)
-        (assoc params
-               ::root? false
-               ::height height'
-               ::record/first-key first-key
-               ::record/last-key last-key)))))
-
-
-(defn validate-tree
-  [root params]
-  (cond
-    (zero? (::record/count params))
-      (validate/check ::empty
-        (nil? root)
-        "Empty tree has nil root")
-    (<= (::record/count params) (::part/limit params))
-      (part/validate root params)
-    :else
-      (validate root
-                (assoc params
-                       ::root? true
-                       ::height (::height root)))))
 
 
 
@@ -218,8 +158,7 @@
         end-key
           (take-while #(key/after? end-key (nth % 1))))
       ,,,  ; FIXME
-      #_
-      (read-tablets store part fields tablet/read-range start-key end-key))
+      )
 
     part/data-type
     (part/read-range store node fields start-key end-key)

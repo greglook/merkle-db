@@ -39,7 +39,7 @@
   {:cluster-depth 2
    :vertical false
    :show-external false
-   :ignore-ns #{clojure bigml}}
+   :ignore-ns #{clojure bigml merkle-db.validate}}
 
   :codox
   {:metadata {:doc/format :markdown}

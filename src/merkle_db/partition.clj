@@ -17,8 +17,7 @@
       [key :as key]
       [patch :as patch]
       [record :as record]
-      [tablet :as tablet]
-      [validate :as validate])))
+      [tablet :as tablet])))
 
 
 ;; ## Specs
@@ -51,50 +50,6 @@
                   ::record/first-key
                   ::record/last-key])
     #(= data-type (:data/type %))))
-
-
-(defn validate
-  [part params]
-  (when (validate/check :data/type
-          (= data-type (:data/type part))
-          "Node has expected data type.")
-    (validate/check ::spec
-      (s/valid? ::node-data part)
-      (s/explain-str ::node-data part))
-    ; TODO: warn when partition limit or families don't match params
-    (when (and (::limit params)
-               (::record/count params)
-               (<= (::limit params) (::record/count params)))
-      (validate/check ::underflow
-        (<= (Math/ceil (/ (::limit params) 2)) (::record/count part))
-        "Partition is at least half full if tree has at least :merkle-db.partition/limit records"))
-    (validate/check ::overflow
-      (<= (::record/count part) (::limit params))
-      "Partition has at most :merkle-db.partition/limit records")
-    (when-let [boundary (::record/first-key params)]
-      (validate/check ::record/first-key
-        (not (key/before? (::record/first-key part) boundary))
-        "First key in partition is within the subtree boundary"))
-    (when-let [boundary (::record/last-key params)]
-      (validate/check ::record/last-key
-        (not (key/after? (::record/last-key part) boundary))
-        "Last key in partition is within the subtree boundary"))
-    (validate/check ::base-tablet
-      (:base (::tablets part))
-      "Partition contains a base tablet")
-    ; TODO: partition first-key matches actual first record key in base tablet
-    ; TODO: partition last-key matches actual last record key in base tablet
-    ; TODO: record/count is accurate
-    ; TODO: every key present tests true against membership filter
-    (doseq [[tablet-family link] (::tablets part)]
-      (validate/check-next!
-        link
-        tablet/validate
-        (assoc params
-               ::record/families (::record/families part)
-               ::record/family-key tablet-family
-               ::record/first-key (::record/first-key part)
-               ::record/last-key (::record/last-key part))))))
 
 
 

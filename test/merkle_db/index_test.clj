@@ -26,7 +26,7 @@
         (validate/run!
           store
           nil
-          index/validate-tree
+          validate/validate-data-tree
           {::record/count 0})))
     (testing "partition tree"
       (let [part (part/from-records
@@ -41,7 +41,7 @@
           (validate/run!
             store
             (::node/id (meta part))
-            index/validate-tree
+            validate/validate-data-tree
             {::record/count 5
              ::part/limit 10}))))))
 
@@ -63,5 +63,5 @@
         (validate/run!
           store
           (::node/id (meta root))
-          index/validate-tree
+          validate/validate-data-tree
           params)))))

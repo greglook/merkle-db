@@ -10,6 +10,7 @@
       [generators :as mdgen]
       [key :as key]
       [partition :as part]
+      [patch :as patch]
       [record :as record]
       [tablet :as tablet])))
 
@@ -71,7 +72,7 @@
            (record-seq [seq-a seq-b seq-c])))))
 
 
-(deftest partition-logic
+(deftest partition-construction
   (let [store (mdag/init-store :types record/codec-types)
         k0 (key/create [0 1 2])
         k1 (key/create [1 2 3])
@@ -86,6 +87,15 @@
                 k2 {:b 2, :c 2}
                 k3 {:x 3, :y 3, :a 3, :b 3}
                 k4 {:z 4, :d 4}})]
+    (testing "bad partition"
+      (is (thrown? Exception
+            (part/from-records
+              store
+              {::part/limit 3}
+              {k0 {:x 0, :y 0, :a 0, :c 0}
+               k1 {:x 1, :c 1, :d 1, }
+               k2 {:b 2, :c 2}
+               k3 {:x 3, :y 3, :a 3, :b 3}}))))
     (testing "partition construction"
       (is (= 5 (::record/count part)))
       (is (= k0 (::record/first-key part)))
@@ -100,6 +110,96 @@
               [k3 {:x 3, :a 3}]
               [k4 {:d 4}]]
              (part/read-all store part #{:x :a :d}))))))
+
+
+(deftest partition-updating
+  (let [store (mdag/init-store :types record/codec-types)
+        k0 (key/create [0])
+        k1 (key/create [1])
+        k2 (key/create [2])
+        k3 (key/create [3])
+        k4 (key/create [4])
+        k5 (key/create [5])
+        k6 (key/create [6])
+        k7 (key/create [7])
+        params {::part/limit 4
+                ::record/families {:ab #{:a :b}, :cd #{:c :d}}}
+        p0 (part/from-records
+             store
+             params
+             {k0 {:x 0, :y 0, :a 0, :c 0}
+              k2 {:x 1, :c 1, :d 1, }
+              k4 {:z 4, :d 4}})
+        p1 (part/from-records
+             store
+             params
+             {k5 {:x 5, :d 5}
+              k6 {:a 6, :c 6}})]
+    (testing "full removals"
+      (is (nil? (part/update-partitions!
+                  store params
+                  [[(mdag/link "B" p1) [[k5 ::patch/tombstone]
+                                        [k6 ::patch/tombstone]]]])))
+      (is (nil? (part/update-partitions!
+                  store params
+                  [[(tablet/from-records [[k5 {}] [k6 {}]])
+                    [[k5 ::patch/tombstone]
+                     [k6 ::patch/tombstone]]]]))))
+    (testing "underflow to virtual tablet"
+      (let [vt (part/update-partitions!
+                 store params
+                 [[(mdag/link "B" p1) [[k6 ::patch/tombstone]]]])]
+        (is (= tablet/data-type (:data/type vt)))
+        (is (= [[k5 {:x 5, :d 5}]] (tablet/read-all vt)))))
+    (testing "pass-through logic"
+      (is (= [p0] (part/update-partitions!
+                    store params
+                    [[(mdag/link "A" p0) []]])))
+      (let [vt (tablet/from-records [[k5 {}]])]
+        (is (= vt (part/update-partitions!
+                    store params
+                    [[vt []]])))))
+    (testing "unchanged data"
+      (is (= [p0] (part/update-partitions!
+                    store params
+                    [[(mdag/link "A" p0) [[k1 ::patch/tombstone]]]])))
+      (let [vt (tablet/from-records [[k5 {}]])]
+        (is (= vt (part/update-partitions!
+                    store params
+                    [[vt [[k5 {}]]]])))))
+    (testing "pending overflow"
+      (let [[a b :as parts]
+              (part/update-partitions!
+                store params
+                [[(mdag/link "A" p0)
+                  [[k1 {}]
+                   [k3 {}]
+                   [k5 {}]
+                   [k6 {}]
+                   [k7 {}]]]])]
+        (is (= 2 (count parts)))
+        (is (= [[k0 {:c 0, :a 0, :x 0, :y 0}]
+                [k1 {}]
+                [k2 {:c 1, :d 1, :x 1}]
+                [k3 {}]]
+               (part/read-all store a nil)))
+        (is (= [[k4 {:z 4, :d 4}]
+                [k5 {}]
+                [k6 {}]
+                [k7 {}]]
+               (part/read-all store b nil)))))
+    (testing "final underflow"
+      (let [[a :as parts]
+              (part/update-partitions!
+                store params
+                [[(mdag/link "A" p0) []]
+                 [(mdag/link "B" p1) [[k5 ::patch/tombstone]]]])]
+        (is (= 1 (count parts)))
+        (is (= [[k0 {:c 0, :a 0, :x 0, :y 0}]
+                [k2 {:c 1, :d 1, :x 1}]
+                [k4 {:d 4, :z 4}]
+                [k6 {:a 6, :c 6}]]
+               (part/read-all store a nil)))))))
 
 
 

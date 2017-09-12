@@ -53,7 +53,13 @@
 
 
 
-;; ## Tablet Utilities
+;; ## Read Functions
+
+(defn- get-tablet
+  "Return the tablet data for the given family key."
+  [store part family-key]
+  (mdag/get-data store (get (::tablets part) family-key)))
+
 
 (defn- choose-tablets
   "Selects a list of tablet names to query over, given a mapping of tablet
@@ -72,43 +78,6 @@
     ; No selection provided, return all field data.
     (-> tablet-fields keys set (conj :base))))
 
-
-(defn- get-tablet
-  "Return the tablet data for the given family key."
-  [store part family-key]
-  (mdag/get-data store (get (::tablets part) family-key)))
-
-
-(defn- store-tablet!
-  "Store the given tablet data. Returns a tuple of the family key and named
-  link to the new node."
-  [store family-key tablet]
-  (let [tablet (cond-> tablet
-                 (not= family-key :base)
-                 (tablet/prune))]
-    (when (seq (tablet/read-all tablet))
-      [family-key
-       (mdag/link
-         (if (namespace family-key)
-           (str (namespace family-key) ":" (name family-key))
-           (name family-key))
-         (mdag/store-node! store nil tablet))])))
-
-
-(defn- apply-patch
-  "Performs an update on the tablet by applying the patch changes. Returns an
-  updated tablet, or nil if the result was empty."
-  [tablet changes]
-  (if (seq changes)
-    (let [deletion? (comp patch/tombstone? second)
-          additions (remove deletion? changes)
-          deleted-keys (set (map first (filter deletion? changes)))]
-      (tablet/update-records tablet additions deleted-keys))
-    tablet))
-
-
-
-;; ## Read Functions
 
 (defn- record-seq
   "Combines lazy sequences of partial records into a single lazy sequence
@@ -137,9 +106,9 @@
   (let [tablets (choose-tablets (::record/families part) (set fields))
         field-seqs (map #(apply read-fn (get-tablet store part %) args) tablets)
         records (record-seq field-seqs)]
-    (cond->> records
-      (seq fields)
-        (map (juxt first #(select-keys (second %) fields))))))
+    (if (seq fields)
+      (map (juxt first #(select-keys (second %) fields)) records)
+      records)))
 
 
 (defn read-all
@@ -206,7 +175,7 @@
     (condp = (:data/type x)
       tablet/data-type x
       data-type (tablet/from-records (read-all store x nil))
-      nil nil)))
+      nil)))
 
 
 (defn- join-tablets
@@ -216,6 +185,34 @@
     (tablet/join (load-tablet store a)
                  (load-tablet store b))
     (or a b)))
+
+
+(defn- apply-patch
+  "Performs an update on the tablet by applying the patch changes. Returns an
+  updated tablet, or nil if the result was empty."
+  [tablet changes]
+  (if (seq changes)
+    (let [deletion? (comp patch/tombstone? second)
+          additions (remove deletion? changes)
+          deleted-keys (set (map first (filter deletion? changes)))]
+      (tablet/update-records tablet additions deleted-keys))
+    tablet))
+
+
+(defn- store-tablet!
+  "Store the given tablet data. Returns a tuple of the family key and named
+  link to the new node."
+  [store family-key tablet]
+  (let [tablet (cond-> tablet
+                 (not= family-key :base)
+                 (tablet/prune))]
+    (when (seq (tablet/read-all tablet))
+      [family-key
+       (mdag/link
+         (if (namespace family-key)
+           (str (namespace family-key) ":" (name family-key))
+           (name family-key))
+         (mdag/store-node! store nil tablet))])))
 
 
 (defn from-records
@@ -255,7 +252,7 @@
   [store params records]
   (->> records
        (patch/remove-tombstones)
-       (partition-limited (or (::limit params) default-limit))
+       (partition-limited (::limit params default-limit))
        (mapv #(from-records store params %))))
 
 
@@ -272,9 +269,8 @@
     valid half-full partition.
   - A sequence of data for the serialized partitions."
   [store params inputs]
-  (let [limit (or (::limit params) default-limit)
-        half-full (int (Math/ceil (/ limit 2)))
-        valid? #(or (mdag/link? %) (<= half-full (::record/count %) limit))]
+  (let [limit (::limit params default-limit)
+        half-full (int (Math/ceil (/ limit 2)))]
     (loop [result []
            pending nil
            inputs inputs]
@@ -330,7 +326,7 @@
         (cond
           ; No pending data to handle, we're done.
           (nil? pending)
-            result
+            (not-empty result)
 
           ; Not enough records left to create a valid partition!
           (< (count (tablet/read-all pending)) half-full)
@@ -339,7 +335,7 @@
               (->> (join-tablets store prev pending)
                    (tablet/read-all)
                    (partition-records store params)
-                   (into result))
+                   (into (pop result)))
               ; No siblings, so return virtual tablet for carrying.
               pending)
 

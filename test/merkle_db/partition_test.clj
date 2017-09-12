@@ -16,6 +16,22 @@
 
 ;; ## Unit Tests
 
+(deftest partitioning-utils
+  (testing "partition-limited"
+    (is (nil? (part/partition-limited 3 [])))
+    (is (= [[:a]]
+           (part/partition-limited 3 [:a])))
+    (is (= [[:a :b :c]]
+           (part/partition-limited 3 [:a :b :c])))
+    (is (= [[:a :b] [:c :d :e]]
+           (part/partition-limited 3 [:a :b :c :d :e])))
+    (is (= [100 100 101 100 101]
+           (->>
+             (range 502)
+             (part/partition-limited 120)
+             (map count))))))
+
+
 (deftest tablet-selection
   (let [choose @#'part/choose-tablets]
     (is (= #{:base} (choose {} nil))

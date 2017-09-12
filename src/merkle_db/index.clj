@@ -231,7 +231,7 @@
          height 1]
     (if (<= (count layer) 1)
       (first layer)
-      (let [index-groups (record/partition-limited
+      (let [index-groups (part/partition-limited
                            (::branching-factor params)
                            layer)]
         (recur (mapv (partial store-index! store height) index-groups)

@@ -6,30 +6,20 @@
       [record :as record])))
 
 
-(deftest partitioning-utils
-  (testing "partition-approx"
-    (is (nil? (record/partition-approx 1 0 [])))
-    (is (nil? (record/partition-approx 5 0 [])))
-    (is (= [[:a :b :c]]
-           (record/partition-approx 1 3 [:a :b :c])))
-    (is (= [[:a] [:b :c]]
-           (record/partition-approx 2 3 [:a :b :c])))
-    (is (= [[:a] [:b] [:c]]
-           (record/partition-approx 3 3 [:a :b :c])))
-    (is (= [[:a] [:b] [:c]]
-           (record/partition-approx 5 3 [:a :b :c])))
-    (is (= [[:a :b] [:c :d] [:e :f :g]]
-           (record/partition-approx 3 7 [:a :b :c :d :e :f :g]))))
-  (testing "partition-limited"
-    (is (nil? (record/partition-limited 3 [])))
-    (is (= [[:a]]
-           (record/partition-limited 3 [:a])))
-    (is (= [[:a :b :c]]
-           (record/partition-limited 3 [:a :b :c])))
-    (is (= [[:a :b] [:c :d :e]]
-           (record/partition-limited 3 [:a :b :c :d :e])))
-    (is (= [100 100 101 100 101]
-           (->>
-             (range 502)
-             (record/partition-limited 120)
-             (map count))))))
+(deftest family-grouping
+  (let [k0 (key/create [0])
+        r0 {}
+        k1 (key/create [1])
+        r1 {:a 5, :x true}
+        k2 (key/create [2])
+        r2 {:b 7, :y false}]
+    (is (= {} (record/split-data {} [])))
+    (is (= {:base {k0 {}}}
+           (record/split-data {} [[k0 {}]])))
+    (is (= {:base {k0 {}
+                   k1 {:x true}
+                   k2 {:y false}}
+            :ab   {k0 nil
+                   k1 {:a 5}
+                   k2 {:b 7}}}
+           (record/split-data {:ab #{:a :b}} [[k0 r0] [k1 r1] [k2 r2]])))))

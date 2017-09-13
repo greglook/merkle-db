@@ -8,6 +8,7 @@
     [merkledag.core :as mdag]
     (merkle-db
       [generators :as mdgen]
+      [graph :as graph]
       [key :as key]
       [partition :as part]
       [patch :as patch]
@@ -73,7 +74,7 @@
 
 
 (deftest partition-construction
-  (let [store (mdag/init-store :types record/codec-types)
+  (let [store (mdag/init-store :types graph/codec-types)
         k0 (key/create [0 1 2])
         k1 (key/create [1 2 3])
         k2 (key/create [2 3 4])
@@ -106,7 +107,7 @@
 
 
 (deftest partition-reading
-  (let [store (mdag/init-store :types record/codec-types)
+  (let [store (mdag/init-store :types graph/codec-types)
         k0 (key/create [0])
         k1 (key/create [1])
         k2 (key/create [2])
@@ -151,7 +152,7 @@
 
 
 (deftest partition-updating
-  (let [store (mdag/init-store :types record/codec-types)
+  (let [store (mdag/init-store :types graph/codec-types)
         k0 (key/create [0])
         k1 (key/create [1])
         k2 (key/create [2])
@@ -253,7 +254,7 @@
   (checking "valid properties" 20
     [[field-keys families records] mdgen/data-context]
     (is (valid? ::record/families families))
-    (let [store (mdag/init-store :types record/codec-types)
+    (let [store (mdag/init-store :types graph/codec-types)
           part (part/from-records store {::record/families families} records)
           tablets (into {}
                         (map (juxt key #(mdag/get-data store (val %))))

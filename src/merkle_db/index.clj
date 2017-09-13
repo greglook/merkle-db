@@ -16,6 +16,7 @@
       [core :as mdag]
       [node :as node])
     (merkle-db
+      [graph :as graph]
       [key :as key]
       [partition :as part]
       [record :as record])))
@@ -75,7 +76,7 @@
       (let [child (first children)
             link-name (format "%03d" (count new-children))
             data (if (mdag/link? child)
-                   (mdag/get-data store child)
+                   (graph/get-link! store child)
                    child)
             target (cond
                      (mdag/link? child) child
@@ -167,12 +168,8 @@
       (mapcat
         (fn read-child
           [child-link]
-          (if-let [child (mdag/get-data store child-link)]
-            (read-all store child fields)
-            (throw (ex-info (format "Missing child linked from index-node %s: %s"
-                                    (:id node) child-link)
-                            {:node (:id node)
-                             :child child-link}))))
+          (let [child (graph/get-link! store node child-link)]
+            (read-all store child fields)))
         (::children node))
 
     part/data-type
@@ -190,18 +187,12 @@
   [store node fields record-keys]
   (condp = (:data/type node)
     data-type
-      ; TODO: rewrite to use child-boundaries instead of assign-keys
       (mapcat
         (fn read-child
-          [[index child-keys]]
-          (let [child-link (nth (::children node) index)]
-            (if-let [child (mdag/get-data store child-link)]
-              (read-batch store child fields child-keys)
-              (throw (ex-info (format "Missing child linked from index-node %s: %s"
-                                      (:id node) child-link)
-                              {:node (:id node)
-                               :child child-link})))))
-        (assign-keys (::keys node) (sort record-keys)))
+          [[child-link child-keys]]
+          (let [child (graph/get-link! store node child-link)]
+            (read-batch store child fields child-keys)))
+        (assign-keys node record-keys))
 
     part/data-type
       (part/read-batch store node fields record-keys)
@@ -226,16 +217,11 @@
           end-key
             (take-while #(not (key/after? (nth % 1) end-key))))
         (->>
-          (map first)
           (mapcat
             (fn read-child
-              [link]
-              (if-let [child (mdag/get-data store link)]
-                (read-range store child fields start-key end-key)
-                (throw (ex-info (format "Missing child linked from index-node %s: %s"
-                                        (:id node) link)
-                                {:node (:id node)
-                                 :child link})))))))
+              [[child-link _ _]]
+              (let [child (graph/get-link! store node child-link)]
+                (read-range store child fields start-key end-key))))))
 
     part/data-type
       (part/read-range store node fields start-key end-key)
@@ -304,7 +290,7 @@
                (unreduced result)
                (merge-nodes
                  (if (mdag/link? prev)
-                   (mdag/get-data store prev)
+                   (graph/get-link! store prev)
                    prev)
                  curr))))
         ([[result prev curr] [first-key child]]
@@ -350,7 +336,7 @@
 (defn- update-index-node
   [store params carry [node-link changes]]
   (if (seq changes)
-    (let [index (mdag/get-data store node-link)
+    (let [index (graph/get-link! store node-link)
           child-changes (group-changes
                           (::keys index)
                           (::children index)
@@ -393,7 +379,7 @@
                  ::record/first-key (::record/first-key (first children))
                  ::record/last-key (::record/last-key (peek children))))))
     ; No changes, return unchanged node.
-    (mdag/get-data store node-link)))
+    (graph/get-link! store node-link)))
 
 
 (defn- relink-children

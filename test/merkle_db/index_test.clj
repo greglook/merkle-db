@@ -11,6 +11,7 @@
     [merkledag.node :as node]
     (merkle-db
       [generators :as mdgen]
+      [graph :as graph]
       [index :as index]
       [key :as key]
       [partition :as part]
@@ -20,7 +21,7 @@
 
 
 (deftest construction-reading
-  (let [store (mdag/init-store :types record/codec-types)
+  (let [store (mdag/init-store :types graph/codec-types)
         k0 (key/create [0])
         k1 (key/create [1])
         k2 (key/create [2])
@@ -70,7 +71,7 @@
 
 #_
 (deftest tree-validation
-  (let [store (mdag/init-store :types record/codec-types)]
+  (let [store (mdag/init-store :types graph/codec-types)]
     (testing "empty tree"
       (tu/check-asserts
         (validate/run!
@@ -103,7 +104,7 @@
      part-limit (gen/large-integer* {:min 4})
      branch-fac (gen/large-integer* {:min 4})]
     (is (valid? ::record/families families))
-    (let [store (mdag/init-store :types record/codec-types)
+    (let [store (mdag/init-store :types graph/codec-types)
           params {::record/families families
                   ::record/count (count records)
                   ::index/branching-factor branch-fac

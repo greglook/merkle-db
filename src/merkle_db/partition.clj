@@ -14,6 +14,7 @@
       [node :as node])
     (merkle-db
       [bloom :as bloom]
+      [graph :as graph]
       [key :as key]
       [patch :as patch]
       [record :as record]
@@ -139,7 +140,7 @@
 (defn- get-tablet
   "Return the tablet data for the given family key."
   [store part family-key]
-  (mdag/get-data store (get (::tablets part) family-key)))
+  (graph/get-link! store part (get (::tablets part) family-key)))
 
 
 (defn- choose-tablets
@@ -225,7 +226,7 @@
   "Loads data from the given value into a tablet."
   [store x]
   (let [x (if (mdag/link? x)
-            (mdag/get-data store x)
+            (graph/get-link! store x)
             x)]
     (condp = (:data/type x)
       tablet/data-type x
@@ -278,7 +279,7 @@
             ; No pending records or changes, so use "pass through" logic.
             (if (mdag/link? part)
               ; No changes to the stored partition, add directly to result.
-              (recur (conj result (mdag/get-data store part))
+              (recur (conj result (graph/get-link! store part))
                      nil
                      (next inputs))
               ; No changes to virtual tablet, recur with pending records.
@@ -295,7 +296,7 @@
                 (= tablet tablet')
                   (if (mdag/link? part)
                     ; Original linked partition remains unchanged by update.
-                    (recur (conj result (mdag/get-data store part))
+                    (recur (conj result (graph/get-link! store part))
                            nil
                            (next inputs))
                     ; Original pending data hasn't changed

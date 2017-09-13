@@ -51,6 +51,89 @@
 
 
 
+;; ## Construction Functions
+
+; TODO: make this private
+(defn ^:no-doc partition-limited
+  "Returns a sequence of partitions of the elements of `coll` such that:
+  - No partition has more than `limit` elements
+  - The minimum number of partitions is returned
+  - Partitions are approximately equal in size
+
+  Note that this counts (and hence realizes) the input collection."
+  [limit coll]
+  (let [cnt (count coll)
+        n (min (int (Math/ceil (/ cnt limit))) cnt)]
+    (when (pos? cnt)
+      (letfn [(split [i] (int (* (/ i n) cnt)))
+              (take-parts
+                [i xs]
+                (when (seq xs)
+                  (lazy-seq
+                    (let [length (- (split (inc i)) (split i))
+                          [head tail] (split-at length xs)]
+                      (cons head (take-parts (inc i) tail))))))]
+        (take-parts 0 coll)))))
+
+
+(defn- store-tablet!
+  "Store the given tablet data. Returns a tuple of the family key and named
+  link to the new node."
+  [store family-key tablet]
+  (let [tablet (cond-> tablet
+                 (not= family-key :base)
+                 (tablet/prune))]
+    (when (seq (tablet/read-all tablet))
+      [family-key
+       (mdag/link
+         (if (namespace family-key)
+           (str (namespace family-key) ":" (name family-key))
+           (name family-key))
+         (mdag/store-node! store nil tablet))])))
+
+
+(defn from-records
+  "Constructs a new partition from the given map of record data. The records
+  will be split into tablets matching the given families, if provided. Returns
+  the node data for the persisted partition."
+  [store params records]
+  (let [records (vec (sort-by first (patch/remove-tombstones records))) ; TODO: don't sort?
+        limit (or (::limit params) default-limit)
+        families (or (::record/families params) {})]
+    (when (< limit (count records))
+      (throw (ex-info
+               (format "Cannot construct a partition from %d records overflowing limit %d"
+                       (count records) limit)
+               {::record/count (count records)
+                ::limit limit})))
+    (when (seq records)
+      (->>
+        {:data/type data-type
+         ::tablets (into {}
+                         (map #(store-tablet! store (key %) (tablet/from-records (val %))))
+                         (record/split-data families records))
+         ::membership (into (bloom/create limit)
+                            (map first)
+                            records)
+         ::record/count (count records)
+         ::record/families families
+         ::record/first-key (first (first records))
+         ::record/last-key (first (last records))}
+        (mdag/store-node! store nil)
+        (::node/data)))))
+
+
+(defn partition-records
+  "Divides the given records into one or more partitions. Returns a sequence of
+  node data for the persisted partitions."
+  [store params records]
+  (->> records
+       (patch/remove-tombstones)
+       (partition-limited (::limit params default-limit))
+       (mapv #(from-records store params %))))
+
+
+
 ;; ## Read Functions
 
 (defn- get-tablet
@@ -134,35 +217,6 @@
 
 
 ;; ## Update Functions
-
-; TODO: make this private
-(defn ^:no-doc partition-limited
-  "Returns a sequence of partitions of the elements of `coll` such that:
-  - No partition has more than `limit` elements
-  - The minimum number of partitions is returned
-  - Partitions are approximately equal in size
-
-  Note that this counts the collection."
-  [limit coll]
-  (let [cnt (count coll)
-        n (min (int (Math/ceil (/ cnt limit))) cnt)]
-    (when (pos? cnt)
-      (->>
-        [nil
-         (->> (range (inc n))
-              (map #(int (* (/ % n) cnt)))
-              (partition 2 1))
-         coll]
-        (iterate
-          (fn [[_ [[start end :as split] & splits] xs]]
-            (when-let [length (and split (- end start))]
-              [(seq (take length xs))
-               splits
-               (drop length xs)])))
-        (drop 1)
-        (take-while first)
-        (map first)))))
-
 
 (defn- load-tablet
   "Loads data from the given value into a tablet."

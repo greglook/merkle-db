@@ -64,7 +64,6 @@
         k2 (key/create [2 3 4])
         r2 {:bar "baz"}
         tablet (tablet/from-records {k1 r1, k2 r2})]
-    (is (= #{:foo :bar} (tablet/fields-present tablet)))
     (is (= k1 (tablet/first-key tablet)))
     (is (= k2 (tablet/last-key tablet)))))
 

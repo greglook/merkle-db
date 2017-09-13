@@ -239,6 +239,12 @@
 
 ;; ## Property Tests
 
+(defn- fields-present
+  "Scans the records in a tablet to determine the full set of fields present."
+  [tablet]
+  (set (mapcat (comp keys second) (tablet/read-all tablet))))
+
+
 (deftest ^:generative partition-behavior
   (checking "valid properties" 20
     [[field-keys families records] mdgen/data-context]
@@ -259,12 +265,12 @@
         (is (= all-keys (set (tablet/keys (:base tablets))))
             "base tablet contains every record key"))
       (is (empty? (set/intersection
-                    (tablet/fields-present (:base tablets))
+                    (fields-present (:base tablets))
                     (set (mapcat val families))))
           "base tablet record data does not contain any fields in families")
       (doseq [[family-key tablet] (dissoc tablets :base)]
         (is (empty? (set/difference
-                      (tablet/fields-present tablet)
+                      (fields-present tablet)
                       (get families family-key)))
             "family tablet should only contain field data for that family")
         (is (zero? (count (filter empty? (map second (tablet/read-all tablet)))))

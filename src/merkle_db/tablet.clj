@@ -64,12 +64,6 @@
      ::records (vec records)}))
 
 
-(defn fields-present
-  "Scans the records in a tablet to determine the full set of fields present."
-  [tablet]
-  (set (mapcat (comp clojure.core/keys second) (::records tablet))))
-
-
 (defn join
   "Join two tablets into a single tablet. The tablets key ranges must not
   overlap."

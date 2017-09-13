@@ -20,8 +20,6 @@
       [tablet :as tablet])))
 
 
-;; ## Specs
-
 (def ^:const data-type
   "Value of `:data/type` that indicates a partition node."
   :merkle-db/partition)
@@ -182,8 +180,7 @@
   "Convert the values to virtual tablets and join them into a single tablet."
   [store a b]
   (if (and a b)
-    (tablet/join (load-tablet store a)
-                 (load-tablet store b))
+    (tablet/join (load-tablet store a) (load-tablet store b))
     (or a b)))
 
 
@@ -197,63 +194,6 @@
           deleted-keys (set (map first (filter deletion? changes)))]
       (tablet/update-records tablet additions deleted-keys))
     tablet))
-
-
-(defn- store-tablet!
-  "Store the given tablet data. Returns a tuple of the family key and named
-  link to the new node."
-  [store family-key tablet]
-  (let [tablet (cond-> tablet
-                 (not= family-key :base)
-                 (tablet/prune))]
-    (when (seq (tablet/read-all tablet))
-      [family-key
-       (mdag/link
-         (if (namespace family-key)
-           (str (namespace family-key) ":" (name family-key))
-           (name family-key))
-         (mdag/store-node! store nil tablet))])))
-
-
-(defn from-records
-  "Constructs a new partition from the given map of record data. The records
-  will be split into tablets matching the given families, if provided. Returns
-  the node data for the persisted partition."
-  [store params records]
-  (let [records (vec (sort-by first (patch/remove-tombstones records))) ; TODO: don't sort?
-        limit (or (::limit params) default-limit)
-        families (or (::record/families params) {})]
-    (when (< limit (count records))
-      (throw (ex-info
-               (format "Cannot construct a partition from %d records overflowing limit %d"
-                       (count records) limit)
-               {::record/count (count records)
-                ::limit limit})))
-    (when (seq records)
-      (->>
-        {:data/type data-type
-         ::tablets (into {}
-                         (map #(store-tablet! store (key %) (tablet/from-records (val %))))
-                         (record/split-data families records))
-         ::membership (into (bloom/create limit)
-                            (map first)
-                            records)
-         ::record/count (count records)
-         ::record/families families
-         ::record/first-key (first (first records))
-         ::record/last-key (first (last records))}
-        (mdag/store-node! store nil)
-        (::node/data)))))
-
-
-(defn partition-records
-  "Divides the given records into one or more partitions. Returns a sequence of
-  node data for the persisted partitions."
-  [store params records]
-  (->> records
-       (patch/remove-tombstones)
-       (partition-limited (::limit params default-limit))
-       (mapv #(from-records store params %))))
 
 
 (defn update-partitions!

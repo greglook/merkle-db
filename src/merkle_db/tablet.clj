@@ -54,11 +54,10 @@
 
 
 
-;; ## Utilities
+;; ## Constructors
 
 (defn from-records
-  "Constructs a new bare-bones tablet node. Does not ensure that the records
-  are sorted."
+  "Constructs a new tablet node. Does not ensure that the records are sorted."
   [records]
   (when (seq (filter (comp map? second) records))
     {:data/type data-type
@@ -122,7 +121,7 @@
 (defn prune
   "Update a tablet by removing empty records from the data."
   [tablet]
-  (update tablet ::records #(vec (remove (comp empty? second) %))))
+  (update tablet ::records (partial into [] (remove (comp empty? second)))))
 
 
 (defn update-records

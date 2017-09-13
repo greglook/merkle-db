@@ -147,14 +147,14 @@
   trailing boundary, corresponding to the split keys on either side of that
   child."
   [index]
-  (->>
-    (concat
-      [nil]
-      (map vector (::children index) (::keys index))
-      [[(last (::children index))]])
-    (partition 2 1)
-    (map (fn [[[_ first-key] [link last-key]]]
-           [link first-key last-key]))))
+  (loop [boundaries [[(first (::children index)) nil (first (::keys index))]]
+         children (next (::children index))
+         split-keys (::keys index)]
+    (if (seq children)
+      (recur (conj boundaries [(first children) (first split-keys) (second split-keys)])
+             (next children)
+             (next split-keys))
+      boundaries)))
 
 
 (defn read-all

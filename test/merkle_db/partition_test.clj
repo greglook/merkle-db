@@ -96,20 +96,54 @@
                k1 {:x 1, :c 1, :d 1, }
                k2 {:b 2, :c 2}
                k3 {:x 3, :y 3, :a 3, :b 3}}))))
-    (testing "partition construction"
+    (testing "properties"
       (is (= 5 (::record/count part)))
       (is (= k0 (::record/first-key part)))
       (is (= k4 (::record/last-key part)))
       (is (= #{:base :ab :cd} (set (keys (::part/tablets part)))))
       (is (= #{:a :b} (get-in part [::record/families :ab])))
-      (is (= #{:c :d} (get-in part [::record/families :cd]))))
-    (testing "record reading"
+      (is (= #{:c :d} (get-in part [::record/families :cd]))))))
+
+
+(deftest partition-reading
+  (let [store (mdag/init-store :types record/codec-types)
+        k0 (key/create [0])
+        k1 (key/create [1])
+        k2 (key/create [2])
+        k3 (key/create [3])
+        k4 (key/create [4])
+        r0 {:x 0, :y 0, :a 0, :c 0}
+        r1 {:x 1, :c 1, :d 1}
+        r2 {:b 2, :c 2}
+        r3 {:x 3, :y 3, :a 3, :b 3}
+        r4 {:z 4, :d 4}
+        part (part/from-records
+               store
+               {::record/families {:ab #{:a :b}, :cd #{:c :d}}}
+               {k0 r0, k1 r1, k2 r2, k3 r3, k4 r4})]
+    (testing "read-all"
+      (is (= [[k0 r0] [k1 r1] [k2 r2] [k3 r3] [k4 r4]]
+             (part/read-all store part nil)))
       (is (= [[k0 {:x 0, :a 0}]
               [k1 {:x 1, :d 1}]
               [k2 {}]
               [k3 {:x 3, :a 3}]
               [k4 {:d 4}]]
-             (part/read-all store part #{:x :a :d}))))))
+             (part/read-all store part #{:x :a :d}))))
+    (testing "read-batch"
+      (is (= [[k1 r1] [k3 r3]]
+             (part/read-batch store part nil #{k1 k3})))
+      (is (= [[k0 {:c 0}] [k2 {:c 2}] [k4 {}]]
+             (part/read-batch store part #{:c} #{k0 k2 k4 (key/create [7])}))))
+    (testing "read-range"
+      (is (= [[k0 r0] [k1 r1] [k2 r2] [k3 r3] [k4 r4]]
+             (part/read-range store part nil nil nil)))
+      (is (= [[k0 {:c 0, :x 0}] [k1 {:c 1, :x 1}] [k2 {:c 2}]]
+             (part/read-range store part #{:c :x} nil k2)))
+      (is (= [[k2 {}] [k3 {:x 3}] [k4 {:z 4}]]
+             (part/read-range store part #{:x :z} k2 nil)))
+      (is (= [[k2 r2] [k3 r3]]
+             (part/read-range store part nil k2 k3))))))
 
 
 (deftest partition-updating

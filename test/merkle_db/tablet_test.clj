@@ -42,20 +42,23 @@
 
 
 (deftest range-reads
-  (let [k1 (key/create [1 2 3])
-        r1 {:foo 123}
-        k2 (key/create [4 5 6])
-        r2 {:foo 456}
-        tablet (tablet/from-records {k1 r1, k2 r2})]
+  (let [k0 (key/create [0])
+        k1 (key/create [1])
+        k2 (key/create [2])
+        r0 {:foo 123}
+        r1 {:foo 456}
+        r2 {:foo 789}
+        tablet (tablet/from-records {k0 r0, k1 r1, k2 r2})]
     (is (empty? (tablet/read-range empty-tablet nil nil)))
-    (is (= [[k1 r1] [k2 r2]]
+    (is (= [[k0 r0] [k1 r1] [k2 r2]]
            (tablet/read-range tablet nil nil)))
-    (is (= [[k1 r1]]
-           (tablet/read-range tablet nil (key/create [2]))))
+    (is (= [[k0 r0] [k1 r1]]
+           (tablet/read-range tablet nil k1)))
     (is (= [[k2 r2]]
-           (tablet/read-range tablet (key/create [2]) nil)))
-    (is (empty?
-          (tablet/read-range tablet (key/create [2]) (key/create [3]))))))
+           (tablet/read-range tablet k2 nil)))
+    (is (= [[k1 r1]]
+           (tablet/read-range tablet (key/create [0 0]) (key/create [1 5]))))
+    (is (empty? (tablet/read-range tablet (key/create [3]) (key/create [7]))))))
 
 
 (deftest tablet-utilities

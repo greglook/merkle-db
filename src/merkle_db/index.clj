@@ -82,7 +82,7 @@
                      (= 1 height) (meta child)
                      :else (meta (store-index! store (dec height) (::children data))))
             link (mdag/link link-name target)]
-        (recur (+ record-count (::record/count data))
+        (recur (int (+ record-count (::record/count data)))
                (conj new-children link)
                (conj child-keys (::record/first-key data))
                (::record/last-key data)
@@ -142,6 +142,21 @@
       results)))
 
 
+(defn- child-boundaries
+  "Return a sequence of tuples of a child link, its leading boundary, and its
+  trailing boundary, corresponding to the split keys on either side of that
+  child."
+  [index]
+  (->>
+    (concat
+      [nil]
+      (map vector (::children index) (::keys index))
+      [[(last (::children index))]])
+    (partition 2 1)
+    (map (fn [[[_ first-key] [link last-key]]]
+           [link first-key last-key]))))
+
+
 (defn read-all
   "Read a lazy sequence of key/map tuples which contain the requested field data
   for every record in the subtree. This function works on both index nodes and
@@ -149,19 +164,19 @@
   [store node fields]
   (condp = (:data/type node)
     data-type
-    (mapcat
-      (fn read-child
-        [child-link]
-        (if-let [child (mdag/get-data store child-link)]
-          (read-all store child fields)
-          (throw (ex-info (format "Missing child linked from index-node %s: %s"
-                                  (:id node) child-link)
-                          {:node (:id node)
-                           :child child-link}))))
-      (::children node))
+      (mapcat
+        (fn read-child
+          [child-link]
+          (if-let [child (mdag/get-data store child-link)]
+            (read-all store child fields)
+            (throw (ex-info (format "Missing child linked from index-node %s: %s"
+                                    (:id node) child-link)
+                            {:node (:id node)
+                             :child child-link}))))
+        (::children node))
 
     part/data-type
-    (part/read-all store node fields)
+      (part/read-all store node fields)
 
     (throw (ex-info (str "Unsupported index-tree node type: "
                          (pr-str (:data/type node)))
@@ -175,20 +190,21 @@
   [store node fields record-keys]
   (condp = (:data/type node)
     data-type
-    (mapcat
-      (fn read-child
-        [[index child-keys]]
-        (let [child-link (nth (::children node) index)]
-          (if-let [child (mdag/get-data store child-link)]
-            (read-batch store child fields child-keys)
-            (throw (ex-info (format "Missing child linked from index-node %s: %s"
-                                    (:id node) child-link)
-                            {:node (:id node)
-                             :child child-link})))))
-      (assign-keys (::keys node) (sort record-keys)))
+      ; TODO: rewrite to use child-boundaries instead of assign-keys
+      (mapcat
+        (fn read-child
+          [[index child-keys]]
+          (let [child-link (nth (::children node) index)]
+            (if-let [child (mdag/get-data store child-link)]
+              (read-batch store child fields child-keys)
+              (throw (ex-info (format "Missing child linked from index-node %s: %s"
+                                      (:id node) child-link)
+                              {:node (:id node)
+                               :child child-link})))))
+        (assign-keys (::keys node) (sort record-keys)))
 
     part/data-type
-    (part/read-batch store node fields record-keys)
+      (part/read-batch store node fields record-keys)
 
     (throw (ex-info (str "Unsupported index-tree node type: "
                          (pr-str (:data/type node)))
@@ -202,24 +218,27 @@
   [store node fields start-key end-key]
   (condp = (:data/type node)
     data-type
-    (->
-      (concat (map vector (::children node) (::keys node))
-              [[(last (::children node))]])
-      (->>
-        (partition 2 1)
-        (map (fn [[[_ start-key] [link end-key]]]
-               [link [start-key end-key]]))
-        (cons [(first (::children node)) nil (first (::key node))]))
-      (cond->>
-        start-key
-          (drop-while #(key/before? (nth % 2) start-key))
-        end-key
-          (take-while #(key/after? end-key (nth % 1))))
-      ,,,  ; FIXME
-      )
+      (->
+        (child-boundaries node)
+        (cond->>
+          start-key
+            (drop-while #(key/before? (nth % 2) start-key))
+          end-key
+            (take-while #(not (key/after? (nth % 1) end-key))))
+        (->>
+          (map first)
+          (mapcat
+            (fn read-child
+              [link]
+              (if-let [child (mdag/get-data store link)]
+                (read-range store child fields start-key end-key)
+                (throw (ex-info (format "Missing child linked from index-node %s: %s"
+                                        (:id node) link)
+                                {:node (:id node)
+                                 :child link})))))))
 
     part/data-type
-    (part/read-range store node fields start-key end-key)
+      (part/read-range store node fields start-key end-key)
 
     (throw (ex-info (str "Unsupported index-tree node type: "
                          (pr-str (:data/type node)))

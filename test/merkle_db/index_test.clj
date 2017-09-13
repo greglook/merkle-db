@@ -55,11 +55,17 @@
              (index/read-batch store root nil #{k1 k2 k4 (key/create [7])})))
       (is (= [[k1 {:x 1}] [k3 {:x 3}]]
              (index/read-batch store root #{:x} #{k1 k3 k4}))))
-    #_
     (testing "read-range"
       (is (= [[k0 r0] [k1 r1] [k2 r2] [k3 r3] [k4 r4]]
              (index/read-range store root nil nil nil)))
-      ,,,)))
+      (is (= [[k0 {:y 0}] [k3 {:y 3}]]
+             (index/read-range store root #{:y} nil nil)))
+      (is (= [[k0 r0] [k1 r1]]
+             (index/read-range store root nil nil k1)))
+      (is (= [[k2 r2] [k3 r3] [k4 r4]]
+             (index/read-range store root nil k2 nil)))
+      (is (= [[k2 {:c 2}]]
+             (index/read-range store root #{:c} k2 k3))))))
 
 
 #_

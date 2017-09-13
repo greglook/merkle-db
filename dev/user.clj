@@ -11,24 +11,23 @@
     [clojure.test.check.generators :as gen]
     [clojure.tools.namespace.repl :refer [refresh]]
     [com.stuartsierra.component :as component]
-    (merkledag
-      [core :as mdag]
-      [link :as link]
-      [node :as node])
+    [merkledag.core :as mdag]
+    [merkledag.link :as link]
+    [merkledag.node :as node]
     [merkledag.ref.file :as mrf]
-    (merkle-db
-      [bloom :as bloom]
-      [connection :as conn]
-      [db :as db]
-      [generators :as mdgen]
-      [index :as index]
-      [key :as key]
-      [partition :as part]
-      [patch :as patch]
-      [record :as record]
-      [table :as table]
-      [tablet :as tablet]
-      [viz :as viz])
+    [merkle-db.bloom :as bloom]
+    [merkle-db.connection :as conn]
+    [merkle-db.db :as db]
+    [merkle-db.generators :as mdgen]
+    [merkle-db.graph :as graph]
+    [merkle-db.index :as index]
+    [merkle-db.key :as key]
+    [merkle-db.partition :as part]
+    [merkle-db.patch :as patch]
+    [merkle-db.record :as record]
+    [merkle-db.table :as table]
+    [merkle-db.tablet :as tablet]
+    [merkle-db.viz :as viz]
     [multihash.core :as multihash]
     [multihash.digest :as digest]
     [rhizome.viz :as rhizome]))
@@ -40,7 +39,7 @@
     (mdag/init-store
       :store (file-block-store "var/db/blocks")
       :cache {:total-size-limit (* 32 1024)}
-      :types record/codec-types)
+      :types graph/codec-types)
     (doto (mrf/file-ref-tracker "var/db/refs.tsv")
       (mrf/load-history!))))
 
@@ -83,13 +82,13 @@
         record-keys (map (partial key/encode key/long-lexicoder) (range n))
         record-data (sample-record-data field-keys n)
         records (zipmap record-keys record-data)
-        store (mdag/init-store :types record/codec-types)
+        store (mdag/init-store :types graph/codec-types)
         params {::record/count n
                 ::record/families families
                 ::index/branching-factor branch-factor
                 ::part/limit part-limit}
         parts (part/from-records store params records)
-        root (index/build-index store params parts)]
+        root (index/from-partitions store params parts)]
     (viz/save-tree store
                    (::node/id (meta root))
                    (constantly true)
@@ -120,12 +119,12 @@
 (defn viz-update
   [update-map branch-factor part-limit]
   (let [{:keys [families records changes]} update-map
-        store (mdag/init-store :types record/codec-types)
+        store (mdag/init-store :types graph/codec-types)
         params {::record/families families
                 ::index/branching-factor branch-factor
                 ::part/limit part-limit}
         parts (part/partition-records store params records)
-        root (index/build-index store params parts)]
+        root (index/from-partitions store params parts)]
     (try
       (let [root' (index/update-tree store params root changes)
             old-nodes (viz/find-nodes store {}

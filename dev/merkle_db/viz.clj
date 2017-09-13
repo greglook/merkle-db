@@ -2,10 +2,10 @@
   "Utilities for visualizing merkle-db databases."
   (:require
     [clojure.string :as str]
-    (merkledag
-      [core :as mdag]
-      [link :as link]
-      [node :as node])
+    [merkledag.core :as mdag]
+    [merkledag.link :as link]
+    [merkledag.node :as node]
+    [merkle-db.db :as db]
     [multihash.core :as multihash]
     [rhizome.viz :as rhizome]))
 
@@ -159,7 +159,7 @@
 (defn view-database
   ([db]
    (view-database db (constantly true)))
-  ([db follow?]
+  ([^merkle_db.db.Database db follow?]
    (when-not (::node/id db)
      (throw (IllegalArgumentException.
               (str "Cannot vizualize database with no node id: "

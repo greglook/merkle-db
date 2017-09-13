@@ -112,35 +112,39 @@
         k2 (key/create [2])
         k3 (key/create [3])
         k4 (key/create [4])
+        k5 (key/create [5])
         r0 {:x 0, :y 0, :a 0, :c 0}
         r1 {:x 1, :c 1, :d 1}
         r2 {:b 2, :c 2}
         r3 {:x 3, :y 3, :a 3, :b 3}
         r4 {:z 4, :d 4}
+        r5 {}
         part (part/from-records
                store
                {::record/families {:ab #{:a :b}, :cd #{:c :d}}}
-               {k0 r0, k1 r1, k2 r2, k3 r3, k4 r4})]
+               {k0 r0, k1 r1, k2 r2, k3 r3, k4 r4, k5 r5})]
     (testing "read-all"
-      (is (= [[k0 r0] [k1 r1] [k2 r2] [k3 r3] [k4 r4]]
+      (is (= [[k0 r0] [k1 r1] [k2 r2] [k3 r3] [k4 r4] [k5 r5]]
              (part/read-all store part nil)))
+      (is (= [[k0 {:a 0}]
+              [k3 {:a 3}]]
+             (part/read-all store part #{:a})))
       (is (= [[k0 {:x 0, :a 0}]
               [k1 {:x 1, :d 1}]
-              [k2 {}]
               [k3 {:x 3, :a 3}]
               [k4 {:d 4}]]
              (part/read-all store part #{:x :a :d}))))
     (testing "read-batch"
       (is (= [[k1 r1] [k3 r3]]
              (part/read-batch store part nil #{k1 k3})))
-      (is (= [[k0 {:c 0}] [k2 {:c 2}] [k4 {}]]
+      (is (= [[k0 {:c 0}] [k2 {:c 2}]]
              (part/read-batch store part #{:c} #{k0 k2 k4 (key/create [7])}))))
     (testing "read-range"
-      (is (= [[k0 r0] [k1 r1] [k2 r2] [k3 r3] [k4 r4]]
+      (is (= [[k0 r0] [k1 r1] [k2 r2] [k3 r3] [k4 r4] [k5 r5]]
              (part/read-range store part nil nil nil)))
       (is (= [[k0 {:c 0, :x 0}] [k1 {:c 1, :x 1}] [k2 {:c 2}]]
              (part/read-range store part #{:c :x} nil k2)))
-      (is (= [[k2 {}] [k3 {:x 3}] [k4 {:z 4}]]
+      (is (= [[k3 {:x 3}] [k4 {:z 4}]]
              (part/read-range store part #{:x :z} k2 nil)))
       (is (= [[k2 r2] [k3 r3]]
              (part/read-range store part nil k2 k3))))))
@@ -162,7 +166,7 @@
              store
              params
              {k0 {:x 0, :y 0, :a 0, :c 0}
-              k2 {:x 1, :c 1, :d 1, }
+              k2 {:x 1, :c 1, :d 1}
               k4 {:z 4, :d 4}})
         p1 (part/from-records
              store
@@ -206,21 +210,21 @@
               (part/update-partitions!
                 store params
                 [[(mdag/link "A" p0)
-                  [[k1 {}]
-                   [k3 {}]
-                   [k5 {}]
-                   [k6 {}]
-                   [k7 {}]]]])]
+                  [[k1 {:a 1}]
+                   [k3 {:b 3}]
+                   [k5 {:c 5}]
+                   [k6 {:d 6}]
+                   [k7 {:e 7}]]]])]
         (is (= 2 (count parts)))
         (is (= [[k0 {:c 0, :a 0, :x 0, :y 0}]
-                [k1 {}]
+                [k1 {:a 1}]
                 [k2 {:c 1, :d 1, :x 1}]
-                [k3 {}]]
+                [k3 {:b 3}]]
                (part/read-all store a nil)))
         (is (= [[k4 {:z 4, :d 4}]
-                [k5 {}]
-                [k6 {}]
-                [k7 {}]]
+                [k5 {:c 5}]
+                [k6 {:d 6}]
+                [k7 {:e 7}]]
                (part/read-all store b nil)))))
     (testing "final underflow"
       (let [[a :as parts]

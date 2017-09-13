@@ -87,8 +87,9 @@
     Options may include:
 
     - `:fields`
-      Only return data for the selected set of fields. If not provided, all
-      fields are returned.
+      Only return data for the selected set of fields. If provided, only
+      records with data for one or more of the fields are returned, otherwise
+      all fields and records (including empty ones) are returned.
     - `:start-key`
       Return records with keys equal to or greater than the marker.
     - `:end-key`
@@ -107,8 +108,9 @@
     Options may include:
 
     - `:fields`
-      Only return data for the selected set of fields. If not provided, all
-      fields are returned.")
+      Only return data for the selected set of fields. If provided, only
+      records with data for one or more of the fields are returned, otherwise
+      all fields and records are returned.")
 
   (insert
     [table records]

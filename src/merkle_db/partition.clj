@@ -188,7 +188,10 @@
         field-seqs (map #(apply read-fn (get-tablet store part %) args) tablets)
         records (record-seq field-seqs)]
     (if (seq fields)
-      (map (juxt first #(select-keys (second %) fields)) records)
+      (->>
+        records
+        (map (juxt first #(select-keys (second %) fields)))
+        (remove (comp empty? second)))
       records)))
 
 

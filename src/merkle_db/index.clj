@@ -131,13 +131,13 @@
       (if (seq split-keys)
         ; Take next batch of keys.
         (let [split (first split-keys)
-              [in after] (split-with (partial key/before? split) record-keys)
+              [in after] (split-with #(key/before? % split) record-keys)
               results' (if (seq in)
                          (conj results [index in])
                          results)]
           (recur results' (inc index) (next split-keys) after))
         ; No more splits, emit one final group with remaining keys.
-        (conj results [(inc index) record-keys]))
+        (conj results [index record-keys]))
       ; No more record keys to assign.
       results)))
 
@@ -185,7 +185,7 @@
                                     (:id node) child-link)
                             {:node (:id node)
                              :child child-link})))))
-      (assign-keys (::keys node) record-keys))
+      (assign-keys (::keys node) (sort record-keys)))
 
     part/data-type
     (part/read-batch store node fields record-keys)
@@ -409,18 +409,17 @@
             (from-partitions store params))
           root)
       data-type
-        (let [root' (update-index-node store params nil [root changes])
-              store! (fn store!
-                       [node]
-                       (if (mdag/link? node)
-                         node
-                         (->> (::children node)
-                              (map store!)
-                              (relink-children)
-                              (assoc node ::children)
-                              (mdag/store-node! store nil)
-                              (::node/data))))]
-          (store! root'))
+        (letfn [(store!  ; TODO: factor out?
+                  [node]
+                  (if (mdag/link? node)
+                    node
+                    (->> (::children node)
+                         (map store!)
+                         (relink-children)
+                         (assoc node ::children)
+                         (mdag/store-node! store nil)
+                         (::node/data))))]
+          (store! (update-index-node store params nil [root changes])))
       (throw (ex-info (str "Unsupported index-tree node type: "
                            (pr-str (:data/type root)))
                       {:data/type (:data/type root)})))))

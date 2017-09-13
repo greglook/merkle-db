@@ -15,10 +15,54 @@
       [key :as key]
       [partition :as part]
       [record :as record]
-      [validate :as validate]
+      #_[validate :as validate]
       [test-utils :as tu])))
 
 
+(deftest construction-reading
+  (let [store (mdag/init-store :types record/codec-types)
+        k0 (key/create [0])
+        k1 (key/create [1])
+        k2 (key/create [2])
+        k3 (key/create [3])
+        k4 (key/create [4])
+        r0 {:x 0, :y 0, :a 0, :c 0}
+        r1 {:x 1, :c 1, :d 1}
+        r2 {:b 2, :c 2}
+        r3 {:x 3, :y 3, :a 3, :b 3}
+        r4 {:z 4, :d 4}
+        params {::index/branching-factor 4
+                ::part/limit 3
+                ::record/families {:ab #{:a :b}, :cd #{:c :d}}}
+        part0 (part/from-records store params {k0 r0, k1 r1, k2 r2})
+        part1 (part/from-records store params {k3 r3, k4 r4})
+        root (index/from-partitions store params [part0 part1])]
+    (testing "root properties"
+      (is (= index/data-type (:data/type root)))
+      (is (= 1 (::index/height root)))
+      (is (= [k3] (::index/keys root)))
+      (is (= 2 (count (::index/children root))))
+      (is (= 5 (::record/count root)))
+      (is (= k0 (::record/first-key root)))
+      (is (= k4 (::record/last-key root))))
+    (testing "read-all"
+      (is (= [[k0 r0] [k1 r1] [k2 r2] [k3 r3] [k4 r4]]
+             (index/read-all store root nil)))
+      (is (= [[k1 {:d 1}] [k4 {:d 4}]]
+             (index/read-all store root #{:d}))))
+    (testing "read-batch"
+      (is (= [[k1 r1] [k2 r2] [k4 r4]]
+             (index/read-batch store root nil #{k1 k2 k4 (key/create [7])})))
+      (is (= [[k1 {:x 1}] [k3 {:x 3}]]
+             (index/read-batch store root #{:x} #{k1 k3 k4}))))
+    #_
+    (testing "read-range"
+      (is (= [[k0 r0] [k1 r1] [k2 r2] [k3 r3] [k4 r4]]
+             (index/read-range store root nil nil nil)))
+      ,,,)))
+
+
+#_
 (deftest tree-validation
   (let [store (mdag/init-store :types record/codec-types)]
     (testing "empty tree"

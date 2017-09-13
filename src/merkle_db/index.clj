@@ -123,24 +123,24 @@
   "Assigns record keys to the children of this node which they would belong
   to. Returns a sequence of vectors containing the child index and a sequence
   of record keys, only including children which had keys assigned."
-  [split-keys record-keys]
-  (loop [results []
-         index 0
-         split-keys split-keys
-         record-keys record-keys]
-    (if (seq record-keys)
+  [index record-keys]
+  (loop [assignments []
+         children (::children index)
+         split-keys (::keys index)
+         pending-keys (sort (set record-keys))]
+    (if (seq pending-keys)
       (if (seq split-keys)
         ; Take next batch of keys.
         (let [split (first split-keys)
-              [in after] (split-with #(key/before? % split) record-keys)
-              results' (if (seq in)
-                         (conj results [index in])
-                         results)]
-          (recur results' (inc index) (next split-keys) after))
+              [in after] (split-with #(key/before? % split) pending-keys)
+              assignments' (if (seq in)
+                             (conj assignments [(first children) in])
+                             assignments)]
+          (recur assignments' (next children) (next split-keys) after))
         ; No more splits, emit one final group with remaining keys.
-        (conj results [index record-keys]))
+        (conj assignments [(first children) pending-keys]))
       ; No more record keys to assign.
-      results)))
+      assignments)))
 
 
 (defn- child-boundaries

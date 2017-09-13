@@ -59,7 +59,7 @@
                   ::index/branching-factor branch-fac
                   ::part/limit part-limit}
           parts (part/partition-records store params records)
-          root (index/build-index store params parts)]
+          root (index/from-partitions store params parts)]
       (tu/check-asserts
         (validate/run!
           store

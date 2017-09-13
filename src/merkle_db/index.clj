@@ -58,28 +58,88 @@
 
 
 
+;; ## Construction
+
+(defn- store-index!
+  "Recursively store index nodes from the given sequence of children. Loads
+  each child to calculate the aggregate first-key, last-key, and count
+  attributes. Returns persisted index node data."
+  [store height children]
+  (loop [record-count 0
+         new-children []
+         child-keys []
+         last-last-key nil
+         children children]
+    (if (seq children)
+      ; Load and update aggregate stats from next child.
+      (let [child (first children)
+            link-name (format "%03d" (count new-children))
+            data (if (mdag/link? child)
+                   (mdag/get-data store child)
+                   child)
+            target (cond
+                     (mdag/link? child) child
+                     (= 1 height) (meta child)
+                     :else (meta (store-index! store (dec height) (::children data))))
+            link (mdag/link link-name target)]
+        (recur (+ record-count (::record/count data))
+               (conj new-children link)
+               (conj child-keys (::record/first-key data))
+               (::record/last-key data)
+               (next children)))
+      ; No more children, serialize node.
+      (->>
+        {:data/type data-type
+         ::height height
+         ::keys (vec (drop 1 child-keys))
+         ::children new-children
+         ::record/count record-count
+         ::record/first-key (first child-keys)
+         ::record/last-key last-last-key}
+        (mdag/store-node! store nil)
+        (::node/data)))))
+
+
+(defn from-partitions
+  "Build an index tree from a sequence of partitions, using the given
+  parameters. Returns the final, persisted root node data."
+  [store params partitions]
+  (loop [layer partitions
+         height 1]
+    (if (<= (count layer) 1)
+      (first layer)
+      (let [index-groups (part/partition-limited
+                           (::branching-factor params)
+                           layer)]
+        (recur (mapv (partial store-index! store height) index-groups)
+               (inc height))))))
+
+
+
 ;; ## Read Functions
 
 (defn- assign-keys
   "Assigns record keys to the children of this node which they would belong
-  to. Returns a lazy sequence of vectors containing the child index and a
-  sequence of record keys."
+  to. Returns a sequence of vectors containing the child index and a sequence
+  of record keys, only including children which had keys assigned."
   [split-keys record-keys]
-  ; OPTIMIZE: use transducers
-  (->>
-    [nil 0 split-keys record-keys]
-    (iterate
-      (fn [[_ index splits rks]]
-        (when (seq rks)
-          (if (seq splits)
-            ; Take all records coming before the next split key.
-            (let [[in after] (split-with (partial key/before? (first splits)) rks)]
-              [[index in] (inc index) (next splits) after])
-            ; No more splits, emit one final group with any remaining keys.
-            [[(inc index) rks]]))))
-    (drop 1)
-    (take-while first)
-    (map first)))
+  (loop [results []
+         index 0
+         split-keys split-keys
+         record-keys record-keys]
+    (if (seq record-keys)
+      (if (seq split-keys)
+        ; Take next batch of keys.
+        (let [split (first split-keys)
+              [in after] (split-with (partial key/before? split) record-keys)
+              results' (if (seq in)
+                         (conj results [index in])
+                         results)]
+          (recur results' (inc index) (next split-keys) after))
+        ; No more splits, emit one final group with remaining keys.
+        (conj results [(inc index) record-keys]))
+      ; No more record keys to assign.
+      results)))
 
 
 (defn read-all
@@ -169,73 +229,6 @@
 
 ;; ## Update Functions
 
-(defn- relink-children
-  "Rewrite a vector of childen into numbered links."
-  [children]
-  (into []
-        (map-indexed
-          #(mdag/link
-             (format "%03d" %1)
-             (if (mdag/link? %2) %2 (meta %2))))
-        children))
-
-
-(defn- store-index!
-  "Recursively store index nodes from the given sequence of children. Loads
-  each child to calculate the aggregate first-key, last-key, and count
-  attributes. Returns persisted index node data."
-  [store height children]
-  (loop [record-count 0
-         new-children []
-         child-keys []
-         last-last-key nil
-         children children]
-    (if (seq children)
-      ; Load and update aggregate stats from next child.
-      (let [child (first children)
-            link-name (format "%03d" (count new-children))
-            data (if (mdag/link? child)
-                   (mdag/get-data store child)
-                   child)
-            target (cond
-                     (mdag/link? child) child
-                     (= 1 height) (meta child)
-                     :else (meta (store-index! store (dec height) (::children data))))
-            link (mdag/link link-name target)]
-        (recur (+ record-count (::record/count data))
-               (conj new-children link)
-               (conj child-keys (::record/first-key data))
-               (::record/last-key data)
-               (next children)))
-      ; No more children, serialize node.
-      (->>
-        {:data/type data-type
-         ::height height
-         ::keys (vec (drop 1 child-keys))
-         ::children new-children
-         ::record/count record-count
-         ::record/first-key (first child-keys)
-         ::record/last-key last-last-key}
-        (mdag/store-node! store nil)
-        (::node/data)))))
-
-
-(defn build-index
-  "Given a sequence of partitions, builds an index tree with the given
-  parameters incorporating the partitions. Returns the final, persisted root
-  node data."
-  [store params partitions]
-  (loop [layer partitions
-         height 1]
-    (if (<= (count layer) 1)
-      (first layer)
-      (let [index-groups (part/partition-limited
-                           (::branching-factor params)
-                           layer)]
-        (recur (mapv (partial store-index! store height) index-groups)
-               (inc height))))))
-
-
 (defn- group-changes
   "Divide up a sorted sequence of changes into a lazy sequence of tuples of
   the first key in the subtree, the child link, and the associated changes, if
@@ -259,9 +252,8 @@
 
 
 (defn- redistribute-children
-  "Transducer which accumulates child nodes and outputs valid nodes as
-  necessary. Input values should be a vector of
-  `[first-key link-or-candidate]`."
+  "... accumulates child nodes and outputs valid nodes as necessary. Input
+  values should be a vector of `[first-key link-or-candidate]`."
   [store limit count-children merge-nodes]
   (let [half-full (int (Math/ceil (/ limit 2)))
         valid? #(or (mdag/link? %) (<= half-full (count-children %) limit))]
@@ -385,6 +377,17 @@
     (mdag/get-data store node-link)))
 
 
+(defn- relink-children
+  "Rewrite a vector of childen into numbered links."
+  [children]
+  (into []
+        (map-indexed
+          #(mdag/link
+             (format "%03d" %1)
+             (if (mdag/link? %2) %2 (meta %2))))
+        children))
+
+
 (defn update-tree
   "Apply a set of changes to the index tree rooted in the given node. The
   changes should be a sequence of record ids to either data maps or patch
@@ -396,14 +399,14 @@
     ; Empty tree.
     (->> changes
          (part/partition-records store params)
-         (build-index store params))
+         (from-partitions store params))
     ; Check root node type.
     (condp = (:data/type root)
       part/data-type
         (if (seq changes)
           (some->>
-            (part/update-partition-root store params root changes)
-            (build-index store params))
+            (part/update-root! store params root changes)
+            (from-partitions store params))
           root)
       data-type
         (let [root' (update-index-node store params nil [root changes])

@@ -340,9 +340,9 @@
                  (into result)))))))
 
 
-(defn update-partition-root
+(defn update-root!
   "Apply changes to a partition root node, returning a sequence of
-  updated partition links."
+  updated partitions."
   [store params part changes]
   (let [result (update-partitions! store params [[part changes]])]
     (if (sequential? result)

@@ -5,7 +5,8 @@
             :url "http://unlicense.org/"}
 
   :aliases
-  {"coverage" ["with-profile" "+coverage" "cloverage"]
+  {"coverage" ["with-profile" "+coverage" "cloverage"
+               "--ns-exclude-regex" "merkle-db.validate"]
    "docs" ["do" ["codox"] ["doc-lit"]]
    "doc-lit" ["marg" "--dir" "target/doc/marginalia"
               "src/merkle_db/connection.clj"

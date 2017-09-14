@@ -13,7 +13,8 @@
       [partition :as part]
       [patch :as patch]
       [record :as record]
-      [tablet :as tablet])))
+      [tablet :as tablet]
+      [test-utils :as tu])))
 
 
 ;; ## Unit Tests

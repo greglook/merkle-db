@@ -186,40 +186,32 @@
     (testing "full removals"
       (is (empty? (part/update-partitions!
                     store params nil
-                    [[(mdag/link "B" p1) [[k5 ::patch/tombstone]
-                                          [k6 ::patch/tombstone]]]])))
+                    [[p1 [[k5 ::patch/tombstone]
+                          [k6 ::patch/tombstone]]]])))
       (is (empty? (part/update-partitions!
                     store params nil
-                    [[(tablet/from-records [[k5 {}] [k6 {}]])
+                    [[(part/from-records store params [[k5 {}] [k6 {}]])
                       [[k5 ::patch/tombstone]
                        [k6 ::patch/tombstone]]]]))))
     (testing "underflow to virtual tablet"
       (let [vt (part/update-partitions!
                  store params nil
-                 [[(mdag/link "B" p1) [[k6 ::patch/tombstone]]]])]
+                 [[p1 [[k6 ::patch/tombstone]]]])]
         (is (= tablet/data-type (:data/type vt)))
         (is (= [[k5 {:x 5, :d 5}]] (tablet/read-all vt)))))
     (testing "pass-through logic"
       (is (= [p0] (part/update-partitions!
                     store params nil
-                    [[(mdag/link "A" p0) []]])))
-      (let [vt (tablet/from-records [[k5 {}]])]
-        (is (= vt (part/update-partitions!
-                    store params nil
-                    [[vt []]])))))
+                    [[p0 []]]))))
     (testing "unchanged data"
       (is (= [p0] (part/update-partitions!
                     store params nil
-                    [[(mdag/link "A" p0) [[k1 ::patch/tombstone]]]])))
-      (let [vt (tablet/from-records [[k5 {}]])]
-        (is (= vt (part/update-partitions!
-                    store params nil
-                    [[vt [[k5 {}]]]])))))
+                    [[p0 [[k1 ::patch/tombstone]]]]))))
     (testing "pending overflow"
       (let [[a b :as parts]
               (part/update-partitions!
                 store params nil
-                [[(mdag/link "A" p0)
+                [[p0
                   [[k1 {:a 1}]
                    [k3 {:b 3}]
                    [k5 {:c 5}]
@@ -240,8 +232,8 @@
       (let [[a :as parts]
               (part/update-partitions!
                 store params nil
-                [[(mdag/link "A" p0) []]
-                 [(mdag/link "B" p1) [[k5 ::patch/tombstone]]]])]
+                [[p0 []]
+                 [p1 [[k5 ::patch/tombstone]]]])]
         (is (= 1 (count parts)))
         (is (= [[k0 {:c 0, :a 0, :x 0, :y 0}]
                 [k2 {:c 1, :d 1, :x 1}]

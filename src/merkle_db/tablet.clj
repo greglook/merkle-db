@@ -75,14 +75,16 @@
   "Join two tablets into a single tablet. The tablets key ranges must not
   overlap."
   [left right]
-  (let [left-bound (last-key left)
-        right-bound (first-key right)]
-    (when-not (key/before? left-bound right-bound)
-      (throw (ex-info (format "Cannot join tablets with overlapping key ranges: %s > %s"
-                              left-bound right-bound)
-                      {:left-bound left-bound
-                       :right-bound right-bound}))))
-  (update left ::records into (::records right)))
+  (if (and left right)
+    (let [left-bound (last-key left)
+          right-bound (first-key right)]
+      (when-not (key/before? left-bound right-bound)
+        (throw (ex-info (format "Cannot join tablets with overlapping key ranges: %s > %s"
+                                left-bound right-bound)
+                        {:left-bound left-bound
+                         :right-bound right-bound})))
+      (update left ::records into (::records right)))
+    (or left right)))
 
 
 

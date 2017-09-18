@@ -230,26 +230,6 @@
 
 ;; ## Update Functions
 
-(defn- load-tablet
-  "Loads data from the given value into a tablet."
-  [store x]
-  (let [x (if (mdag/link? x)
-            (graph/get-link! store x)
-            x)]
-    (condp = (:data/type x)
-      tablet/data-type x
-      data-type (tablet/from-records (read-all store x nil))
-      nil)))
-
-
-(defn- join-tablets
-  "Convert the values to virtual tablets and join them into a single tablet."
-  [store a b]
-  (if (and a b)
-    (tablet/join (load-tablet store a) (load-tablet store b))
-    (or a b)))
-
-
 (defn- apply-patch
   "Performs an update on the tablet by applying the patch changes. Returns an
   updated tablet, or nil if the result was empty."
@@ -260,6 +240,22 @@
           deleted-keys (set (map first (filter deletion? changes)))]
       (tablet/update-records tablet additions deleted-keys))
     tablet))
+
+
+(defn- emit-parts
+  "Chop up some pending records in a virtual tablet into full valid partitions.
+  Returns a tuple containing a vector of serialized partitions and a virtual
+  tablet containing any remaining records."
+  [store params threshold part-size pending]
+  (loop [result []
+         records (tablet/read-all pending)]
+    (if (<= threshold (count records))
+      ; Serialize a full partition using the pending records.
+      (let [[output remnant] (split-at part-size records)
+            part (from-records store params output)]
+        (recur (conj result part) remnant))
+      ; Not enough to guarantee validity, so continue.
+      [result (tablet/from-records records)])))
 
 
 (defn- finish-update
@@ -276,7 +272,8 @@
     (< (count (tablet/read-all pending)) half-full)
       (if-let [prev (peek result)]
         ; Load last result link and redistribute into two valid partitions.
-        (->> (join-tablets store prev pending)
+        (->> pending
+             (tablet/join (tablet/from-records (read-all store prev nil)))
              (tablet/read-all)
              (partition-records store params)
              (into (pop result)))
@@ -301,7 +298,9 @@
   sequence of partitions may be empty if all records were removed."
   [store params carry inputs]
   (let [limit (::limit params default-limit)
-        half-full (int (Math/ceil (/ limit 2)))]
+        half-full (int (Math/ceil (/ limit 2)))
+        emit-threshold (+ limit half-full)
+        emit-size limit]
     (loop [result []
            pending (when (tablet? carry) carry)
            inputs (if (partition? carry)
@@ -312,17 +311,12 @@
         (let [[part changes] (first inputs)]
           (if (and (nil? pending) (empty? changes))
             ; No pending records or changes, so use "pass through" logic.
-            (if (mdag/link? part)
-              ; No changes to the stored partition, add directly to result.
-              ; FIXME: this will allow invalid partitions if the partition limit has changed!
-              (recur (conj result (graph/get-link! store part))
-                     nil
-                     (next inputs))
-              ; No changes to virtual tablet, recur with pending records.
-              (recur result part (next inputs)))
+            ; FIXME: this will allow invalid partitions if the partition limit has changed!
+            ; TODO: check partition validity, redistribute if needed
+            (recur (conj result part) nil (next inputs))
             ; Load partition data or use virtual tablet records.
-            (let [tablet (load-tablet store part)
-                  tablet' (join-tablets store pending (apply-patch tablet changes))]
+            (let [tablet (tablet/from-records (read-all store part nil))
+                  tablet' (tablet/join pending (apply-patch tablet changes))]
               (cond
                 ; All data was removed from the partition.
                 (empty? (tablet/read-all tablet'))
@@ -330,28 +324,14 @@
 
                 ; Original partition data was unchanged by updates.
                 (= tablet tablet')
-                  (if (mdag/link? part)
-                    ; Original linked partition remains unchanged by update.
-                    ; FIXME: this will allow invalid partitions if the partition limit has changed!
-                    (recur (conj result (graph/get-link! store part))
-                           nil
-                           (next inputs))
-                    ; Original pending data hasn't changed
-                    (recur result tablet (next inputs)))
+                  ; Original linked partition remains unchanged by update.
+                  ; FIXME: this will allow invalid partitions if the partition limit has changed!
+                  (recur (conj result part) nil (next inputs))
 
                 ; Accumulated enough records to output full partitions.
                 (<= (+ limit half-full) (count (tablet/read-all tablet')))
-                  (let [[result' remnant]
-                        (loop [result result
-                               records (tablet/read-all tablet')]
-                          (if (<= (+ limit half-full) (count records))
-                            ; Serialize a full partition using the pending records.
-                            (let [[output remnant] (split-at limit records)
-                                  part' (from-records store params output)]
-                              (recur (conj result part') remnant))
-                            ; Not enough to guarantee validity, so continue.
-                            [result records]))]
-                    (recur result' (tablet/from-records remnant) (next inputs)))
+                  (let [[parts pending'] (emit-parts store params emit-threshold emit-size tablet')]
+                    (recur (into result parts) pending' (next inputs)))
 
                 ; Not enough data to output a partition yet, keep pending.
                 :else

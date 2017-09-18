@@ -92,7 +92,7 @@
       (->>
         {:data/type data-type
          ::height height
-         ::keys (vec (drop 1 child-keys))
+         ::keys (vec (rest child-keys))
          ::children new-children
          ::record/count record-count
          ::record/first-key (first child-keys)
@@ -110,7 +110,7 @@
     (if (<= (count layer) 1)
       (first layer)
       (let [index-groups (part/partition-limited
-                           (::branching-factor params)
+                           (::branching-factor params default-branching-factor)
                            layer)]
         (recur (mapv (partial store-index! store height) index-groups)
                (inc height))))))
@@ -386,10 +386,7 @@
   "Rewrite a vector of childen into numbered links."
   [children]
   (into []
-        (map-indexed
-          #(mdag/link
-             (format "%03d" %1)
-             (if (mdag/link? %2) %2 (meta %2))))
+        (map-indexed #(mdag/link (format "%03d" %1) %2))
         children))
 
 
@@ -400,31 +397,38 @@
   `:merkle-db.data/families`. Returns an updated persisted root node if any
   records remain in the tree."
   [store params root changes]
-  (if (nil? root)
+  (cond
+    ; No changes, return root as-is.
+    (empty? changes)
+      root
+
     ; Empty tree.
-    (->> changes
-         (part/partition-records store params)
-         (from-partitions store params))
-    ; Check root node type.
-    (condp = (:data/type root)
-      part/data-type
-        (if (seq changes)
-          (some->>
-            (part/update-root! store params root changes)
-            (from-partitions store params))
-          root)
-      data-type
-        (letfn [(store!  ; TODO: factor out?
-                  [node]
-                  (if (mdag/link? node)
-                    node
-                    (->> (::children node)
-                         (map store!)
-                         (relink-children)
-                         (assoc node ::children)
-                         (mdag/store-node! store nil)
-                         (::node/data))))]
-          (store! (update-index-node store params nil [root changes])))
+    (nil? root)
+      (->> changes
+           (part/partition-records store params)
+           (from-partitions store params))
+
+    ; Root is a partition node.
+    (= part/data-type (:data/type root))
+      (some->>
+        (part/update-root! store params root changes)
+        (from-partitions store params))
+
+    ; Root is an index node.
+    (= data-type (:data/type root))
+      (letfn [(store!  ; TODO: very similar to `store-index!`
+                [node]
+                (if (mdag/link? node)
+                  node
+                  (->> (::children node)
+                       (map store!)
+                       (relink-children)
+                       (assoc node ::children)
+                       (mdag/store-node! store nil)
+                       (::node/data))))]
+        (store! (update-index-node store params nil [root changes])))
+
+    :else
       (throw (ex-info (str "Unsupported index-tree node type: "
                            (pr-str (:data/type root)))
-                      {:data/type (:data/type root)})))))
+                      {:data/type (:data/type root)}))))

@@ -131,24 +131,24 @@ which links to the subtree containing the referenced keys.
     >    [O]       .O.     [??|???]
          / \      / | \
         O   O    O  O  O
-       /|\  |\  / \/|\/ \
-       ###  ##  # ##### #
+       /|\ / \  / \/|\/ \
+       ### # #  # ##### #
 
             ...O...             |?????]
            /       \
           O        .O.        |???]
          / \      / | \
     >  [O]  O    O  O  O   [?|?]
-       /|\  |\  / \/|\/ \
-       ###  ##  # ##### #
+       /|\ / \  / \/|\/ \
+       ### # #  # ##### #
 
             ...O...             |?????]
            /       \
           O        .O.        |???]
          / \      / | \
         O   O    O  O  O     |?]
-       /|\  |\  / \/|\/ \
-    >[#]##  ##  # ##### #  [?]
+       /|\ / \  / \/|\/ \
+    >[#]## # #  # ##### #  [?]
 
 #### Apply Changes
 
@@ -178,27 +178,29 @@ partition.
           O        .O.
          / \      / | \
         O   O    O  O  O
-       /|\  |\  /|\/|\/ \
-    > [UxU] ##  ####### #
+       /|\ / \  /|\/|\/ \
+    > [UxU]# #  ####### #
 
             ...O...
            /       \
           O        .O.
          / \      / | \
         O   O    O  O  O
-        |   |\  /|\/|\/ \
-    >  [U]  ##  ####### #
+        |  / \  /|\/|\/ \
+    >  [U] # #  ####### #
+
+#### Carry Orphans
 
 When a node has only a single child, it is 'carried' up the tree recursively
-so it can be passed down the next branch for merging into the next branch.
+so it can be passed down the next branch for merging into the next subtree over.
 
             ...O...
            /       \
           O        .O.
          / \      / | \
     >  [U]  O    O  O  O
-            |\  /|\/|\/ \
-            # # ####### #
+           / \  /|\/|\/ \
+           # #  ####### #
 
             ...O...
            /       \
@@ -206,11 +208,12 @@ so it can be passed down the next branch for merging into the next branch.
           |       / | \
           O      O  O  O
          / \    /|\/|\/ \
-        #   #   ####### #
+         # #    ####### #
 
-When an orphaned subtree is being passed to the next branch, and the current
-node's height is one more than the subtree root, insert it as a child of the
-current node:
+An orphan may be either a set of records too small to make a partition, a valid
+partition node, or an index node with further children. When an orphaned subtree
+is being passed to the next branch, and the current node's height is one more
+than the subtree root, insert it as a child of the current node:
 
             ...O...
            /       \
@@ -218,7 +221,7 @@ current node:
           |       / | \
     > (U)[*]     O  O  O
          / \    /|\/|\/ \
-        #   #   ####### #
+         # #    ####### #
 
             ...O...
            /       \
@@ -248,6 +251,14 @@ The resulting buffer contains enough records to make a single valid partition:
           *      O  O  O
           |     /|\/|\/ \
     >    [@]    ####### #
+
+            ...O...
+           /       \
+          O        .O.
+          |       / | \
+    >    [@]     O  O  O
+                /|\/|\/ \
+                ####### #
 
             ...O...
            /       \
@@ -296,15 +307,15 @@ The resulting buffer contains enough records to make a single valid partition:
            /  |  \
           O   O   O
         //|\ /|\ / \
-    >  @##[U]### # #
+    >  [@##U]### # #
 
              O
              |
            ..O..
           /  |  \
          O   O   O
-       //|  /|\ / \
-    > @#[@] ### # #
+        /|\ /|\ / \
+    >  [@#@]### # #
 
              O
              |
@@ -344,7 +355,7 @@ Insert nodes into right subtree, resulting in splitting multiple partitions.
 
 #### Redistribute Children
 
-In the **distribution** phase, any candidate children which have over or
+In the **redistribution** phase, any candidate children which have over or
 overflowed must split, merge with a neighbor, or borrow some elements from
 one. Afterwards, all children should be at least half full and under the
 size limit, unless there is only a single child left.

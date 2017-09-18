@@ -89,10 +89,12 @@
     (is (thrown? Exception
           (tablet/join t2 t1)))
     (let [tablet (tablet/join t1 t2)]
-      (is (= [[k1 r1] [k2 r2]] (tablet/read-all tablet))))))
+      (is (= [[k1 r1] [k2 r2]] (tablet/read-all tablet))))
+    (is (identical? t1 (tablet/join t1 nil)))
+    (is (identical? t2 (tablet/join nil t2)))))
 
 
-(deftest record-updates
+(deftest record-pruning
   (let [k1 (key/create [1 2 3])
         r1 {:foo 123}
         k2 (key/create [4 5 6])
@@ -100,35 +102,7 @@
         k3 (key/create [7 8 9])
         r3 {:foo 789}
         tablet (tablet/from-records {k1 r1, k2 r2, k3 r3})]
-    (testing "pruning"
-      (is (= [[k1 r1]]
-             (tablet/read-all
-               (tablet/prune
-                 (tablet/from-records {k1 r1, k2 {}}))))))
-    (testing "insertion"
-      (is (= [[k1 r1] [k2 r2] [k3 r3]]
-             (tablet/read-all
-               (tablet/update-records
-                 (tablet/from-records {k1 r1})
-                 {k2 r2, k3 r3} #{}))))
-      (is (= [[k1 r2]]
-             (tablet/read-all
-               (tablet/update-records
-                 (tablet/from-records {k1 r1})
-                 {k1 r2} #{}))))
-      (is (= [[k1 r1] [k2 r2]]
-             (tablet/read-all
-               (tablet/update-records
-                 (tablet/from-records {k1 r1})
-                 {k2 r2} #{})))))
-    (testing "deletion"
-      (is (= [[k1 r1] [k2 r2]]
-             (tablet/read-all
-               (tablet/update-records
-                 tablet
-                 {} #{k3}))))
-      (is (= [[k2 r2]]
-             (tablet/read-all
-               (tablet/update-records
-                 (tablet/from-records {k1 r1})
-                 {k2 r2} #{k1})))))))
+    (is (= [[k1 r1]]
+           (tablet/read-all
+             (tablet/prune
+               (tablet/from-records {k1 r1, k2 {}})))))))

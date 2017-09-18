@@ -250,13 +250,10 @@
 (defn- apply-patch
   "Performs an update on the tablet by applying the patch changes. Returns an
   updated tablet, or nil if the result was empty."
-  [tablet changes]
-  (if (seq changes)
-    (let [deletion? (comp patch/tombstone? second)
-          additions (remove deletion? changes)
-          deleted-keys (set (map first (filter deletion? changes)))]
-      (tablet/update-records tablet additions deleted-keys))
-    tablet))
+  [changes tablet]
+  (->> (tablet/read-all tablet)
+       (patch/patch-seq (sort-by first changes))
+       (tablet/from-records)))
 
 
 (defn- emit-parts
@@ -332,7 +329,7 @@
 
             ; Load partition data or use virtual tablet records.
             (let [tablet (tablet/from-records (read-all store part nil))
-                  tablet' (tablet/join pending (apply-patch tablet changes))]
+                  tablet' (tablet/join pending (apply-patch changes tablet))]
               (cond
                 ; All data was removed from the partition.
                 (empty? (tablet/read-all tablet'))

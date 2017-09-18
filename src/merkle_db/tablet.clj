@@ -61,7 +61,7 @@
 
 
 
-;; ## Constructors
+;; ## Construction
 
 (defn from-records
   "Constructs a new tablet node. Does not ensure that the records are sorted."
@@ -85,6 +85,12 @@
                          :right-bound right-bound})))
       (update left ::records into (::records right)))
     (or left right)))
+
+
+(defn prune
+  "Update a tablet by removing empty records from the data."
+  [tablet]
+  (update tablet ::records (partial into [] (remove (comp empty? second)))))
 
 
 
@@ -116,28 +122,3 @@
       (drop-while #(key/before? (first %) start-key))
     end-key
       (take-while #(not (key/after? (first %) end-key)))))
-
-
-
-;; ## Update Functions
-
-(defn prune
-  "Update a tablet by removing empty records from the data."
-  [tablet]
-  (update tablet ::records (partial into [] (remove (comp empty? second)))))
-
-
-(defn update-records
-  "Update a tablet by inserting the records in `additions` (a collection of
-  key/data map entries) and removing the records whose keys are in
-  `deletions` (a collection of record keys)."
-  [tablet additions deletions]
-  ; OPTIMIZE: do this in one pass instead of building maps.
-  (when-let [records (-> (sorted-map)
-                         (into (::records tablet))
-                         (into additions)
-                         (cond->
-                           (seq deletions)
-                             (as-> rs (apply dissoc rs deletions)))
-                         (seq))]
-    (assoc tablet ::records (vec records))))

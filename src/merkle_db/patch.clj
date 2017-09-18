@@ -83,10 +83,10 @@
   sequence, replacing any equivalent keys from the sequence. If the changed
   value is a tombstone, the record will not appear in the sequence."
   [patch records]
-  (let [maybe-cons (fn maybe-cons
-                     [[patch-key patch-val :as entry] more-records]
-                     (let [tail (patch-seq (next patch) more-records)]
-                       (if (tombstone? patch-val) tail (cons entry tail))))]
+  (letfn [(maybe-cons
+            [[patch-key patch-val :as entry] more-records]
+            (let [tail (patch-seq (next patch) more-records)]
+              (if (tombstone? patch-val) tail (cons entry tail))))]
     (lazy-seq
       (cond
         ; No more patch data, return records directly.

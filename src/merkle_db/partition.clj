@@ -230,6 +230,23 @@
 
 ;; ## Update Functions
 
+; TODO: find better pattern than passing limit and half-full around :\
+
+(defn- check-partition
+  "Check a partition for validity under the current parameters. Returns a tuple
+  containing output valid partitions and a new virtual tablet, if needed."
+  [store params limit half-full part]
+  (cond
+    (< (::record/count part) half-full)
+      [nil (tablet/from-records (read-all store part nil))]
+
+    (< limit (::record/count part))
+      [(partition-records store params (read-all store part nil)) nil]
+
+    :else
+      [[part] nil]))
+
+
 (defn- apply-patch
   "Performs an update on the tablet by applying the patch changes. Returns an
   updated tablet, or nil if the result was empty."
@@ -272,9 +289,8 @@
     (< (count (tablet/read-all pending)) half-full)
       (if-let [prev (peek result)]
         ; Load last result link and redistribute into two valid partitions.
-        (->> pending
-             (tablet/join (tablet/from-records (read-all store prev nil)))
-             (tablet/read-all)
+        (->> (tablet/read-all pending)
+             (concat (read-all store prev nil))
              (partition-records store params)
              (into (pop result)))
         ; No siblings, so return virtual tablet for carrying.
@@ -311,9 +327,9 @@
         (let [[part changes] (first inputs)]
           (if (and (nil? pending) (empty? changes))
             ; No pending records or changes, so use "pass through" logic.
-            ; FIXME: this will allow invalid partitions if the partition limit has changed!
-            ; TODO: check partition validity, redistribute if needed
-            (recur (conj result part) nil (next inputs))
+            (let [[parts pending] (check-partition store params limit half-full part)]
+              (recur (into result parts) pending (next inputs)))
+
             ; Load partition data or use virtual tablet records.
             (let [tablet (tablet/from-records (read-all store part nil))
                   tablet' (tablet/join pending (apply-patch tablet changes))]
@@ -325,13 +341,13 @@
                 ; Original partition data was unchanged by updates.
                 (= tablet tablet')
                   ; Original linked partition remains unchanged by update.
-                  ; FIXME: this will allow invalid partitions if the partition limit has changed!
-                  (recur (conj result part) nil (next inputs))
+                  (let [[parts pending] (check-partition store params limit half-full part)]
+                    (recur (into result parts) pending (next inputs)))
 
                 ; Accumulated enough records to output full partitions.
                 (<= (+ limit half-full) (count (tablet/read-all tablet')))
-                  (let [[parts pending'] (emit-parts store params emit-threshold emit-size tablet')]
-                    (recur (into result parts) pending' (next inputs)))
+                  (let [[parts pending] (emit-parts store params emit-threshold emit-size tablet')]
+                    (recur (into result parts) pending (next inputs)))
 
                 ; Not enough data to output a partition yet, keep pending.
                 :else

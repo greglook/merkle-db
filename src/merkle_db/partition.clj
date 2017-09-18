@@ -240,7 +240,9 @@
     (< (::record/count part) half-full)
       [nil (tablet/from-records (read-all store part nil))]
 
-    (< limit (::record/count part))
+    (or (< limit (::record/count part))
+        (not= (::record/families part)
+              (::record/families params)))
       [(partition-records store params (read-all store part nil)) nil]
 
     :else

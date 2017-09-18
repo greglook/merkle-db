@@ -19,6 +19,14 @@
 
 ;; ## Unit Tests
 
+(deftest partition-predicate
+  (is (not (part/partition? "foo")))
+  (is (not (part/partition? [123 456])))
+  (is (not (part/partition? {})))
+  (is (not (part/partition? {:data/type :foo/bar})))
+  (is (part/partition? {:data/type part/data-type})))
+
+
 (deftest partitioning-utils
   (testing "partition-limited"
     (is (nil? (part/partition-limited 3 [])))
@@ -176,41 +184,41 @@
              {k5 {:x 5, :d 5}
               k6 {:a 6, :c 6}})]
     (testing "full removals"
-      (is (nil? (part/update-partitions!
-                  store params
-                  [[(mdag/link "B" p1) [[k5 ::patch/tombstone]
-                                        [k6 ::patch/tombstone]]]])))
-      (is (nil? (part/update-partitions!
-                  store params
-                  [[(tablet/from-records [[k5 {}] [k6 {}]])
-                    [[k5 ::patch/tombstone]
-                     [k6 ::patch/tombstone]]]]))))
+      (is (empty? (part/update-partitions!
+                    store params nil
+                    [[(mdag/link "B" p1) [[k5 ::patch/tombstone]
+                                          [k6 ::patch/tombstone]]]])))
+      (is (empty? (part/update-partitions!
+                    store params nil
+                    [[(tablet/from-records [[k5 {}] [k6 {}]])
+                      [[k5 ::patch/tombstone]
+                       [k6 ::patch/tombstone]]]]))))
     (testing "underflow to virtual tablet"
       (let [vt (part/update-partitions!
-                 store params
+                 store params nil
                  [[(mdag/link "B" p1) [[k6 ::patch/tombstone]]]])]
         (is (= tablet/data-type (:data/type vt)))
         (is (= [[k5 {:x 5, :d 5}]] (tablet/read-all vt)))))
     (testing "pass-through logic"
       (is (= [p0] (part/update-partitions!
-                    store params
+                    store params nil
                     [[(mdag/link "A" p0) []]])))
       (let [vt (tablet/from-records [[k5 {}]])]
         (is (= vt (part/update-partitions!
-                    store params
+                    store params nil
                     [[vt []]])))))
     (testing "unchanged data"
       (is (= [p0] (part/update-partitions!
-                    store params
+                    store params nil
                     [[(mdag/link "A" p0) [[k1 ::patch/tombstone]]]])))
       (let [vt (tablet/from-records [[k5 {}]])]
         (is (= vt (part/update-partitions!
-                    store params
+                    store params nil
                     [[vt [[k5 {}]]]])))))
     (testing "pending overflow"
       (let [[a b :as parts]
               (part/update-partitions!
-                store params
+                store params nil
                 [[(mdag/link "A" p0)
                   [[k1 {:a 1}]
                    [k3 {:b 3}]
@@ -231,7 +239,7 @@
     (testing "final underflow"
       (let [[a :as parts]
               (part/update-partitions!
-                store params
+                store params nil
                 [[(mdag/link "A" p0) []]
                  [(mdag/link "B" p1) [[k5 ::patch/tombstone]]]])]
         (is (= 1 (count parts)))

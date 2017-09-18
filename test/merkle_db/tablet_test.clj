@@ -10,6 +10,14 @@
   (tablet/from-records []))
 
 
+(deftest tablet-predicate
+  (is (not (tablet/tablet? "foo")))
+  (is (not (tablet/tablet? [123 456])))
+  (is (not (tablet/tablet? {})))
+  (is (not (tablet/tablet? {:data/type :foo/bar})))
+  (is (tablet/tablet? {:data/type tablet/data-type})))
+
+
 (deftest key-reads
   (let [k1 (key/create [1 2 3])
         r1 {:foo 123}

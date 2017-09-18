@@ -18,16 +18,24 @@
       [key :as key]
       [patch :as patch]
       [record :as record]
-      [tablet :as tablet])))
+      [tablet :as tablet :refer [tablet?]])))
 
 
 (def ^:const data-type
   "Value of `:data/type` that indicates a partition node."
   :merkle-db/partition)
 
+
 (def default-limit
   "The default number of records to build partitions up to."
   10000)
+
+
+(defn partition?
+  "Determines whether the value is partition node data."
+  [x]
+  (and (map? x) (= data-type (:data/type x))))
+
 
 ;; Maximum number of records to allow in each partition.
 (s/def ::limit pos-int?)
@@ -48,13 +56,13 @@
                   ::record/families
                   ::record/first-key
                   ::record/last-key])
-    #(= data-type (:data/type %))))
+    partition?))
 
 
 
 ;; ## Construction Functions
 
-; TODO: make this private
+; TODO: make this private and eager
 (defn ^:no-doc partition-limited
   "Returns a sequence of partitions of the elements of `coll` such that:
   - No partition has more than `limit` elements
@@ -254,24 +262,51 @@
     tablet))
 
 
+(defn- finish-update
+  "Finalize an update by ensuring any remaining pending records are emitted.
+  Returns an updated result vector with serialized partition data, or a
+  virtual tablet if not enough record are left."
+  [store params half-full result pending]
+  (cond
+    ; No pending data to handle, we're done.
+    (nil? pending)
+      result
+
+    ; Not enough records left to create a valid partition!
+    (< (count (tablet/read-all pending)) half-full)
+      (if-let [prev (peek result)]
+        ; Load last result link and redistribute into two valid partitions.
+        (->> (join-tablets store prev pending)
+             (tablet/read-all)
+             (partition-records store params)
+             (into (pop result)))
+        ; No siblings, so return virtual tablet for carrying.
+        pending)
+
+    ; Enough records to make one or more valid partitions.
+    :else
+      (->> (tablet/read-all pending)
+           (partition-records store params)
+           (into result))))
+
+
 (defn update-partitions!
-  "Consume a sequence of tuples containing partitions and associated patch
-  changes to return an updated sequence of partitions. Each tuple has the form
-  `[partition-data changes]`. The partition data may be either a link
-  to an existing node or a virtual tablet which was carried into the inputs.
+  "Apply patch changes to a sequence of partitions and redistribute the results
+  to create a new sequence of valid, updated partitions. Each input tuple
+  should have the form `[partition changes]`, and `carry` may be a
+  forward-carried partition or virtual tablet.
 
-  The result of the update is one of:
-
-  - `nil` if all partitions were removed by the changes.
-  - A virtual tablet if there are not enough records in the result to create a
-    valid half-full partition.
-  - A sequence of data for the serialized partitions."
-  [store params inputs]
+  Returns a sequence of updated valid stored partitions, or a virtual tablet if
+  there were not enough records in the result to create a valid partition. The
+  sequence of partitions may be empty if all records were removed."
+  [store params carry inputs]
   (let [limit (::limit params default-limit)
         half-full (int (Math/ceil (/ limit 2)))]
     (loop [result []
-           pending nil
-           inputs inputs]
+           pending (when (tablet? carry) carry)
+           inputs (if (partition? carry)
+                    (cons [carry nil] inputs)
+                    inputs)]
       (if (seq inputs)
         ; Process next partition in the sequence.
         (let [[part changes] (first inputs)]
@@ -279,6 +314,7 @@
             ; No pending records or changes, so use "pass through" logic.
             (if (mdag/link? part)
               ; No changes to the stored partition, add directly to result.
+              ; FIXME: this will allow invalid partitions if the partition limit has changed!
               (recur (conj result (graph/get-link! store part))
                      nil
                      (next inputs))
@@ -296,6 +332,7 @@
                 (= tablet tablet')
                   (if (mdag/link? part)
                     ; Original linked partition remains unchanged by update.
+                    ; FIXME: this will allow invalid partitions if the partition limit has changed!
                     (recur (conj result (graph/get-link! store part))
                            nil
                            (next inputs))
@@ -321,27 +358,7 @@
                   (recur result tablet' (next inputs))))))
 
         ; No more partitions to process.
-        (cond
-          ; No pending data to handle, we're done.
-          (nil? pending)
-            (not-empty result)
-
-          ; Not enough records left to create a valid partition!
-          (< (count (tablet/read-all pending)) half-full)
-            (if-let [prev (peek result)]
-              ; Load last result link and redistribute into two valid partitions.
-              (->> (join-tablets store prev pending)
-                   (tablet/read-all)
-                   (partition-records store params)
-                   (into (pop result)))
-              ; No siblings, so return virtual tablet for carrying.
-              pending)
-
-          ; Enough records to make one or more valid partitions.
-          :else
-            (->> (tablet/read-all pending)
-                 (partition-records store params)
-                 (into result)))))))
+        (finish-update store params half-full result pending)))))
 
 
 (defn update-root!
@@ -353,3 +370,9 @@
       result
       (when result
         [(from-records store params (tablet/read-all result))]))))
+
+
+; XXX: In the carry-backward case with a virtual tablet, we need to load the
+; last partition, borrow records to fill out the tablet, and write out two
+; partitions. In the carry-backward case with a partition, we just append it
+; to the list of child partitions. (probably make this a separate function)

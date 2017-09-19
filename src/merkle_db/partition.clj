@@ -300,6 +300,22 @@
         [result (tablet/from-records records)]))))
 
 
+(defn- join-last-part
+  "Combines a sequence of partitions and a trailing virtual tablet to produce a
+  valid final sequence of partitions. Returns the updated sequence, or a
+  virtual tablet for carrying."
+  [store params parts tablet]
+  (let [parts (vec parts)]
+    (if-let [prev (peek parts)]
+      ; Load last partition and redistribute into two valid partitions.
+      (->> (tablet/read-all tablet)
+           (concat (read-all store prev nil))
+           (partition-records store params)
+           (into (pop parts)))
+      ; No siblings, so return virtual tablet for carrying.
+      tablet)))
+
+
 (defn- flush-updates
   "Finalize an update by ensuring any remaining pending records are emitted.
   Returns an updated result vector with serialized partition data, or a
@@ -312,14 +328,7 @@
 
     ; Not enough records left to create a valid partition!
     (< (count (tablet/read-all pending)) (min-limit params))
-      (if-let [prev (peek result)]
-        ; Load last result link and redistribute into two valid partitions.
-        (->> (tablet/read-all pending)
-             (concat (read-all store prev nil))
-             (partition-records store params)
-             (into (pop result)))
-        ; No siblings, so return virtual tablet for carrying.
-        pending)
+      (join-last-part store params result pending)
 
     ; Enough records to make one or more valid partitions.
     :else
@@ -384,13 +393,24 @@
   updated partitions."
   [store params part changes]
   (let [result (update-partitions! store params [[part changes]])]
-    (if (sequential? result)
-      result
-      (when result
-        [(from-records store params (tablet/read-all result))]))))
+    (if (tablet? result)
+      [(from-records store params (tablet/read-all result))]
+      result)))
 
 
-; XXX: In the carry-backward case with a virtual tablet, we need to load the
-; last partition, borrow records to fill out the tablet, and write out two
-; partitions. In the carry-backward case with a partition, we just append it
-; to the list of child partitions. (probably make this a separate function)
+(defn carry-backward
+  "Carry an orphaned node back from later in the tree. Returns the updated
+  sequence of partitions."
+  [store params parts carry]
+  (cond
+    (nil? carry)
+      parts
+
+    (tablet? carry)
+      (join-last-part store params parts carry)
+
+    (partition? carry)
+      (conj (vec parts) carry)
+
+    :else
+      (throw (IllegalArgumentException. (str "Illegal carry type: " (:data/type carry))))))

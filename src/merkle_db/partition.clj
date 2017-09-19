@@ -26,11 +26,6 @@
   :merkle-db/partition)
 
 
-(def default-limit
-  "The default number of records to build partitions up to."
-  10000)
-
-
 (defn partition?
   "Determines whether the value is partition node data."
   [x]
@@ -57,6 +52,38 @@
                   ::record/first-key
                   ::record/last-key])
     partition?))
+
+
+
+;; ## Partition Limits
+
+(def default-limit
+  "The default number of records to build partitions up to."
+  10000)
+
+
+(defn max-limit
+  "Return the maximum size a valid partition can have given the parameters."
+  [params]
+  (::limit params default-limit))
+
+
+(defn min-limit
+  "Return the minimum size a valid partition can have given the parameters."
+  [params]
+  (int (Math/ceil (/ (max-limit params) 2))))
+
+
+(defn overflow?
+  "Return true if the given partition is overflowing the limit."
+  [params part]
+  (< (max-limit params) (::record/count part)))
+
+
+(defn underflow?
+  "Return true if the given partition is underflowing the limit."
+  [params part]
+  (< (::record/count part) (min-limit params)))
 
 
 
@@ -107,7 +134,7 @@
   the node data for the persisted partition."
   [store params records]
   (let [records (vec (sort-by first (patch/remove-tombstones records))) ; TODO: don't sort?
-        limit (or (::limit params) default-limit)
+        limit (max-limit params)
         families (or (::record/families params) {})]
     (when (< limit (count records))
       (throw (ex-info
@@ -138,7 +165,7 @@
   [store params records]
   (->> records
        (patch/remove-tombstones)
-       (partition-limited (::limit params default-limit))
+       (partition-limited (max-limit params))
        (mapv #(from-records store params %))))
 
 
@@ -230,17 +257,15 @@
 
 ;; ## Update Functions
 
-; TODO: find better pattern than passing limit and half-full around :\
-
 (defn- check-partition
   "Check a partition for validity under the current parameters. Returns a tuple
   containing output valid partitions and a new virtual tablet, if needed."
-  [store params limit half-full part]
+  [store params part]
   (cond
-    (< (::record/count part) half-full)
+    (underflow? params part)
       [nil (tablet/from-records (read-all store part nil))]
 
-    (or (< limit (::record/count part))
+    (or (overflow? params part)
         (not= (::record/families part)
               (::record/families params)))
       [(partition-records store params (read-all store part nil)) nil]
@@ -262,30 +287,31 @@
   "Chop up some pending records in a virtual tablet into full valid partitions.
   Returns a tuple containing a vector of serialized partitions and a virtual
   tablet containing any remaining records."
-  [store params threshold part-size pending]
-  (loop [result []
-         records (tablet/read-all pending)]
-    (if (<= threshold (count records))
-      ; Serialize a full partition using the pending records.
-      (let [[output remnant] (split-at part-size records)
-            part (from-records store params output)]
-        (recur (conj result part) remnant))
-      ; Not enough to guarantee validity, so continue.
-      [result (tablet/from-records records)])))
+  [store params threshold pending]
+  (let [part-size (max-limit params)]
+    (loop [result []
+           records (tablet/read-all pending)]
+      (if (<= threshold (count records))
+        ; Serialize a full partition using the pending records.
+        (let [[output remnant] (split-at part-size records)
+              part (from-records store params output)]
+          (recur (conj result part) remnant))
+        ; Not enough to guarantee validity, so continue.
+        [result (tablet/from-records records)]))))
 
 
-(defn- finish-update
+(defn- flush-updates
   "Finalize an update by ensuring any remaining pending records are emitted.
   Returns an updated result vector with serialized partition data, or a
   virtual tablet if not enough record are left."
-  [store params half-full result pending]
+  [store params result pending]
   (cond
     ; No pending data to handle, we're done.
     (nil? pending)
       result
 
     ; Not enough records left to create a valid partition!
-    (< (count (tablet/read-all pending)) half-full)
+    (< (count (tablet/read-all pending)) (min-limit params))
       (if-let [prev (peek result)]
         ; Load last result link and redistribute into two valid partitions.
         (->> (tablet/read-all pending)
@@ -312,10 +338,7 @@
   there were not enough records in the result to create a valid partition. The
   sequence of partitions may be empty if all records were removed."
   [store params carry inputs]
-  (let [limit (::limit params default-limit)
-        half-full (int (Math/ceil (/ limit 2)))
-        emit-threshold (+ limit half-full)
-        emit-size limit]
+  (let [emit-threshold (+ (max-limit params) (min-limit params))]
     (loop [result []
            pending (when (tablet? carry) carry)
            inputs (if (partition? carry)
@@ -326,7 +349,7 @@
         (let [[part changes] (first inputs)]
           (if (and (nil? pending) (empty? changes))
             ; No pending records or changes, so use "pass through" logic.
-            (let [[parts pending] (check-partition store params limit half-full part)]
+            (let [[parts pending] (check-partition store params part)]
               (recur (into result parts) pending (next inputs)))
 
             ; Load partition data or use virtual tablet records.
@@ -340,12 +363,12 @@
                 ; Original partition data was unchanged by updates.
                 (= tablet tablet')
                   ; Original linked partition remains unchanged by update.
-                  (let [[parts pending] (check-partition store params limit half-full part)]
+                  (let [[parts pending] (check-partition store params part)]
                     (recur (into result parts) pending (next inputs)))
 
                 ; Accumulated enough records to output full partitions.
-                (<= (+ limit half-full) (count (tablet/read-all tablet')))
-                  (let [[parts pending] (emit-parts store params emit-threshold emit-size tablet')]
+                (<= emit-threshold (count (tablet/read-all tablet')))
+                  (let [[parts pending] (emit-parts store params emit-threshold tablet')]
                     (recur (into result parts) pending (next inputs)))
 
                 ; Not enough data to output a partition yet, keep pending.
@@ -353,7 +376,7 @@
                   (recur result tablet' (next inputs))))))
 
         ; No more partitions to process.
-        (finish-update store params half-full result pending)))))
+        (flush-updates store params result pending)))))
 
 
 (defn update-root!

@@ -119,26 +119,26 @@
 
 ;; ## Read Functions
 
-(defn- assign-keys
-  "Assigns record keys to the children of this node which they would belong
-  to. Returns a sequence of vectors containing the child index and a sequence
-  of record keys, only including children which had keys assigned."
-  [index record-keys]
+(defn- assign-records
+  "Assigns records to the children of this node which they would belong
+  to. Returns a sequence of vectors containing each child link and a collection
+  of the record tuples, if any."
+  [index records]
   (loop [assignments []
          children (::children index)
          split-keys (::keys index)
-         pending-keys (sort (set record-keys))]
-    (if (seq pending-keys)
+         pending (sort-by first records)]
+    (if (seq pending)
       (if (seq split-keys)
         ; Take next batch of keys.
         (let [split (first split-keys)
-              [in after] (split-with #(key/before? % split) pending-keys)
-              assignments' (if (seq in)
-                             (conj assignments [(first children) in])
-                             assignments)]
-          (recur assignments' (next children) (next split-keys) after))
+              [in after] (split-with #(key/before? (first %) split) pending)]
+          (recur (conj assignments [(first children) (not-empty in)])
+                 (next children)
+                 (next split-keys)
+                 after))
         ; No more splits, emit one final group with remaining keys.
-        (conj assignments [(first children) pending-keys]))
+        (conj assignments [(first children) pending]))
       ; No more record keys to assign.
       assignments)))
 
@@ -189,10 +189,11 @@
     data-type
       (mapcat
         (fn read-child
-          [[child-link child-keys]]
-          (let [child (graph/get-link! store node child-link)]
-            (read-batch store child fields child-keys)))
-        (assign-keys node record-keys))
+          [[child-link record-keys]]
+          (when (seq record-keys)
+            (let [child (graph/get-link! store node child-link)]
+              (read-batch store child fields (map first record-keys)))))
+        (assign-records node (map vector record-keys)))
 
     part/data-type
       (part/read-batch store node fields record-keys)
@@ -234,160 +235,65 @@
 
 ;; ## Update Functions
 
-(defn- group-changes
-  "Divide up a sorted sequence of changes into a lazy sequence of tuples of
-  the first key in the subtree, the child link, and the associated changes, if
-  any."
-  [child-keys child-links changes]
-  (lazy-seq
-    (when (seq child-links)
-      (if (seq changes)
-        (let [next-key (first child-keys)
-              [group more-changes]
-                (if next-key
-                  (split-with #(key/before? (first %) next-key) changes)
-                  [changes nil])]
-          (cons
-            [(first child-links) (seq group)]
-            (group-changes (next child-keys)
-                           (next child-links)
-                           more-changes)))
-        ; No more changes
-        (map vector child-keys)))))
-
-
-(defn- redistribute-children
-  "... accumulates child nodes and outputs valid nodes as necessary. Input
-  values should be a vector of `[first-key link-or-candidate]`."
-  [store limit count-children merge-nodes]
-  (let [half-full (int (Math/ceil (/ limit 2)))
-        valid? #(or (mdag/link? %) (<= half-full (count-children %) limit))]
-    (fn [xf]
-      (fn
-        ([]
-         [(xf) nil nil])
-        ([[result prev curr]]
-         (cond
-           ; Current node is first in sequence.
-           (nil? prev)
-             (if curr
-               ; Output only child node.
-               (xf (xf (unreduced result) curr))
-               ; No further children to process.
-               (xf result))
-
-           ; Two valid children, output directly.
-           (valid? curr)
-             (-> (unreduced result)
-                 (xf prev)
-                 (xf curr)
-                 (xf))
-
-           ; Final child is underflowing, merge with prev.
-           :else
-             (reduce
-               xf
-               (unreduced result)
-               (merge-nodes
-                 (if (mdag/link? prev)
-                   (graph/get-link! store prev)
-                   prev)
-                 curr))))
-        ([[result prev curr] [first-key child]]
-         ; case [prev curr] input
-         ; [nil nil]
-         ; Input becomes current node unless it's an overflow, in which case it
-         ; is split into multiple conforming nodes.
-         ; TODO: might be more optimal to keep an overflowing node in curr,
-         ; but would require changes to flush above.
-         ;
-         ; [nil link]
-         ; - link => [link link]
-         ; - underflow => [link underflow]
-         ; - candidate => [link candidate]
-         ; - overflow => split nodes, output all but last two candidates
-         ;
-         ; [nil underflow]
-         ; - link => load link, merge with underflowing node
-         ; - underflow => merge with current
-         ; - candidate => redistribute with current
-         ; - overflow => redistribute with current
-         ;
-         ; [nil candidate]
-         ; - link
-         ; - underflow
-         ; - candidate
-         ; - overflow
-         ;
-         ; [link link]
-         ; - link
-         ; - underflow
-         ; - candidate
-         ; - overflow
-         ;
-         ; [link underflow]
-         ; - link
-         ; - underflow
-         ; - candidate
-         ; - overflow
-         ,,,)))))
-
-
-(defn- update-index-node
-  [store params carry [node-link changes]]
-  (if (seq changes)
-    (let [index (graph/get-link! store node-link)
-          child-changes (group-changes
-                          (::keys index)
-                          (::children index)
-                          changes)]
-      (if (= 1 (::height index))
-        ; Update children as partitions.
-        (let [children (part/update-partitions! store params child-changes)]
-          ; if carry is a virtual tablet, merge with children
-          ; if carry is a partition, add it to the front (or back?) of changes list
-          ; otherwise, not valid to have a carry here
-          (prn :update-index-partitions children)
-          (if (sequential? children)
-            (if (= 1 (count children))
-              ; Single partition to carry up the tree.
-              (first children)
-              (let [child-keys (into [] (comp (drop 1) (map ::record/first-key)) children)
-                    child-links (into [] (map #(mdag/link "part" (meta %))) children)
-                    record-count (reduce + 0 (map ::record/count children))]
-                (assoc index
-                       ::keys child-keys
-                       ::children child-links
-                       ::record/count record-count
-                       ::record/first-key (::record/first-key (first children))
-                       ::record/last-key (::record/last-key (peek children)))))
-            ; Virtual tablet, return for carrying.
-            children))
-        ; Update child index nodes.
-        (let [; if carry is an index subtree and the height is one less than
-              ; ours, adopt it as a child with no changes. Otherwise, carry it
-              ; into the update for the relevant child.
-              children (mapv #(update-index-node store params nil %) child-changes)
-              ; TODO: redistribute children
-              child-keys (into [] (comp (drop 1) (map ::record/first-key)) children)
-              record-count (reduce + 0 (map ::record/count children))]
-          (prn :update-index-children children)
-          (assoc index
-                 ::keys child-keys
-                 ::children children
-                 ::record/count record-count
-                 ::record/first-key (::record/first-key (first children))
-                 ::record/last-key (::record/last-key (peek children))))))
-    ; No changes, return unchanged node.
-    (graph/get-link! store node-link)))
-
-
-(defn- relink-children
-  "Rewrite a vector of childen into numbered links."
+(defn- numbered-child-links
+  "Write a vector of childen into numbered links."
   [children]
   (into []
         (map-indexed #(mdag/link (format "%03d" %1) %2))
         children))
+
+
+(defn- index-children
+  "Aggregates index node values from a sequence of child data."
+  [children]
+  (let [ckeys (into [] (map ::record/first-key) (rest children))
+        links (numbered-child-links children)
+        record-count (reduce + 0 (map ::record/count children))]
+    {::keys ckeys
+     ::children links
+     ::record/count record-count
+     ::record/first-key (::record/first-key (first children))
+     ::record/last-key (::record/last-key (last children))}))
+
+
+(defn- update-index-children!
+  "Apply changes to a sequence of intermediate index nodes and redistribute the
+  results to create a new sequence of valid indexes. Each input tuple should
+  have the form `[index changes]`, and `carry` may be a forward-carried index
+  subtree or partition that is **not** a direct descendant of the parent node.
+
+  Returns a sequence of updated and valid (but unpersisted) index nodes, or a
+  direct map of node data to carry forward."
+  [store params carry inputs]
+  ,,,)
+
+
+(defn- update-index-node
+  [store params carry [index changes]]
+  (if (seq changes)
+    (let [child-changes (map (juxt #(graph/get-link! store index (first %)) second)
+                             (assign-records index changes))
+          children (if (= 1 (::height index))
+                     ; Update children as partitions.
+                     (part/update-partitions! store params carry child-changes)
+                     ; Update child index nodes.
+                     (if (and (= data-type (:data/type carry))
+                              (= (dec (::height index)) (::height carry)))
+                       ; Adopt the carried index subtree by prepending it to the results.
+                       (update-index-children! store params nil (cons [carry nil] child-changes))
+                       ; No carry, or carry is not a direct child.
+                       (update-index-children! store params carry child-changes)))]
+      (if (sequential? children)
+        (if (= 1 (count children))
+          ; Orphaned child, return directly for carrying.
+          (first children)
+          ; Construct index node from partitions.
+          ; FIXME: needs to break into multiple nodes on overflow
+          [(merge index (index-children children))])
+        ; Carried node, return for further carrying.
+        children))
+    ; No changes, return unchanged node.
+    [index]))
 
 
 (defn update-tree
@@ -422,7 +328,7 @@
                   node
                   (->> (::children node)
                        (map store!)
-                       (relink-children)
+                       (numbered-child-links)
                        (assoc node ::children)
                        (mdag/store-node! store nil)
                        (::node/data))))]

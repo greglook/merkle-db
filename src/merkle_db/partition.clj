@@ -1,11 +1,7 @@
 (ns merkle-db.partition
   "Partitions contain non-overlapping ranges of the records witin a table.
   Partition nodes contain metadata about the contained records and links to the
-  tablets where the data for each field family is stored.
-
-  Some functions in this namespace use the term 'virtual tablet' to mean a
-  tablet map in memory which contains the full record data for a partition.
-  They are used as temporary ways to represent unserialized record data."
+  tablets where the data for each field family is stored."
   (:require
     [clojure.future :refer [pos-int?]]
     [clojure.spec :as s]
@@ -255,148 +251,122 @@
 
 ;; ## Update Functions
 
-(defn- check-partition
-  "Check a partition for validity under the current parameters. Returns a tuple
-  containing output valid partitions and a new virtual tablet, if needed."
-  [store params part]
-  (cond
-    (underflow? params part)
-      [nil (tablet/from-records (read-all store part nil))]
-
-    (or (overflow? params part)
-        (not= (::record/families part)
-              (::record/families params)))
-      [(partition-records store params (read-all store part nil)) nil]
-
-    :else
-      [[part] nil]))
-
-
-(defn- apply-patch
-  "Performs an update on the tablet by applying the patch changes. Returns an
-  updated tablet, or nil if the result was empty."
-  [changes tablet]
-  (->> (tablet/read-all tablet)
-       (patch/patch-seq (sort-by first changes))
-       (tablet/from-records)))
-
-
 (defn- emit-parts
-  "Chop up some pending records in a virtual tablet into full valid partitions.
-  Returns a tuple containing a vector of serialized partitions and a virtual
-  tablet containing any remaining records."
+  "Chop up some pending records into full valid partitions. Returns a tuple
+  containing a vector of serialized partitions and a vector containing any
+  remaining records."
   [store params threshold pending]
   (let [part-size (max-limit params)]
     (loop [result []
-           records (tablet/read-all pending)]
+           records pending]
       (if (<= threshold (count records))
         ; Serialize a full partition using the pending records.
         (let [[output remnant] (split-at part-size records)
               part (from-records store params output)]
           (recur (conj result part) remnant))
         ; Not enough to guarantee validity, so continue.
-        [result (tablet/from-records records)]))))
+        [result records]))))
 
 
 (defn- join-last-part
-  "Combines a sequence of partitions and a trailing virtual tablet to produce a
-  valid final sequence of partitions. Returns the updated sequence, or a
-  virtual tablet for carrying."
-  [store params parts tablet]
-  (let [parts (vec parts)]
-    (if-let [prev (peek parts)]
-      ; Load last partition and redistribute into two valid partitions.
-      (->> (tablet/read-all tablet)
-           (concat (read-all store prev nil))
-           (partition-records store params)
-           (into (pop parts)))
-      ; No siblings, so return virtual tablet for carrying.
-      tablet)))
+  "Combines a non-empty vector of partitions and some trailing records to
+  produce a valid final sequence of partitions. Returns the updated sequence."
+  [store params parts pending]
+  (->> pending
+       (concat (read-all store (peek parts) nil))
+       (partition-records store params)
+       (into (pop parts))))
 
 
 (defn- flush-updates
   "Finalize an update by ensuring any remaining pending records are emitted.
-  Returns an updated result vector with serialized partition data, or a
-  virtual tablet if not enough record are left."
+  Returns a height 0 result tuple with serialized partition data, or a -1
+  result with records if not enough are left."
   [store params result pending]
   (cond
     ; No pending data to handle, we're done.
-    (nil? pending)
-      result
+    (empty? pending)
+      (when (seq result)
+        [0 result])
 
     ; Not enough records left to create a valid partition!
-    (< (count (tablet/read-all pending)) (min-limit params))
-      (join-last-part store params result pending)
+    (< (count pending) (min-limit params))
+      (if (empty? result)
+        [-1 pending]
+        [0 (join-last-part store params result pending)])
 
     ; Enough records to make one or more valid partitions.
     :else
-      (->> (tablet/read-all pending)
-           (partition-records store params)
-           (into result))))
+      [0 (into result (partition-records store params pending))]))
 
 
 (defn update-partitions!
   "Apply patch changes to a sequence of partitions and redistribute the results
   to create a new sequence of valid, updated partitions. Each input tuple
-  should have the form `[partition changes]`, and `carry` may be a
-  forward-carried partition or virtual tablet.
+  should have the form `[partition changes]`, where changes **must be sorted**
+  by key. `carry` may be a result tuple with height 0 and a vector of
+  partitions, or height -1 and a vector of records.
 
-  Returns a sequence of updated valid stored partitions, or a virtual tablet if
-  there were not enough records in the result to create a valid partition. The
-  sequence of partitions may be empty if all records were removed."
+  Returns a result tuple with height 0 and a sequence of updated, valid, stored
+  partitions, or tuple with height -1 and a sequence of records if there were
+  not enough records in the result to create a valid partition. The sequence of
+  partitions may be empty if all records were removed."
   [store params carry inputs]
+  (when (and carry (pos? (first carry)))
+    (throw (IllegalArgumentException.
+             (str "Cannot carry index subtrees into a partition update: "
+                  (pr-str carry)))))
   (let [emit-threshold (+ (max-limit params) (min-limit params))]
-    (loop [result []
-           pending (when (tablet? carry) carry)
-           inputs (if (partition? carry)
-                    (cons [carry nil] inputs)
-                    inputs)]
+    (loop [outputs (if (and carry (zero? (first carry)))
+                     (vec (second carry))
+                     [])
+           pending (when (and carry (neg? (first carry)))
+                     (vec (second carry)))
+           inputs inputs]
       (if (seq inputs)
         ; Process next partition in the sequence.
         (let [[part changes] (first inputs)]
           (if (and (nil? pending) (empty? changes))
             ; No pending records or changes, so use "pass through" logic.
-            (let [[parts pending] (check-partition store params part)]
-              (recur (into result parts) pending (next inputs)))
+            (recur (conj outputs part) nil (next inputs))
 
-            ; Load partition data or use virtual tablet records.
-            (let [tablet (tablet/from-records (read-all store part nil))
-                  tablet' (tablet/join pending (apply-patch changes tablet))]
+            ; Load partition data or use pending records.
+            (let [records (read-all store part nil)
+                  records' (concat pending (patch/patch-seq changes records))]
               (cond
                 ; All data was removed from the partition.
-                (empty? (tablet/read-all tablet'))
-                  (recur result nil (next inputs))
+                (empty? records')
+                  (recur outputs nil (next inputs))
 
                 ; Original partition data was unchanged by updates.
-                (= tablet tablet')
-                  ; Original linked partition remains unchanged by update.
-                  (let [[parts pending] (check-partition store params part)]
-                    (recur (into result parts) pending (next inputs)))
+                (= records records')
+                  (recur (conj outputs part) nil (next inputs))
 
                 ; Accumulated enough records to output full partitions.
-                (<= emit-threshold (count (tablet/read-all tablet')))
-                  (let [[parts pending] (emit-parts store params emit-threshold tablet')]
-                    (recur (into result parts) pending (next inputs)))
+                (<= emit-threshold (count records'))
+                  (let [[parts pending] (emit-parts store params emit-threshold records')]
+                    (recur (into outputs parts) pending (next inputs)))
 
                 ; Not enough data to output a partition yet, keep pending.
                 :else
-                  (recur result tablet' (next inputs))))))
+                  (recur outputs records' (next inputs))))))
 
         ; No more partitions to process.
-        (flush-updates store params result pending)))))
+        (flush-updates store params outputs pending)))))
 
 
+; TODO: needed?
 (defn update-root!
   "Apply changes to a partition root node, returning a sequence of
   updated partitions."
   [store params part changes]
   (let [result (update-partitions! store params [[part changes]])]
-    (if (tablet? result)
-      [(from-records store params (tablet/read-all result))]
+    (if (neg? (first result))
+      [0 [(from-records store params (second result))]]
       result)))
 
 
-(defn carry-backward
+(defn carry-back
   "Carry an orphaned node back from later in the tree. Returns the updated
   sequence of partitions."
   [store params parts carry]
@@ -404,11 +374,12 @@
     (nil? carry)
       parts
 
-    (tablet? carry)
+    (neg? (first carry))
       (join-last-part store params parts carry)
 
-    (partition? carry)
+    (zero? (first carry))
       (conj (vec parts) carry)
 
     :else
-      (throw (IllegalArgumentException. (str "Illegal carry type: " (:data/type carry))))))
+      (throw (IllegalArgumentException.
+               (str "Illegal carry type: " (pr-str carry))))))

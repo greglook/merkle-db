@@ -82,7 +82,7 @@
            (record-seq [seq-a seq-b seq-c])))))
 
 
-(deftest partition-construction
+(deftest partition-properties
   (let [store (mdag/init-store :types graph/codec-types)
         k0 (key/create [0 1 2])
         k1 (key/create [1 2 3])
@@ -184,31 +184,32 @@
              {k5 {:x 5, :d 5}
               k6 {:a 6, :c 6}})]
     (testing "full removals"
-      (is (empty? (part/update-partitions!
-                    store params nil
-                    [[p1 [[k5 ::patch/tombstone]
-                          [k6 ::patch/tombstone]]]])))
-      (is (empty? (part/update-partitions!
-                    store params nil
-                    [[(part/from-records store params [[k5 {}] [k6 {}]])
-                      [[k5 ::patch/tombstone]
-                       [k6 ::patch/tombstone]]]]))))
-    (testing "underflow to virtual tablet"
-      (let [vt (part/update-partitions!
-                 store params nil
-                 [[p1 [[k6 ::patch/tombstone]]]])]
-        (is (= tablet/data-type (:data/type vt)))
-        (is (= [[k5 {:x 5, :d 5}]] (tablet/read-all vt)))))
+      (is (nil? (part/update-partitions!
+                  store params nil
+                  [[p1 [[k5 ::patch/tombstone]
+                        [k6 ::patch/tombstone]]]])))
+      (is (nil? (part/update-partitions!
+                  store params nil
+                  [[(part/from-records store params [[k5 {}] [k6 {}]])
+                    [[k5 ::patch/tombstone]
+                     [k6 ::patch/tombstone]]]]))))
+    (testing "underflow to carried records"
+      (is (= [-1 [[k5 {:x 5, :d 5}]]]
+             (part/update-partitions!
+               store params nil
+               [[p1 [[k6 ::patch/tombstone]]]]))))
     (testing "pass-through logic"
-      (is (= [p0] (part/update-partitions!
-                    store params nil
-                    [[p0 []]]))))
+      (is (= [0 [p0]]
+             (part/update-partitions!
+               store params nil
+               [[p0 []]]))))
     (testing "unchanged data"
-      (is (= [p0] (part/update-partitions!
-                    store params nil
-                    [[p0 [[k1 ::patch/tombstone]]]]))))
+      (is (= [0 [p0]]
+             (part/update-partitions!
+               store params nil
+               [[p0 [[k1 ::patch/tombstone]]]]))))
     (testing "pending overflow"
-      (let [[a b :as parts]
+      (let [[height [a b :as parts]]
               (part/update-partitions!
                 store params nil
                 [[p0
@@ -217,6 +218,7 @@
                    [k5 {:c 5}]
                    [k6 {:d 6}]
                    [k7 {:e 7}]]]])]
+        (is (zero? height))
         (is (= 2 (count parts)))
         (is (= [[k0 {:c 0, :a 0, :x 0, :y 0}]
                 [k1 {:a 1}]
@@ -229,17 +231,52 @@
                 [k7 {:e 7}]]
                (part/read-all store b nil)))))
     (testing "final underflow"
-      (let [[a :as parts]
+      (let [[height [a :as parts]]
               (part/update-partitions!
                 store params nil
                 [[p0 []]
                  [p1 [[k5 ::patch/tombstone]]]])]
+        (is (zero? height))
         (is (= 1 (count parts)))
         (is (= [[k0 {:c 0, :a 0, :x 0, :y 0}]
                 [k2 {:c 1, :d 1, :x 1}]
                 [k4 {:d 4, :z 4}]
                 [k6 {:a 6, :c 6}]]
-               (part/read-all store a nil)))))))
+               (part/read-all store a nil)))))
+    (testing "bad carry"
+      (is (thrown? IllegalArgumentException
+            (part/update-partitions! store params [1 [:x]] [[p0 []]]))))
+    (testing "partition carry"
+      (let [[height [a b :as parts]]
+              (part/update-partitions!
+                store params
+                [0 [p0]]
+                [[p1 [[k7 {:e 7}]]]])]
+        (is (zero? height))
+        (is (= 2 (count parts)))
+        (is (= [[k0 {:c 0, :a 0, :x 0, :y 0}]
+                [k2 {:c 1, :d 1, :x 1}]
+                [k4 {:d 4, :z 4}]]
+               (part/read-all store a nil)))
+        (is (= [[k5 {:d 5, :x 5}]
+                [k6 {:a 6, :c 6}]
+                [k7 {:e 7}]]
+               (part/read-all store b nil)))))
+    (testing "tablet carry"
+      (let [[height [a b :as parts]]
+              (part/update-partitions!
+                store params
+                [-1 [[k0 {:a 0}] [k1 {:b 1}]]]
+                [[p1 [[k7 {:e 7}]]]])]
+        (is (zero? height))
+        (is (= 2 (count parts)))
+        (is (= [[k0 {:a 0}]
+                [k1 {:b 1}]]
+               (part/read-all store a nil)))
+        (is (= [[k5 {:d 5, :x 5}]
+                [k6 {:a 6, :c 6}]
+                [k7 {:e 7}]]
+               (part/read-all store b nil)))))))
 
 
 
@@ -251,7 +288,7 @@
   (set (mapcat (comp keys second) (tablet/read-all tablet))))
 
 
-(deftest ^:generative partition-behavior
+(deftest ^:generative partition-construction
   (checking "valid properties" 20
     [[field-keys families records] mdgen/data-context]
     (is (valid? ::record/families families))

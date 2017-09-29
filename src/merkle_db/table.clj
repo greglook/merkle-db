@@ -6,15 +6,13 @@
     [clojure.future :refer [nat-int? pos-int?]]
     [clojure.spec :as s]
     [clojure.string :as str]
-    (merkledag
-      [core :as mdag]
-      [node :as node])
-    (merkle-db
-      [index :as index]
-      [key :as key]
-      [partition :as part]
-      [patch :as patch]
-      [record :as record]))
+    [merkledag.core :as mdag]
+    [merkledag.node :as node]
+    [merkle-db.index :as index]
+    [merkle-db.key :as key]
+    [merkle-db.partition :as part]
+    [merkle-db.patch :as patch]
+    [merkle-db.record :as record])
   (:import
     java.time.Instant))
 

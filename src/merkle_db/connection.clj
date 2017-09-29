@@ -4,12 +4,10 @@
   manager."
   (:require
     [clojure.string :as str]
-    (merkledag
-      [core :as mdag]
-      [node :as node]
-      [ref :as ref])
-    (merkle-db
-      [db :as db])))
+    [merkledag.core :as mdag]
+    [merkledag.node :as node]
+    [merkledag.ref :as ref]
+    [merkle-db.db :as db]))
 
 
 ;; ## Connection Protocols

@@ -4,9 +4,8 @@
   (:require
     [clojure.spec :as s]
     [clojure.string :as str]
-    (merkle-db
-      [key :as key]
-      [record :as record])))
+    [merkle-db.key :as key]
+    [merkle-db.record :as record]))
 
 
 ;; ## Specs

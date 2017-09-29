@@ -4,9 +4,8 @@
   (:require
     [clojure.future :refer [pos-int?]]
     [clojure.spec :as s]
-    (merkle-db
-      [key :as key]
-      [record :as record])))
+    [merkle-db.key :as key]
+    [merkle-db.record :as record]))
 
 
 (def ^:const data-type

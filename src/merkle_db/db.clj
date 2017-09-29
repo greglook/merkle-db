@@ -4,13 +4,11 @@
     [clojure.future :refer [inst? nat-int?]]
     [clojure.spec :as s]
     [clojure.string :as str]
-    (merkledag
-      [core :as mdag]
-      [link :as link]
-      [node :as node])
-    (merkle-db
-      [record :as record]
-      [table :as table])
+    [merkledag.core :as mdag]
+    [merkledag.link :as link]
+    [merkledag.node :as node]
+    [merkle-db.record :as record]
+    [merkle-db.table :as table]
     [multihash.core :as multihash])
   (:import
     java.time.Instant

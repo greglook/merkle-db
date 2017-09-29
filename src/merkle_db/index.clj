@@ -12,14 +12,12 @@
   (:require
     [clojure.future :refer [pos-int?]]
     [clojure.spec :as s]
-    (merkledag
-      [core :as mdag]
-      [node :as node])
-    (merkle-db
-      [graph :as graph]
-      [key :as key]
-      [partition :as part]
-      [record :as record])))
+    [merkledag.core :as mdag]
+    [merkledag.node :as node]
+    [merkle-db.graph :as graph]
+    [merkle-db.key :as key]
+    [merkle-db.partition :as part]
+    [merkle-db.record :as record]))
 
 
 (def ^:const data-type

@@ -9,16 +9,14 @@
   (:require
     [clojure.future :refer [pos-int?]]
     [clojure.spec :as s]
-    (merkledag
-      [core :as mdag]
-      [node :as node])
-    (merkle-db
-      [bloom :as bloom]
-      [graph :as graph]
-      [key :as key]
-      [patch :as patch]
-      [record :as record]
-      [tablet :as tablet :refer [tablet?]])))
+    [merkledag.core :as mdag]
+    [merkledag.node :as node]
+    [merkle-db.bloom :as bloom]
+    [merkle-db.graph :as graph]
+    [merkle-db.key :as key]
+    [merkle-db.patch :as patch]
+    [merkle-db.record :as record]
+    [merkle-db.tablet :as tablet :refer [tablet?]]))
 
 
 (def ^:const data-type

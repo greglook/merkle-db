@@ -15,12 +15,6 @@
   :merkle-db/tablet)
 
 
-(defn tablet?
-  "Determines whether the value is tablet node data."
-  [x]
-  (and (map? x) (= data-type (:data/type x))))
-
-
 ;; Sorted vector of record entries.
 (s/def ::records
   (s/coll-of ::record/entry :kind vector?))
@@ -29,7 +23,7 @@
 (s/def ::node-data
   (s/and
     (s/keys :req [::records])
-    tablet?))
+    #(= data-type (:data/type %))))
 
 
 

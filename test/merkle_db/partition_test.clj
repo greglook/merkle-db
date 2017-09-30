@@ -19,27 +19,24 @@
 
 ;; ## Unit Tests
 
-(deftest partition-predicate
-  (is (not (part/partition? "foo")))
-  (is (not (part/partition? [123 456])))
-  (is (not (part/partition? {})))
-  (is (not (part/partition? {:data/type :foo/bar})))
-  (is (part/partition? {:data/type part/data-type})))
-
-
-(deftest partitioning-utils
-  (testing "partition-limited"
-    (is (nil? (part/partition-limited 3 [])))
+(deftest partition-limits
+  (testing "limits"
+    (is (= part/default-limit (part/max-limit {})))
+    (is (= 420 (part/max-limit {::part/limit 420})))
+    (is (= 2 (part/min-limit {::part/limit 4})))
+    (is (= 3 (part/min-limit {::part/limit 5}))))
+  (testing "split-limited"
+    (is (nil? (part/split-limited 3 [])))
     (is (= [[:a]]
-           (part/partition-limited 3 [:a])))
+           (part/split-limited 3 [:a])))
     (is (= [[:a :b :c]]
-           (part/partition-limited 3 [:a :b :c])))
+           (part/split-limited 3 [:a :b :c])))
     (is (= [[:a :b] [:c :d :e]]
-           (part/partition-limited 3 [:a :b :c :d :e])))
+           (part/split-limited 3 [:a :b :c :d :e])))
     (is (= [100 100 101 100 101]
            (->>
              (range 502)
-             (part/partition-limited 120)
+             (part/split-limited 120)
              (map count))))))
 
 

@@ -12,18 +12,12 @@
     [merkle-db.key :as key]
     [merkle-db.patch :as patch]
     [merkle-db.record :as record]
-    [merkle-db.tablet :as tablet :refer [tablet?]]))
+    [merkle-db.tablet :as tablet]))
 
 
 (def ^:const data-type
   "Value of `:data/type` that indicates a partition node."
   :merkle-db/partition)
-
-
-(defn partition?
-  "Determines whether the value is partition node data."
-  [x]
-  (and (map? x) (= data-type (:data/type x))))
 
 
 ;; Maximum number of records to allow in each partition.
@@ -45,7 +39,7 @@
                   ::record/families
                   ::record/first-key
                   ::record/last-key])
-    partition?))
+    #(= data-type (:data/type %))))
 
 
 
@@ -68,43 +62,30 @@
   (int (Math/ceil (/ (max-limit params) 2))))
 
 
-(defn overflow?
-  "Return true if the given partition is overflowing the limit."
-  [params part]
-  (< (max-limit params) (::record/count part)))
+(defn split-limited
+  "Returns a sequence of groups of the elements of `coll` such that:
+  - No group has more than `limit` elements
+  - The number of groups is minimized
+  - Groups are approximately equal in size
 
-
-(defn underflow?
-  "Return true if the given partition is underflowing the limit."
-  [params part]
-  (< (::record/count part) (min-limit params)))
-
-
-
-;; ## Construction Functions
-
-; TODO: make this private and eager
-(defn ^:no-doc partition-limited
-  "Returns a sequence of partitions of the elements of `coll` such that:
-  - No partition has more than `limit` elements
-  - The minimum number of partitions is returned
-  - Partitions are approximately equal in size
-
-  Note that this counts (and hence realizes) the input collection."
+  This method eagerly realizes the input collection."
   [limit coll]
   (let [cnt (count coll)
         n (min (int (Math/ceil (/ cnt limit))) cnt)]
     (when (pos? cnt)
-      (letfn [(split [i] (int (* (/ i n) cnt)))
-              (take-parts
-                [i xs]
-                (when (seq xs)
-                  (lazy-seq
-                    (let [length (- (split (inc i)) (split i))
-                          [head tail] (split-at length xs)]
-                      (cons head (take-parts (inc i) tail))))))]
-        (take-parts 0 coll)))))
+      (loop [i 0
+             mark 0
+             groups []
+             xs coll]
+        (if (seq xs)
+          (let [mark' (int (* (/ (inc i) n) cnt))
+                [head tail] (split-at (- mark' mark) xs)]
+            (recur (inc i) (int mark') (conj groups head) tail))
+          groups)))))
 
+
+
+;; ## Construction Functions
 
 (defn- store-tablet!
   "Store the given tablet data. Returns a tuple of the family key and named
@@ -159,7 +140,7 @@
   [store params records]
   (->> records
        (patch/remove-tombstones)
-       (partition-limited (max-limit params))
+       (split-limited (max-limit params))
        (mapv #(from-records store params %))))
 
 

@@ -37,7 +37,7 @@
                 ::record/families {:ab #{:a :b}, :cd #{:c :d}}}
         part0 (part/from-records store params {k0 r0, k1 r1, k2 r2})
         part1 (part/from-records store params {k3 r3, k4 r4})
-        root (index/from-partitions store params [part0 part1])]
+        root (index/build-tree store params [part0 part1])]
     (testing "root properties"
       (is (= index/data-type (:data/type root)))
       (is (= 1 (::index/height root)))
@@ -116,7 +116,7 @@
                   ::index/branching-factor branch-fac
                   ::part/limit part-limit}
           parts (part/partition-records store params records)
-          root (index/from-partitions store params parts)]
+          root (index/build-tree store params parts)]
       (tu/check-asserts
         (validate/run!
           store

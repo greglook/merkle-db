@@ -88,7 +88,7 @@
                 ::index/branching-factor branch-factor
                 ::part/limit part-limit}
         parts (part/from-records store params records)
-        root (index/from-partitions store params parts)]
+        root (index/build-tree store params parts)]
     (viz/save-tree store
                    (::node/id (meta root))
                    (constantly true)
@@ -124,7 +124,7 @@
                 ::index/branching-factor branch-factor
                 ::part/limit part-limit}
         parts (part/partition-records store params records)
-        root (index/from-partitions store params parts)]
+        root (index/build-tree store params parts)]
     (try
       (let [root' (index/update-tree store params root changes)
             old-nodes (viz/find-nodes store {}

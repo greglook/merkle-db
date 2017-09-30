@@ -104,21 +104,23 @@
      ::record/last-key (::record/last-key (last children))}))
 
 
-(defn from-partitions
-  "Build an index tree from a sequence of partitions, using the given
+(defn- store-index!
+  [store height children]
+  (->> (index-children height children)
+       (mdag/store-node! store nil)
+       (::node/data)))
+
+
+(defn build-tree
+  "Build an index tree from a sequence of child nodes, using the given
   parameters. Returns the final, persisted root node data."
-  [store params partitions]
-  (loop [layer partitions
+  [store params children]
+  (loop [layer children
          height 1]
     (if (<= (count layer) 1)
       (first layer)
-      (let [index-groups (part/split-limited (max-branches params) layer)]
-        (recur (mapv (fn store-index
-                       [children]
-                       (->> (index-children height children)
-                            (mdag/store-node! store nil)
-                            (::node/data)))
-                     index-groups)
+      (let [groups (part/split-limited (max-branches params) layer)]
+        (recur (mapv (partial store-index! store height) groups)
                (inc height))))))
 
 
@@ -289,7 +291,7 @@
             ; Try to build intermediate index layers
             (if (<= (min-branches params) (count outputs))
               ; Build one or more valid index nodes from the outputs.
-              [height (mapv (partial index-children height)
+              [height (mapv (partial store-index! store (inc oheight))
                             (part/split-limited (max-branches params)
                                                 outputs))]
               ; Not enough outputs to make a valid node - return for carrying.
@@ -347,29 +349,16 @@
     (nil? root)
       (->> changes
            (part/partition-records store params)
-           (from-partitions store params))
+           (build-tree store params))
 
-    ; Root is a partition node.
-    (= part/data-type (:data/type root))
-      (let [result (part/update-partitions! store params [[root changes]])]
-        (if (neg? (first result))
-          (part/from-records store params (second result))
-          (from-partitions store params (second result))))
-
-    ; Root is an index node.
-    (= data-type (:data/type root))
-      (letfn [(store! ; TODO: delay storage like this?
-                [node]
-                (if (mdag/link? node)
-                  node
-                  (->> (::children node)
-                       (map store!)
-                       (numbered-child-links)
-                       (assoc node ::children)
-                       (mdag/store-node! store nil)
-                       (::node/data))))]
-        ; TODO: handle vector return type
-        (store! (update-index-node! store params nil root changes)))
+    ; Root is an index or partition node.
+    (contains? #{data-type part/data-type} (:data/type root))
+      (let [[height nodes] (if (= part/data-type (:data/type root))
+                             (part/update-partitions! store params nil [[root changes]])
+                             (update-index-node! store params nil root changes))]
+        (if (neg? height)
+          (part/from-records store params nodes)
+          (build-tree store params nodes)))
 
     :else
       (throw (ex-info (str "Unsupported index-tree node type: "

@@ -24,9 +24,6 @@
   "Value of `:data/type` that indicates an index tree node."
   :merkle-db/index)
 
-(def default-branching-factor
-  "The default number of children to limit each index node to."
-  256)
 
 ;; The branching factor determines the number of children an index node in the
 ;; data tree can have.
@@ -54,6 +51,28 @@
     #(= data-type (:data/type %))
     #(= (count (::children %))
         (inc (count (::keys %))))))
+
+
+
+;; ## Branching Factor
+
+(def default-branching-factor
+  "The default number of children to limit each index node to."
+  256)
+
+
+(defn max-branches
+  "Return the maximum number of children a valid index node can have given the
+  parameters."
+  [params]
+  (::branching-factor params default-branching-factor))
+
+
+(defn min-branches
+  "Return the minimum number of children a valid index node must have given the
+  parameters."
+  [params]
+  (int (Math/ceil (/ (max-branches params) 2))))
 
 
 
@@ -93,9 +112,7 @@
          height 1]
     (if (<= (count layer) 1)
       (first layer)
-      (let [index-groups (part/partition-limited
-                           (::branching-factor params default-branching-factor)
-                           layer)]
+      (let [index-groups (part/split-limited (max-branches params) layer)]
         (recur (mapv (fn store-index
                        [children]
                        (->> (index-children height children)
@@ -253,7 +270,6 @@
           ; Result elements are a carry.
           :else
             (recur outputs result (next inputs))))
-
       ; No more input nodes.
       (if (seq outputs)
         (let [outputs (if carry
@@ -261,9 +277,9 @@
                           (part/carry-back store params outputs carry)
                           ('carry-back store params outputs carry))
                         outputs)]
-          (if (<= ('min-limit params) (count outputs))
+          (if (<= (min-branches params) (count outputs))
             ; Build one or more valid index nodes from the outputs.
-            [height (mapv index-children ('split-limited ('max-limit params) outputs))]
+            [height (mapv index-children (part/split-limited (max-branches params) outputs))]
             ; Not enough outputs to make a valid node - return for carrying.
             [(dec height) outputs]))
         ; No outputs, so return nil or direct carry.
@@ -271,6 +287,9 @@
 
 
 (defn- update-index-node!
+  "Updates the given index node by applying the changes. Returns a tuple
+  containing the resulting height and a sequence of updated and valid (but
+  unpersisted) index nodes at that height."
   [store params carry index changes]
   (if (and (nil? carry) (empty? changes))
     ; No carry or changes to apply, pass-through node.

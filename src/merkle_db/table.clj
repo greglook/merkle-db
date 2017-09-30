@@ -71,6 +71,8 @@
 
   ;; Records
 
+  ; TODO: scan-keys?
+
   (scan
     [table]
     [table opts]

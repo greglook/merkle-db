@@ -20,6 +20,7 @@
       [test-utils :as tu])))
 
 
+#_
 (deftest construction-reading
   (let [store (mdag/init-store :types graph/codec-types)
         k0 (key/create [0])

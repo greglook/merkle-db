@@ -144,8 +144,12 @@ up according to which child subtree they belong to. Each index node maintains a
 list of child links and split keys, so portion out the changes to bucket them by
 record key.
 
+The result is a sequence of tuples containing the child and a vector of the
+record changes assigned to that child. Children with no changes will appear
+with a nil second value.
+
 ```
-(divide-changes [cx k3 cy k7 cz] [[k2 r2] [k3 r3] [k6 r6]])
+(assign-records [cx cy cz] [k3 k7] [[k2 r2] [k3 r3] [k6 r6]])
 => [[cx [[k2 r2]]] [cy [[k3 r3] [k6 r6]]] [cz nil]]
 ```
 
@@ -207,7 +211,7 @@ At this point we've completed the update algorithm for a single node, the result
 of which was either a sequence of one or more index nodes at the original level,
 or a sequence of sibling nodes carried up from further down the tree.
 
-#### Manage Root
+#### Promote Root
 
 After recursively applying changes to the root node and unwinding back to the
 top of the tree, examine the result.

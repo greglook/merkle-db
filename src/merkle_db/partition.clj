@@ -335,13 +335,13 @@
   [store params parts carry]
   (cond
     (nil? carry)
-      parts
+      [0 parts]
+
+    (zero? (first carry))
+      [0 (into parts (second carry))]
 
     (neg? (first carry))
       (merge-into store params parts (second carry))
-
-    (zero? (first carry))
-      (conj (vec parts) carry)
 
     :else
       (throw (IllegalArgumentException.

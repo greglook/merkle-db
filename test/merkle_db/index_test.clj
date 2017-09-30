@@ -20,8 +20,7 @@
       [test-utils :as tu])))
 
 
-#_
-(deftest construction-reading
+(deftest index-reading
   (let [store (mdag/init-store :types graph/codec-types)
         k0 (key/create [0])
         k1 (key/create [1])
@@ -48,16 +47,22 @@
       (is (= k0 (::record/first-key root)))
       (is (= k4 (::record/last-key root))))
     (testing "read-all"
+      (is (thrown? Exception
+            (index/read-all store {:data/type :foo} nil)))
       (is (= [[k0 r0] [k1 r1] [k2 r2] [k3 r3] [k4 r4]]
              (index/read-all store root nil)))
       (is (= [[k1 {:d 1}] [k4 {:d 4}]]
              (index/read-all store root #{:d}))))
     (testing "read-batch"
+      (is (thrown? Exception
+            (index/read-batch store {:data/type :foo} nil nil)))
       (is (= [[k1 r1] [k2 r2] [k4 r4]]
              (index/read-batch store root nil #{k1 k2 k4 (key/create [7])})))
       (is (= [[k1 {:x 1}] [k3 {:x 3}]]
              (index/read-batch store root #{:x} #{k1 k3 k4}))))
     (testing "read-range"
+      (is (thrown? Exception
+            (index/read-range store {:data/type :foo} nil nil nil)))
       (is (= [[k0 r0] [k1 r1] [k2 r2] [k3 r3] [k4 r4]]
              (index/read-range store root nil nil nil)))
       (is (= [[k0 {:y 0}] [k3 {:y 3}]]

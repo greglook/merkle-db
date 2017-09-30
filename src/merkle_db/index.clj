@@ -241,7 +241,14 @@
 
 ;; ## Update Functions
 
+(defn- carry-back
+  [store params nodes carry]
+  ; FIXME: implement
+  (throw (RuntimeException. "NYI: index/carry-back")))
+
+
 (declare update-index-node!)
+
 
 (defn- update-index-children!
   "Apply changes to a sequence of intermediate index nodes and redistribute the
@@ -272,16 +279,21 @@
             (recur outputs result (next inputs))))
       ; No more input nodes.
       (if (seq outputs)
-        (let [outputs (if carry
-                        (if (zero? height)
-                          (part/carry-back store params outputs carry)
-                          ('carry-back store params outputs carry))
-                        outputs)]
-          (if (<= (min-branches params) (count outputs))
-            ; Build one or more valid index nodes from the outputs.
-            [height (mapv index-children (part/split-limited (max-branches params) outputs))]
-            ; Not enough outputs to make a valid node - return for carrying.
-            [(dec height) outputs]))
+        (let [[oheight outputs :as result]
+                (if carry
+                  (carry-back store params outputs carry)
+                  [(dec height) outputs])]
+          (if (neg? oheight)
+            ; Got bare records from carry-back
+            result
+            ; Try to build intermediate index layers
+            (if (<= (min-branches params) (count outputs))
+              ; Build one or more valid index nodes from the outputs.
+              [height (mapv (partial index-children height)
+                            (part/split-limited (max-branches params)
+                                                outputs))]
+              ; Not enough outputs to make a valid node - return for carrying.
+              result)))
         ; No outputs, so return nil or direct carry.
         carry))))
 

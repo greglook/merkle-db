@@ -59,44 +59,30 @@
 
 ;; ## Construction
 
-(defn- store-index!
-  "Recursively store index nodes from the given sequence of children. Loads
-  each child to calculate the aggregate first-key, last-key, and count
-  attributes. Returns persisted index node data."
-  [store height children]
-  (loop [record-count 0
-         new-children []
-         child-keys []
-         last-last-key nil
-         children children]
-    (if (seq children)
-      ; Load and update aggregate stats from next child.
-      (let [child (first children)
-            link-name (format "%03d" (count new-children))
-            data (if (mdag/link? child)
-                   (graph/get-link! store child)
-                   child)
-            target (cond
-                     (mdag/link? child) child
-                     (= 1 height) (meta child)
-                     :else (meta (store-index! store (dec height) (::children data))))
-            link (mdag/link link-name target)]
-        (recur (int (+ record-count (::record/count data)))
-               (conj new-children link)
-               (conj child-keys (::record/first-key data))
-               (::record/last-key data)
-               (next children)))
-      ; No more children, serialize node.
-      (->>
-        {:data/type data-type
-         ::height height
-         ::keys (vec (rest child-keys))
-         ::children new-children
-         ::record/count record-count
-         ::record/first-key (first child-keys)
-         ::record/last-key last-last-key}
-        (mdag/store-node! store nil)
-        (::node/data)))))
+(defn- numbered-child-links
+  "Write a vector of childen into numbered links."
+  [children]
+  (let [width (count (pr-str (dec (count children))))
+        fmt (str "%0" width "d")]
+    (into []
+          (map-indexed #(mdag/link (format fmt %1) %2))
+          children)))
+
+
+(defn- index-children
+  "Aggregates index node values from a sequence of child data. Returns the node
+  data map for the constructed index."
+  [height children]
+  (let [ckeys (into [] (map ::record/first-key) (rest children))
+        links (numbered-child-links children)
+        record-count (reduce + 0 (map ::record/count children))]
+    {:data/type data-type
+     ::height height
+     ::keys ckeys
+     ::children links
+     ::record/count record-count
+     ::record/first-key (::record/first-key (first children))
+     ::record/last-key (::record/last-key (last children))}))
 
 
 (defn from-partitions
@@ -110,7 +96,12 @@
       (let [index-groups (part/partition-limited
                            (::branching-factor params default-branching-factor)
                            layer)]
-        (recur (mapv (partial store-index! store height) index-groups)
+        (recur (mapv (fn store-index
+                       [children]
+                       (->> (index-children height children)
+                            (mdag/store-node! store nil)
+                            (::node/data)))
+                     index-groups)
                (inc height))))))
 
 
@@ -233,65 +224,80 @@
 
 ;; ## Update Functions
 
-(defn- numbered-child-links
-  "Write a vector of childen into numbered links."
-  [children]
-  (into []
-        (map-indexed #(mdag/link (format "%03d" %1) %2))
-        children))
-
-
-(defn- index-children
-  "Aggregates index node values from a sequence of child data."
-  [children]
-  (let [ckeys (into [] (map ::record/first-key) (rest children))
-        links (numbered-child-links children)
-        record-count (reduce + 0 (map ::record/count children))]
-    {::keys ckeys
-     ::children links
-     ::record/count record-count
-     ::record/first-key (::record/first-key (first children))
-     ::record/last-key (::record/last-key (last children))}))
-
+(declare update-index-node!)
 
 (defn- update-index-children!
   "Apply changes to a sequence of intermediate index nodes and redistribute the
   results to create a new sequence of valid indexes. Each input tuple should
-  have the form `[index changes]`, and `carry` may be a forward-carried index
-  subtree or partition that is **not** a direct descendant of the parent node.
+  have the form `[index changes]`, and `carry` may be a forward-carried result
+  vector.
 
-  Returns a sequence of updated and valid (but unpersisted) index nodes, or a
-  direct map of node data to carry forward."
-  [store params carry inputs]
-  ,,,)
+  Returns a tuple containing the resulting height and a sequence of updated and
+  valid (but unpersisted) index nodes at that height."
+  [store params height carry inputs]
+  (loop [outputs []
+         carry carry
+         inputs inputs]
+    (if (seq inputs)
+      ; Process next input node
+      (let [[child changes] (first inputs)
+            [rheight elements :as result]
+              (update-index-node! store params carry child changes)]
+        (cond
+          ; Result is empty.
+          (nil? result)
+            (recur outputs nil (next inputs))
+          ; Result elements are output-level nodes.
+          (= rheight height)
+            (recur (into outputs elements) nil (next inputs))
+          ; Result elements are a carry.
+          :else
+            (recur outputs result (next inputs))))
+
+      ; No more input nodes.
+      (if (seq outputs)
+        (let [outputs (if carry
+                        (if (zero? height)
+                          (part/carry-back store params outputs carry)
+                          ('carry-back store params outputs carry))
+                        outputs)]
+          (if (<= ('min-limit params) (count outputs))
+            ; Build one or more valid index nodes from the outputs.
+            [height (mapv index-children ('split-limited ('max-limit params) outputs))]
+            ; Not enough outputs to make a valid node - return for carrying.
+            [(dec height) outputs]))
+        ; No outputs, so return nil or direct carry.
+        carry))))
 
 
-(defn- update-index-node
-  [store params carry [index changes]]
-  (if (seq changes)
-    (let [child-changes (map (juxt #(graph/get-link! store index (first %)) second)
-                             (assign-records index changes))
-          children (if (= 1 (::height index))
-                     ; Update children as partitions.
-                     (part/update-partitions! store params carry child-changes)
-                     ; Update child index nodes.
-                     (if (and (= data-type (:data/type carry))
-                              (= (dec (::height index)) (::height carry)))
-                       ; Adopt the carried index subtree by prepending it to the results.
-                       (update-index-children! store params nil (cons [carry nil] child-changes))
-                       ; No carry, or carry is not a direct child.
-                       (update-index-children! store params carry child-changes)))]
-      (if (sequential? children)
-        (if (= 1 (count children))
-          ; Orphaned child, return directly for carrying.
-          (first children)
-          ; Construct index node from partitions.
-          ; FIXME: needs to break into multiple nodes on overflow
-          [(merge index (index-children children))])
-        ; Carried node, return for further carrying.
-        children))
-    ; No changes, return unchanged node.
-    [index]))
+(defn- update-index-node!
+  [store params carry index changes]
+  (if (and (nil? carry) (empty? changes))
+    ; No carry or changes to apply, pass-through node.
+    [(::height index) [index]]
+
+    ; Divide up changes and apply to children.
+    (let [child-inputs (map (fn [[child child-changes]]
+                              [(if (mdag/link? child)
+                                 (graph/get-link! store index child)
+                                 child)
+                               child-changes])
+                            (assign-records index changes))
+          child-height (dec (::height index))]
+      (cond
+        ; Update children as partitions.
+        (zero? child-height)
+          (part/update-partitions! store params carry child-inputs)
+        ; Adopt carried subnodes.
+        (and carry (= (first carry) child-height))
+          (update-index-children!
+            store params child-height
+            nil (concat (map vector (second carry)) child-inputs))
+        ; Carry forward into child updates.
+        :else
+          (update-index-children!
+            store params child-height
+            carry child-inputs)))))
 
 
 (defn update-tree
@@ -314,13 +320,14 @@
 
     ; Root is a partition node.
     (= part/data-type (:data/type root))
-      (some->>
-        (part/update-root! store params root changes)
-        (from-partitions store params))
+      (let [result (part/update-partitions! store params [[root changes]])]
+        (if (neg? (first result))
+          (part/from-records store params (second result))
+          (from-partitions store params (second result))))
 
     ; Root is an index node.
     (= data-type (:data/type root))
-      (letfn [(store!  ; TODO: very similar to `store-index!`
+      (letfn [(store! ; TODO: delay storage like this?
                 [node]
                 (if (mdag/link? node)
                   node
@@ -330,7 +337,8 @@
                        (assoc node ::children)
                        (mdag/store-node! store nil)
                        (::node/data))))]
-        (store! (update-index-node store params nil [root changes])))
+        ; TODO: handle vector return type
+        (store! (update-index-node! store params nil root changes)))
 
     :else
       (throw (ex-info (str "Unsupported index-tree node type: "

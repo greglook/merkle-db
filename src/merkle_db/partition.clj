@@ -268,36 +268,44 @@
         [result records]))))
 
 
-(defn- join-last-part
+(defn- patch-records
+  "Apply changes to the given partition, combining with any pending records to
+  produce a sequence of new partitions and any newly pending records."
+  [store params pending part changes]
+  (let [emit-threshold (+ (max-limit params) (min-limit params))
+        records (read-all store part nil)
+        records' (concat pending (patch/patch-seq changes records))]
+    (cond
+      ; All data was removed from the partition.
+      (empty? records')
+        nil
+      ; Original partition data was unchanged by updates.
+      (= records records')
+        [[part] nil]
+      ; Accumulated enough records to output full partitions.
+      (<= emit-threshold (count records'))
+        (emit-parts store params emit-threshold records')
+      ; Not enough data to output a partition yet, keep pending.
+      :else
+        [nil records'])))
+
+
+(defn- merge-into
   "Combines a non-empty vector of partitions and some trailing records to
-  produce a valid final sequence of partitions. Returns the updated sequence."
+  produce a valid final sequence of partitions. Returns a result tuple with the
+  updated sequence of partitions, or records if underflowing."
   [store params parts pending]
-  (->> pending
-       (concat (read-all store (peek parts) nil))
-       (partition-records store params)
-       (into (pop parts))))
-
-
-(defn- flush-updates
-  "Finalize an update by ensuring any remaining pending records are emitted.
-  Returns a height 0 result tuple with serialized partition data, or a -1
-  result with records if not enough are left."
-  [store params result pending]
-  (cond
-    ; No pending data to handle, we're done.
-    (empty? pending)
-      (when (seq result)
-        [0 result])
-
-    ; Not enough records left to create a valid partition!
-    (< (count pending) (min-limit params))
-      (if (empty? result)
-        [-1 pending]
-        [0 (join-last-part store params result pending)])
-
-    ; Enough records to make one or more valid partitions.
-    :else
-      [0 (into result (partition-records store params pending))]))
+  (loop [parts (vec parts)
+         pending pending]
+    (if (<= (min-limit params) (count pending))
+      ; Enough records to make at least one valid partition.
+      [0 (into parts (partition-records store params pending))]
+      ; Need more records to form a partition.
+      (if (seq parts)
+        ; Join records from the last partition into pending.
+        (recur (pop parts) (concat (read-all store (peek parts) nil) pending))
+        ; No more partitions to join, return records result.
+        [-1 pending]))))
 
 
 (defn update-partitions!
@@ -316,54 +324,28 @@
     (throw (IllegalArgumentException.
              (str "Cannot carry index subtrees into a partition update: "
                   (pr-str carry)))))
-  (let [emit-threshold (+ (max-limit params) (min-limit params))]
-    (loop [outputs (if (and carry (zero? (first carry)))
-                     (vec (second carry))
-                     [])
-           pending (when (and carry (neg? (first carry)))
-                     (vec (second carry)))
-           inputs inputs]
-      (if (seq inputs)
-        ; Process next partition in the sequence.
-        (let [[part changes] (first inputs)]
-          (if (and (nil? pending) (empty? changes))
-            ; No pending records or changes, so use "pass through" logic.
-            (recur (conj outputs part) nil (next inputs))
-
-            ; Load partition data or use pending records.
-            (let [records (read-all store part nil)
-                  records' (concat pending (patch/patch-seq changes records))]
-              (cond
-                ; All data was removed from the partition.
-                (empty? records')
-                  (recur outputs nil (next inputs))
-
-                ; Original partition data was unchanged by updates.
-                (= records records')
-                  (recur (conj outputs part) nil (next inputs))
-
-                ; Accumulated enough records to output full partitions.
-                (<= emit-threshold (count records'))
-                  (let [[parts pending] (emit-parts store params emit-threshold records')]
-                    (recur (into outputs parts) pending (next inputs)))
-
-                ; Not enough data to output a partition yet, keep pending.
-                :else
-                  (recur outputs records' (next inputs))))))
-
-        ; No more partitions to process.
-        (flush-updates store params outputs pending)))))
-
-
-; TODO: needed?
-(defn update-root!
-  "Apply changes to a partition root node, returning a sequence of
-  updated partitions."
-  [store params part changes]
-  (let [result (update-partitions! store params [[part changes]])]
-    (if (neg? (first result))
-      [0 [(from-records store params (second result))]]
-      result)))
+  (loop [outputs (if (and carry (zero? (first carry)))
+                   (vec (second carry))
+                   [])
+         pending (when (and carry (neg? (first carry)))
+                   (vec (second carry)))
+         inputs inputs]
+    (if (seq inputs)
+      ; Process next partition in the sequence.
+      (let [[part changes] (first inputs)]
+        (if (and (nil? pending) (empty? changes))
+          ; No pending records or changes, so use "pass through" logic.
+          (recur (conj outputs part) nil (next inputs))
+          ; Load partition data or use pending records.
+          (let [[parts pending] (patch-records store params pending part changes)]
+            (recur (into outputs parts) pending (next inputs)))))
+      ; No more partitions to process.
+      (if (empty? pending)
+        ; No pending data to handle, we're done.
+        (when (seq outputs)
+          [0 outputs])
+        ; Merge loose records backward into partitions.
+        (merge-into store params outputs pending)))))
 
 
 (defn carry-back
@@ -375,7 +357,7 @@
       parts
 
     (neg? (first carry))
-      (join-last-part store params parts carry)
+      (merge-into store params parts (second carry))
 
     (zero? (first carry))
       (conj (vec parts) carry)

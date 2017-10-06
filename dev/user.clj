@@ -62,7 +62,9 @@
 (defn sample-record-data
   "Generates a vector of `n` maps of record data using the given field keys."
   [field-keys n]
-  (rand-nth (gen/sample (gen/vector (mdgen/record-data field-keys) n))))
+  (rand-nth (gen/sample (gen/vector (gen/map (gen/elements field-keys)
+                                             gen/large-integer)
+                                    n))))
 
 
 (defn sample-subset
@@ -106,10 +108,17 @@
                         (sample-record-data
                           field-keys
                           (count extant-keys)))
+        pick-half (fn [xs]
+                    (let [half (int (/ (count xs) 2))]
+                      (condp > (rand)
+                        0.25 nil
+                        0.50 (take half xs)
+                        0.75 (drop half xs)
+                             xs)))
         changes (merge
-                  (let [ins-keys (sample-subset 0.25 record-keys)]
+                  (let [ins-keys (sample-subset 0.25 (pick-half record-keys))]
                     (zipmap ins-keys (sample-record-data field-keys (count ins-keys))))
-                  (let [del-keys (sample-subset 0.25 record-keys)]
+                  (let [del-keys (sample-subset 0.25 (pick-half record-keys))]
                     (zipmap del-keys (repeat ::patch/tombstone))))]
     {:families families
      :records records
@@ -123,8 +132,7 @@
         params {::record/families families
                 ::index/branching-factor branch-factor
                 ::part/limit part-limit}
-        parts (part/partition-records store params records)
-        root (index/build-tree store params parts)]
+        root (index/from-records store params records)]
     (try
       (let [root' (index/update-tree store params root changes)
             old-nodes (viz/find-nodes store {}

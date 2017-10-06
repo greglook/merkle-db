@@ -88,40 +88,51 @@
           children)))
 
 
-(defn- index-children
-  "Aggregates index node values from a sequence of child data. Returns the node
-  data map for the constructed index."
-  [height children]
+(defn- store-index!
+  "Aggregates index node values from a sequence of child data. Returns the
+  persisted node data map for the constructed index."
+  [store height children]
   (let [ckeys (into [] (map ::record/first-key) (rest children))
         links (numbered-child-links children)
         record-count (reduce + 0 (map ::record/count children))]
-    {:data/type data-type
-     ::height height
-     ::keys ckeys
-     ::children links
-     ::record/count record-count
-     ::record/first-key (::record/first-key (first children))
-     ::record/last-key (::record/last-key (last children))}))
-
-
-(defn- store-index!
-  [store height children]
-  (->> (index-children height children)
-       (mdag/store-node! store nil)
-       (::node/data)))
+    (->>
+      {:data/type data-type
+       ::height height
+       ::keys ckeys
+       ::children links
+       ::record/count record-count
+       ::record/first-key (::record/first-key (first children))
+       ::record/last-key (::record/last-key (last children))}
+      (mdag/store-node! store nil)
+      (::node/data))))
 
 
 (defn build-tree
   "Build an index tree from a sequence of child nodes, using the given
   parameters. Returns the final, persisted root node data."
   [store params children]
-  (loop [layer children
-         height 1]
-    (if (<= (count layer) 1)
-      (first layer)
-      (let [groups (part/split-limited (max-branches params) layer)]
-        (recur (mapv (partial store-index! store height) groups)
-               (inc height))))))
+  (let [heights (distinct (map #(::height % 0) children))]
+    (when (< 1 (count heights))
+      (throw (IllegalArgumentException.
+               (str "Cannot build tree from nodes at differing heights: "
+                    (pr-str heights)))))
+    (loop [layer children
+           height (inc (first heights))]
+      (if (<= (count layer) 1)
+        (first layer)
+        (let [groups (part/split-limited (max-branches params) layer)]
+          (recur (mapv (partial store-index! store height) groups)
+                 (inc height)))))))
+
+
+(defn from-records
+  "Build an index tree from a sequence of records. Not performant for large
+  numbers of records!"
+  [store params records]
+  (->>
+    (sort-by first records)
+    (part/partition-records store params)
+    (build-tree store params)))
 
 
 
@@ -147,8 +158,8 @@
                  after))
         ; No more splits, emit one final group with remaining keys.
         (conj assignments [(first children) pending]))
-      ; No more record keys to assign.
-      assignments)))
+      ; No more record keys to assign; add remaining children.
+      (into assignments (map #(vector % nil)) children))))
 
 
 (defn- child-boundaries
@@ -311,9 +322,7 @@
 
     ; Divide up changes and apply to children.
     (let [child-inputs (map (fn [[child child-changes]]
-                              [(if (mdag/link? child)
-                                 (graph/get-link! store index child)
-                                 child)
+                              [(graph/get-link! store index child)
                                child-changes])
                             (assign-records index changes))
           child-height (dec (::height index))]

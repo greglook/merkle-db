@@ -236,8 +236,9 @@
   "Chop up some pending records into full valid partitions. Returns a tuple
   containing a vector of serialized partitions and a vector containing any
   remaining records."
-  [store params threshold pending]
-  (let [part-size (max-limit params)]
+  [store params pending]
+  (let [part-size (max-limit params)
+        threshold (+ part-size (min-limit params))]
     (loop [result []
            records pending]
       (if (<= threshold (count records))
@@ -253,8 +254,7 @@
   "Apply changes to the given partition, combining with any pending records to
   produce a sequence of new partitions and any newly pending records."
   [store params pending part changes]
-  (let [emit-threshold (+ (max-limit params) (min-limit params))
-        records (read-all store part nil)
+  (let [records (read-all store part nil)
         records' (concat pending (patch/patch-seq changes records))]
     (cond
       ; All data was removed from the partition.
@@ -263,12 +263,9 @@
       ; Original partition data was unchanged by updates.
       (= records records')
         [[part] nil]
-      ; Accumulated enough records to output full partitions.
-      (<= emit-threshold (count records'))
-        (emit-parts store params emit-threshold records')
-      ; Not enough data to output a partition yet, keep pending.
+      ; Output partitions if we've accumulated enough records.
       :else
-        [nil records'])))
+        (emit-parts store params records'))))
 
 
 (defn- merge-into
@@ -330,8 +327,9 @@
 
 
 (defn carry-back
-  "Carry an orphaned node back from later in the tree. Returns the updated
-  sequence of partitions."
+  "Carry an orphaned node back from later in the tree. Returns a result vector
+  with height zero and the updated sequence of partitions, or a -1 height result
+  if there were not enough records left."
   [store params parts carry]
   (cond
     (nil? carry)

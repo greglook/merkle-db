@@ -132,7 +132,8 @@
         params {::record/families families
                 ::index/branching-factor branch-factor
                 ::part/limit part-limit}
-        root (index/from-records store params records)]
+        root (index/from-records store params records)
+        changes (sort-by first changes)]
     (try
       (let [root' (index/update-tree store params root changes)
             old-nodes (viz/find-nodes store {}
@@ -211,3 +212,18 @@
    :changes {(key/create [0]) ::patch/tombstone,
              (key/create [3]) {}
              (key/create [4]) {:a true, :x 45}}})
+
+
+(defn read-test-case
+  "Read a test case from standard input as output by the generative test case."
+  []
+  (let [tcase (read-string (read-line))
+        {:syms [families branch-fac part-limit rkeys ukeys dkeys]} tcase
+        records (map-indexed #(vector (key/create (.data %2)) {:a %1}) rkeys)
+        updates (map-indexed #(vector (key/create (.data %2)) {:b %1}) ukeys)
+        deletions (map #(vector (key/create (.data %)) ::patch/tombstone) dkeys)
+        changes (into (sorted-map) (concat updates deletions))
+        update-map {:families families
+                    :records records
+                    :changes changes}]
+    (viz-update update-map branch-fac part-limit)))

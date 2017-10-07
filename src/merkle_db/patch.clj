@@ -93,7 +93,7 @@
           records
         ; No more records, return remaining patch data.
         (empty? records)
-          patch
+          (remove-tombstones patch)
         ; Next key is in both patch and records.
         (= (ffirst patch) (ffirst records))
           (maybe-cons (first patch) (next records))

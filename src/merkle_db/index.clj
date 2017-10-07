@@ -111,18 +111,19 @@
   "Build an index tree from a sequence of child nodes, using the given
   parameters. Returns the final, persisted root node data."
   [store params children]
-  (let [heights (distinct (map #(::height % 0) children))]
-    (when (< 1 (count heights))
-      (throw (IllegalArgumentException.
-               (str "Cannot build tree from nodes at differing heights: "
-                    (pr-str heights)))))
-    (loop [layer children
-           height (inc (first heights))]
-      (if (<= (count layer) 1)
-        (first layer)
-        (let [groups (part/split-limited (max-branches params) layer)]
-          (recur (mapv (partial store-index! store height) groups)
-                 (inc height)))))))
+  (when (seq children)
+    (let [heights (distinct (map #(::height % 0) children))]
+      (when (< 1 (count heights))
+        (throw (IllegalArgumentException.
+                 (str "Cannot build tree from nodes at differing heights: "
+                      (pr-str heights)))))
+      (loop [layer children
+             height (inc (first heights))]
+        (if (<= (count layer) 1)
+          (first layer)
+          (let [groups (part/split-limited (max-branches params) layer)]
+            (recur (mapv (partial store-index! store height) groups)
+                   (inc height))))))))
 
 
 (defn from-records
@@ -182,8 +183,11 @@
   for every record in the subtree. This function works on both index nodes and
   partitions."
   [store node fields]
-  (condp = (:data/type node)
-    data-type
+  (cond
+    (nil? node)
+      nil
+
+    (= data-type (:data/type node))
       (mapcat
         (fn read-child
           [child-link]
@@ -191,12 +195,13 @@
             (read-all store child fields)))
         (::children node))
 
-    part/data-type
+    (= part/data-type (:data/type node))
       (part/read-all store node fields)
 
-    (throw (ex-info (str "Unsupported index-tree node type: "
-                         (pr-str (:data/type node)))
-                    {:data/type (:data/type node)}))))
+    :else
+      (throw (ex-info (str "Unsupported index-tree node type: "
+                           (pr-str (:data/type node)))
+                      {:data/type (:data/type node)}))))
 
 
 (defn read-batch
@@ -204,8 +209,11 @@
   for the records whose keys are in the given collection. This function works on
   both index nodes and partitions."
   [store node fields record-keys]
-  (condp = (:data/type node)
-    data-type
+  (cond
+    (nil? node)
+      nil
+
+    (= data-type (:data/type node))
       (mapcat
         (fn read-child
           [[child-link record-keys]]
@@ -214,12 +222,13 @@
               (read-batch store child fields (map first record-keys)))))
         (assign-records node (map vector record-keys)))
 
-    part/data-type
+    (= part/data-type (:data/type node))
       (part/read-batch store node fields record-keys)
 
-    (throw (ex-info (str "Unsupported index-tree node type: "
-                         (pr-str (:data/type node)))
-                    {:data/type (:data/type node)}))))
+    :else
+      (throw (ex-info (str "Unsupported index-tree node type: "
+                           (pr-str (:data/type node)))
+                      {:data/type (:data/type node)}))))
 
 
 (defn read-range
@@ -227,8 +236,11 @@
   records whose keys lie in the given range, inclusive. A nil boundary includes
   all records in that range direction."
   [store node fields start-key end-key]
-  (condp = (:data/type node)
-    data-type
+  (cond
+    (nil? node)
+      nil
+
+    (= data-type (:data/type node))
       (->
         (child-boundaries node)
         (cond->>
@@ -243,12 +255,13 @@
               (let [child (graph/get-link! store node child-link)]
                 (read-range store child fields start-key end-key))))))
 
-    part/data-type
+    (= part/data-type (:data/type node))
       (part/read-range store node fields start-key end-key)
 
-    (throw (ex-info (str "Unsupported index-tree node type: "
-                         (pr-str (:data/type node)))
-                    {:data/type (:data/type node)}))))
+    :else
+      (throw (ex-info (str "Unsupported index-tree node type: "
+                           (pr-str (:data/type node)))
+                      {:data/type (:data/type node)}))))
 
 
 
@@ -299,7 +312,8 @@
           (if (neg? oheight)
             ; Got bare records from carry-back
             result
-            ; Try to build intermediate index layers
+            ; Try to build intermediate index layers.
+            ; TODO: build until (= oheight (dec height)) ?
             (if (<= (min-branches params) (count outputs))
               ; Build one or more valid index nodes from the outputs.
               [height (mapv (partial store-index! store (inc oheight))
@@ -365,7 +379,7 @@
       (let [[height nodes] (if (= part/data-type (:data/type root))
                              (part/update-partitions! store params nil [[root changes]])
                              (update-index-node! store params nil root changes))]
-        (if (neg? height)
+        (if (and height (neg? height))
           (part/from-records store params nodes)
           (build-tree store params nodes)))
 

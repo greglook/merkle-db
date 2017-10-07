@@ -96,6 +96,21 @@
               (report! ~type-key state# ~message expected# actual#)
               condition#)
 
+         ; Comparison test.
+         (and (list? test-form)
+              (contains? #{'< '> '<= '>=} (first test-form))
+              (= 3 (count test-form)))
+           `(let [v0# ~(nth test-form 1)
+                  v1# ~(nth test-form 2)
+                  condition# (~(first test-form) v0# v1#)
+                  state# (if condition# :pass ~bad-state)]
+              (report! ~type-key state# ~message
+                       '~test-form
+                       (if condition#
+                         condition#
+                         (list '~'not (list '~(first test-form) v0# v1#))))
+              condition#)
+
          ; Predicate test.
          (and (list? test-form)
               (= 2 (count test-form)))
@@ -291,7 +306,9 @@
       (check ::index/empty
         (nil? root)
         "Empty tree has nil root")
-    (<= (::record/count params) (::part/limit params))
+    (or (< (::record/count params) (::part/limit params))
+        (and (= (::record/count params) (::part/limit params))
+             (= part/data-type (:data/type root))))
       (validate-partition root params)
     :else
       (validate-index

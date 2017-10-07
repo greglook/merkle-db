@@ -37,8 +37,8 @@
      (test/do-report
        {:type (::validate/state result#)
         :message (format "Node %s (%s): %s"
-                         (multihash/base58 (::node/id result#))
-                         (str/join "/" (::validate/path result#))
+                         (multihash/base58 node-id#)
+                         (str/join ", " (map (partial str/join "/") (::validate/paths info#)))
                          (::validate/message result#))
         :expected (::validate/expected
                     result#

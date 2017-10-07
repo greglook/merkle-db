@@ -6,19 +6,19 @@
     [clojure.test :refer :all]
     [clojure.test.check.generators :as gen]
     [com.gfredericks.test.chuck.clojure-test :refer [checking]]
+    [com.gfredericks.test.chuck.generators :as tcgen]
     [merkledag.core :as mdag]
     [merkledag.link :as link]
     [merkledag.node :as node]
-    (merkle-db
-      [generators :as mdgen]
-      [graph :as graph]
-      [index :as index]
-      [key :as key]
-      [partition :as part]
-      [patch :as patch]
-      [record :as record]
-      [validate :as validate]
-      [test-utils :as tu])))
+    [merkle-db.generators :as mdgen]
+    [merkle-db.graph :as graph]
+    [merkle-db.index :as index]
+    [merkle-db.key :as key]
+    [merkle-db.partition :as part]
+    [merkle-db.patch :as patch]
+    [merkle-db.record :as record]
+    [merkle-db.validate :as validate]
+    [merkle-db.test-utils :as tu]))
 
 
 (def k0 (key/create [0]))
@@ -162,22 +162,40 @@
            (index/read-all store root nil)))))
 
 
-(deftest ^:generative index-updating
-  (checking "tree updates" 20
-    [[field-keys families records] mdgen/data-context
-     ; TODO: pick extant, inserts, and deletes
-     part-limit (gen/large-integer* {:min 4})
-     branch-fac (gen/large-integer* {:min 4})]
-    (is (valid? ::record/families families))
-    (let [store (mdag/init-store :types graph/codec-types)
-          params {::record/families families
-                  ::record/count (count records)
-                  ::index/branching-factor branch-fac
-                  ::part/limit part-limit}
-          root (index/from-records store params records)]
-      (tu/check-asserts
-        (validate/run!
-          store
-          (::node/id (meta root))
-          validate/validate-data-tree
-          params)))))
+(deftest ^:generative index-updates
+  (let [field-keys #{:a :b :c :d}]
+    (checking "tree updates" 25
+      [[families branch-factor part-limit [rkeys ukeys dkeys]]
+         (gen/tuple
+           (tcgen/sub-map {:ab #{:a :b}, :cd #{:c :d}})
+           (gen/large-integer* {:min 4})
+           (gen/large-integer* {:min 3})
+           (gen/bind
+             (gen/set mdgen/record-key {:min-elements 10})
+             (fn [all-keys]
+               (let [all-keys (sort all-keys)]
+                 (gen/tuple
+                   (tcgen/subsequence all-keys)
+                   (tcgen/subsequence all-keys)
+                   (tcgen/subsequence all-keys))))))]
+      (let [store (mdag/init-store :types graph/codec-types)
+            params {::record/families families
+                    ::index/branching-factor branch-factor
+                    ::part/limit part-limit}
+            records (map-indexed #(vector %2 {:a %1}) rkeys)
+            updates (map-indexed #(vector %2 {:b %1}) ukeys)
+            deletions (map vector dkeys (repeat ::patch/tombstone))
+            changes (into (sorted-map) (concat updates deletions))
+            root (index/from-records store params records)
+            root' (index/update-tree store params root (vec changes))
+            expected-data (-> (into (sorted-map) records)
+                              (merge changes)
+                              (patch/remove-tombstones))]
+        (is (= expected-data (index/read-all store root' nil)))
+        (tu/check-asserts
+          (validate/run!
+            store
+            (::node/id (meta root'))
+            validate/validate-data-tree
+            (assoc params ::record/count (count expected-data))))
+        ))))

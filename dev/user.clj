@@ -120,22 +120,20 @@
                     (zipmap ins-keys (sample-record-data field-keys (count ins-keys))))
                   (let [del-keys (sample-subset 0.25 (pick-half record-keys))]
                     (zipmap del-keys (repeat ::patch/tombstone))))]
-    {:families families
+    {::record/families families
+     ::index/branching-factor 4
+     ::part/limit 5
      :records records
      :changes changes}))
 
 
 (defn viz-update
-  [update-map branch-factor part-limit]
-  (let [{:keys [families records changes]} update-map
-        store (mdag/init-store :types graph/codec-types)
-        params {::record/families families
-                ::index/branching-factor branch-factor
-                ::part/limit part-limit}
-        root (index/from-records store params records)
-        changes (sort-by first changes)]
+  [update-case]
+  (let [store (mdag/init-store :types graph/codec-types)
+        root (index/from-records store update-case (:records update-case))]
     (try
-      (let [root' (index/update-tree store params root changes)
+      (let [root' (index/update-tree store update-case root
+                                     (sort-by first (:changes update-case)))
             old-nodes (viz/find-nodes store {}
                                       (mdag/get-node store (::node/id (meta root)))
                                       (constantly true))
@@ -159,71 +157,28 @@
                                               :else :black)))
           :edge->descriptor viz/edge->descriptor
           :options {:dpi 64})
-        ['context update-map
+        ['context update-case
          'original-root (link/identify root) root
          'updated-root (link/identify root') root'])
       (catch Exception ex
         (throw (ex-info "Error updating tree!"
-                        {:context update-map
-                         :original root
-                         :params params}
+                        {:context update-case
+                         :original root}
                         ex))))))
-
-
-(def example-reuse
-  {:families {:bc #{:b :c}},
-   :records {(key/create [0]) {},
-             (key/create [5]) {:a true
-                               :b :abc
-                               :c #{"g" "h" "i"}
-                               :d #uuid "348f877b-eb00-4bf2-bced-0ea47991f627"}}
-   :changes {(key/create [0]) {}
-             (key/create [2]) {}}})
-
-
-(def example-subtree
-  {:families {:bc #{:b :c}}
-   :records {(key/create [0]) {:a 0 :b 0 :c 0}
-             (key/create [1]) {:a 1, :c 1}
-             (key/create [2]) {:a 2, :b 2, :d 2}}
-   :changes {(key/create [5]) {:a 5}
-             (key/create [6]) {:x 6}
-             (key/create [7]) {:y 7}}})
-
-
-(def example-delete
-  {:families {:bc #{:b :c}}
-   :records {(key/create [0]) {:b true, :d "abc"}
-             (key/create [3]) {:a :t, :c "qqq"}}
-   :changes {(key/create [0]) ::patch/tombstone
-             (key/create [1]) {:a 123}
-             (key/create [3]) ::patch/tombstone,
-             (key/create [5]) ::patch/tombstone}})
-
-
-(def example-index-shared
-  {:families {:bc #{:b :c}},
-   :records {(key/create [0]) {},
-             (key/create [2]) {:b {:Ec -1.0}},
-             (key/create [4]) {},
-             (key/create [7]) {},
-             (key/create [8]) {},
-             (key/create [9]) {:b #{3.0}}}
-   :changes {(key/create [0]) ::patch/tombstone,
-             (key/create [3]) {}
-             (key/create [4]) {:a true, :x 45}}})
 
 
 (defn read-test-case
   "Read a test case from standard input as output by the generative test case."
   []
   (let [tcase (read-string (read-line))
-        {:syms [families branch-fac part-limit rkeys ukeys dkeys]} tcase
+        {:syms [families branch-factor part-limit rkeys ukeys dkeys]} tcase
         records (map-indexed #(vector (key/create (.data %2)) {:a %1}) rkeys)
         updates (map-indexed #(vector (key/create (.data %2)) {:b %1}) ukeys)
         deletions (map #(vector (key/create (.data %)) ::patch/tombstone) dkeys)
-        changes (into (sorted-map) (concat updates deletions))
-        update-map {:families families
+        changes (vec (into (sorted-map) (concat updates deletions)))
+        update-map {::record/families families
+                    ::index/branching-factor branch-factor
+                    ::part/limit part-limit
                     :records records
                     :changes changes}]
-    (viz-update update-map branch-fac part-limit)))
+    (viz-update update-map)))

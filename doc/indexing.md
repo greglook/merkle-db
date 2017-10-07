@@ -114,17 +114,16 @@ means that some nodes in the tree may need to split while other parts need to
 merge, and we need to reconcile these while changing as few nodes as possible.
 
 To understand how this is accomplished, let's consider the update to a generic
-individual index node in the tree. Let's assume we have a function
-`update-index-node!` which does what we want - what would such a function look
-like?
+individual index node in the tree. What would such a function look like? For
+inputs, first we'll need the graph store (so we can store and retrieve nodes)
+and a set of tree-level parameters specifying the branching factor, partition
+limit, and field families. We will assume these as a given throughout the
+algorithm.
 
-For inputs, first we'll need the graph store (so we can store and retrieve
-nodes) and a set of tree-level parameters specifying the branching factor,
-partition limit, and field families. We will assume these as a given throughout
-the algorithm. Next we'll need the data for the node we're operating on, and the
-sequence of changes to apply to it. Generally, the changes should fall into the
-range of record keys that the index subtree covers. Finally, we'll accept a
-_carry_ input, which will be explained later.
+Next we'll need the data for the node we're operating on, and the sequence of
+changes to apply to it. Generally, the changes should fall into the range of
+record keys that the index subtree covers. Finally, we'll accept a _carry_
+input, which will be explained later.
 
 Initially, the obvious choice for an output is the updated version of the input
 node. However, this fails to account for the fact that we may need to split the
@@ -132,10 +131,6 @@ node if there are many additions, or merge it if there are many deletions.
 Instead, the function will return a _vector_ of nodes, along with an integer
 specifying the height of the results. If we input an index node `n` at height
 `h` and had no splits or merges, we'd expect to get the result `[h [n']]`.
-
-```
-(update-index-node! store params carry node changes) -> [height results]
-```
 
 #### Divide Changes
 
@@ -147,11 +142,6 @@ record key.
 The result is a sequence of tuples containing the child and a vector of the
 record changes assigned to that child. Children with no changes will appear
 with a nil second value.
-
-```
-(assign-records [cx cy cz] [k3 k7] [[k2 r2] [k3 r3] [k6 r6]])
-=> [[cx [[k2 r2]]] [cy [[k3 r3] [k6 r6]]] [cz nil]]
-```
 
 #### Carry Adoption
 
@@ -196,6 +186,16 @@ be an updated set of direct children or another carry output, in which case the
 process repeats until the results are valid or we're reduced back to a carry
 output.
 
+#### Update Partitions
+
+Updating partitions actually requires loading data into memory, so the algorithm
+constrains the total number of partitions loaded to double the partition limit
+`p`. Updated sets of records are buffered as the children are processed,
+emitting full partitions where possible, merging in underflowing partitions as
+needed. The buffer is filled until at least 150% of the partition limit has been
+reached, then a 75% full partition is emitted, leaving (at worst) another 75%
+full partition if there are no more adjacent to process.
+
 #### Rebuild Indexes
 
 If the result was a sequence of updated (direct) children, then we can now
@@ -204,8 +204,6 @@ available to the tree's branching factor - if there are not enough children to
 make a valid half-full node, return the vector of children for carrying.
 Otherwise divide the children into valid-sized branching groups and build index
 nodes to contain them.
-
-**TODO:** Is this where we serialize the index nodes?
 
 At this point we've completed the update algorithm for a single node, the result
 of which was either a sequence of one or more index nodes at the original level,

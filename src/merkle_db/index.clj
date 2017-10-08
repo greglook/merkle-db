@@ -92,6 +92,7 @@
   "Aggregates index node values from a sequence of child data. Returns the
   persisted node data map for the constructed index."
   [store height children]
+  ; OPTIMIZE: truncate separator keys to the shortest value that correctly splits the adjacent children
   (let [ckeys (into [] (map ::record/first-key) (rest children))
         links (numbered-child-links children)
         record-count (reduce + 0 (map ::record/count children))]

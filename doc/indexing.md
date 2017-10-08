@@ -11,12 +11,12 @@ the table.
 There are three groups of attributes which are used in the index tree structure.
 At the table level, two input parameters control how the data tree is shaped:
 
-- `:merkle-db.index/branching-factor`
+- `:merkle-db.index/fan-out`
   An integer which restricts the _maximum_ number of children an index node can
-  have. In a tree with branching factor `b`, every index node except the root
-  must have between `ceiling(b/2)` and `b` children. The root is allowed to have
-  between 2 and `b` children. The branching factor must be at least 4, but is
-  often much higher to reduce fanout (default: 256).
+  have. In a tree with fan-out `f`, every index node except the root
+  must have between `ceiling(f/2)` and `f` children. The root is allowed to have
+  between 2 and `f` children. The fan-out must be at least 4, but is often much
+  higher to reduce tree height (default: 256).
 - `:merkle-db.partition/limit`
   This limit restricts the maximum number of records a single partition can
   hold. This effectively scales the size of the units of parallelism available
@@ -76,10 +76,9 @@ The batch-update algorithm has the following goals:
 
 Note that the first and third points here also imply that an update _should not_
 rewrite nodes that are not being changed if they no longer match the tree
-parameters. For example, changing the branching factor from 4 to 6 means that
-any index nodes with only two children are no longer valid. An update which
-doesn't touch those nodes would leave them in the tree as-is for a later process
-to fix-up.
+parameters. For example, changing the fanout from 4 to 6 means that any index
+nodes with only two children are no longer valid. An update which doesn't touch
+those nodes would leave them in the tree as-is for a later process to fix-up.
 
 ### Empty Tree
 
@@ -116,9 +115,8 @@ merge, and we need to reconcile these while changing as few nodes as possible.
 To understand how this is accomplished, let's consider the update to a generic
 individual index node in the tree. What would such a function look like? For
 inputs, first we'll need the graph store (so we can store and retrieve nodes)
-and a set of tree-level parameters specifying the branching factor, partition
-limit, and field families. We will assume these as a given throughout the
-algorithm.
+and a set of tree-level parameters specifying the fan-out, partition limit, and
+field families. We will assume these as a given throughout the algorithm.
 
 Next we'll need the data for the node we're operating on, and the sequence of
 changes to apply to it. Generally, the changes should fall into the range of
@@ -200,10 +198,10 @@ full partition if there are no more adjacent to process.
 
 If the result was a sequence of updated (direct) children, then we can now
 construct a new index node to contain them. Compare the number of children
-available to the tree's branching factor - if there are not enough children to
-make a valid half-full node, return the vector of children for carrying.
-Otherwise divide the children into valid-sized branching groups and build index
-nodes to contain them.
+available to the tree's fan-out - if there are not enough children to make a
+valid half-full node, return the vector of children for carrying.  Otherwise
+divide the children into valid-sized branching groups and build index nodes to
+contain them.
 
 At this point we've completed the update algorithm for a single node, the result
 of which was either a sequence of one or more index nodes at the original level,
@@ -227,22 +225,10 @@ top of the tree, examine the result.
 
 
 
-
-
-
-
-### Index Updates (old)
-
-The visit to each index node can be broken down into several phases:
-
-1. divide changes
-2. adopt carried orphans
-3. apply changes to children
-4. carry orphans (upward/sideways)
-5. redistribute children
+### Example Diagrams (old)
 
 In the following diagrams, these symbols are used to represent a tree with
-branching-factor of 4:
+fan-out of 4:
 
 - `O` - unchanged index node
 - `*` - candidate index node
@@ -494,7 +480,7 @@ Insert nodes into right subtree, resulting in splitting multiple partitions.
 
 #### Redistribute Children
 
-In the **redistribution** phase, any candidate children which have over or
+In the **redistribution** phase, any candidate children which have under or
 overflowed must split, merge with a neighbor, or borrow some elements from
 one. Afterwards, all children should be at least half full and under the
 size limit, unless there is only a single child left.

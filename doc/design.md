@@ -49,9 +49,9 @@ keys.
  :merkle-db.record/count Long
  :merkle-db.record/families {Keyword #{field-key}}
  :merkle-db.key/lexicoder Keyword
- :merkle-db.index/branching-factor Long  ; 256 children
- :merkle-db.partition/limit Long         ; 10,000 records
- :merkle-db.patch/limit Long             ; 100 changes
+ :merkle-db.index/fan-out Long       ; 256 children
+ :merkle-db.partition/limit Long     ; 10,000 records
+ :merkle-db.patch/limit Long         ; 100 changes
  :merkle-db.table/data MerkleLink
  :merkle-db.table/patch MerkleLink
  :merkle-db.table/modified-at Instant
@@ -102,9 +102,9 @@ The records' field data is stored in _tablets_, which are linked from each
 partition.
 
 Unlike the internal nodes, partitions may contain significantly more entries
-than the index tree's branching factor. When partitions grow above this limit,
-they are split into two smaller partitions to enable better parallelism when
-processing the table.
+than the index tree's fan-out. When partitions grow above this limit, they are
+split into two smaller partitions to enable better parallelism when processing
+the table.
 
 Tables may define _families_ of fields which are often accessed together, as a
 storage optimization for queries. Each family of fields will be written in

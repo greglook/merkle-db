@@ -78,7 +78,7 @@
 
 
 (defn viz-index-build
-  [filename branch-factor part-limit n]
+  [filename fan-out part-limit n]
   (let [field-keys #{:a :b :c :d :e :f}
         families {:bc #{:b :c}, :de #{:d :e}}
         record-keys (map (partial key/encode key/long-lexicoder) (range n))
@@ -87,7 +87,7 @@
         store (mdag/init-store :types graph/codec-types)
         params {::record/count n
                 ::record/families families
-                ::index/branching-factor branch-factor
+                ::index/fan-out fan-out
                 ::part/limit part-limit}
         parts (part/from-records store params records)
         root (index/build-tree store params parts)]
@@ -121,7 +121,7 @@
                   (let [del-keys (sample-subset 0.25 (pick-half record-keys))]
                     (zipmap del-keys (repeat ::patch/tombstone))))]
     {::record/families families
-     ::index/branching-factor 4
+     ::index/fan-out 4
      ::part/limit 5
      :records records
      :changes changes}))
@@ -171,13 +171,13 @@
   "Read a test case from standard input as output by the generative test case."
   []
   (let [tcase (read-string (read-line))
-        {:syms [families branch-factor part-limit rkeys ukeys dkeys]} tcase
+        {:syms [families fan-out part-limit rkeys ukeys dkeys]} tcase
         records (map-indexed #(vector (key/create (.data %2)) {:a %1}) rkeys)
         updates (map-indexed #(vector (key/create (.data %2)) {:b %1}) ukeys)
         deletions (map #(vector (key/create (.data %)) ::patch/tombstone) dkeys)
         changes (vec (into (sorted-map) (concat updates deletions)))
         update-map {::record/families families
-                    ::index/branching-factor branch-factor
+                    ::index/fan-out fan-out
                     ::part/limit part-limit
                     :records records
                     :changes changes}]

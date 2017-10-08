@@ -25,9 +25,9 @@
   :merkle-db/index)
 
 
-;; The branching factor determines the number of children an index node in the
-;; data tree can have.
-(s/def ::branching-factor (s/and pos-int? #(<= 4 %)))
+;; The fan-out determines the number of children an index node in the data tree
+;; can have.
+(s/def ::fan-out (s/and pos-int? #(<= 4 %)))
 
 ;; Height of the node in the tree. Partitions are the leaves and have an
 ;; implicit height of zero, so the first index node has a height of one.
@@ -56,7 +56,7 @@
 
 ;; ## Branching Factor
 
-(def default-branching-factor
+(def default-fan-out
   "The default number of children to limit each index node to."
   256)
 
@@ -65,7 +65,7 @@
   "Return the maximum number of children a valid index node can have given the
   parameters."
   [params]
-  (::branching-factor params default-branching-factor))
+  (::fan-out params default-fan-out))
 
 
 (defn min-branches

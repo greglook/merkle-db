@@ -270,14 +270,14 @@
          (count (::index/keys index)))
       "Index nodes have one fewer key than child links")
     (if (::index/root? params)
-      (check ::index/branching-factor
-        (<= 2 (count (::index/children index)) (::index/branching-factor params))
-        "Root index node has at between [2, b] children")
-      (check ::index/branching-factor
-        (<= (int (Math/ceil (/ (::index/branching-factor params) 2)))
+      (check ::index/fan-out
+        (<= 2 (count (::index/children index)) (::index/fan-out params))
+        "Root index node has at between [2, f] children")
+      (check ::index/fan-out
+        (<= (int (Math/ceil (/ (::index/fan-out params) 2)))
             (count (::index/children index))
-            (::index/branching-factor params))
-        "Internal index node has between [ceil(b/2), b] children"))
+            (::index/fan-out params))
+        "Internal index node has between [ceil(f/2), f] children"))
     (check ::index/height
       (= (::index/height params) (::index/height index))
       "Index node has expected height")

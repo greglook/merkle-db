@@ -34,7 +34,7 @@
 (def r4 {:z 4, :d 4})
 
 (def params
-  {::index/branching-factor 4
+  {::index/fan-out 4
    ::part/limit 3
    ::record/families {:ab #{:a :b}, :cd #{:c :d}}})
 
@@ -67,7 +67,7 @@
 
 (deftest index-reading
   (let [store (mdag/init-store :types graph/codec-types)
-        params {::index/branching-factor 4
+        params {::index/fan-out 4
                 ::part/limit 3
                 ::record/families {:ab #{:a :b}, :cd #{:c :d}}}
         part0 (part/from-records store params {k0 r0, k1 r1, k2 r2})
@@ -164,12 +164,12 @@
 
 (deftest ^:generative index-updates
   (let [field-keys #{:a :b :c :d}]
-    (checking "tree updates" 25
-      [[families branch-factor part-limit [rkeys ukeys dkeys]]
+    (checking "tree updates" 50
+      [[families fan-out part-limit [rkeys ukeys dkeys]]
          (gen/tuple
            (tcgen/sub-map {:ab #{:a :b}, :cd #{:c :d}})
-           (gen/large-integer* {:min 4})
-           (gen/large-integer* {:min 3})
+           (gen/large-integer* {:min 4, :max 32})
+           (gen/large-integer* {:min 5, :max 500})
            (gen/bind
              (gen/set mdgen/record-key {:min-elements 10})
              (fn [all-keys]
@@ -180,7 +180,7 @@
                    (tcgen/subsequence all-keys))))))]
       (let [store (mdag/init-store :types graph/codec-types)
             params {::record/families families
-                    ::index/branching-factor branch-factor
+                    ::index/fan-out fan-out
                     ::part/limit part-limit}
             records (map-indexed #(vector %2 {:a %1}) rkeys)
             updates (map-indexed #(vector %2 {:b %1}) ukeys)

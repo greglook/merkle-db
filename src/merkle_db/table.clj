@@ -46,7 +46,7 @@
 (s/def ::node-data
   (s/and
     (s/keys :req [::record/count
-                  ::index/branching-factor
+                  ::index/fan-out
                   ::part/limit
                   ::modified-at]
             :opt [::data
@@ -340,7 +340,7 @@
     store
     {::name table-name}
     (merge
-      {::index/branching-factor index/default-branching-factor
+      {::index/fan-out index/default-fan-out
        ::part/limit part/default-limit
        ::patch/limit patch/default-limit}
       (dissoc opts ::data ::patch)

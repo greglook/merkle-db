@@ -162,6 +162,16 @@
            (index/read-all store root nil)))))
 
 
+(defmacro timer
+  [label & body]
+  `(let [start# (System/nanoTime)
+         result# (do ~@body)
+         elapsed# (/ (- (System/nanoTime) start#) 1e6)]
+     (printf "%s: %.2f ms\n" ~label elapsed#)
+     (flush)
+     result#))
+
+
 (deftest ^:generative index-updates
   (let [field-keys #{:a :b :c :d}]
     (checking "tree updates" 50
@@ -171,13 +181,27 @@
            (gen/large-integer* {:min 4, :max 32})
            (gen/large-integer* {:min 5, :max 500})
            (gen/bind
-             (gen/set mdgen/record-key {:min-elements 10})
-             (fn [all-keys]
-               (let [all-keys (sort all-keys)]
+             (gen/large-integer* {:min 10, :max 5000})
+             (fn [n]
+               (let [all-keys (map #(key/encode key/long-lexicoder %) (range n))]
                  (gen/tuple
                    (tcgen/subsequence all-keys)
-                   (tcgen/subsequence all-keys)
-                   (tcgen/subsequence all-keys))))))]
+                   (gen/fmap
+                     (fn [fracs]
+                       (->> (map list fracs all-keys)
+                            (filter #(< 0.85 (first %)))
+                            (map second)))
+                     (apply gen/tuple (repeat (count all-keys) (gen/double* {:min 0.0, :max 1.0}))))
+                   (gen/fmap
+                     (fn [fracs]
+                       (->> (map list fracs all-keys)
+                            (filter #(< 0.85 (first %)))
+                            (map second)))
+                     (apply gen/tuple (repeat (count all-keys) (gen/double* {:min 0.0, :max 1.0})))))))))]
+      (printf "\n===============\n")
+      (printf "%d records, %d updates, %d deletions\n"
+              (count rkeys) (count ukeys) (count dkeys))
+      (flush)
       (let [store (mdag/init-store :types graph/codec-types)
             params {::record/families families
                     ::index/fan-out fan-out
@@ -185,17 +209,21 @@
             records (map-indexed #(vector %2 {:a %1}) rkeys)
             updates (map-indexed #(vector %2 {:b %1}) ukeys)
             deletions (map vector dkeys (repeat ::patch/tombstone))
-            changes (into (sorted-map) (concat updates deletions))
-            root (index/from-records store params records)
-            root' (index/update-tree store params root (vec changes))
-            expected-data (-> (into (sorted-map) records)
-                              (merge changes)
-                              (patch/remove-tombstones))]
+            changes (patch/patch-seq deletions updates)
+            root (let [parts (timer "partition records"
+                               (part/partition-records store params records))]
+                   (timer "build tree"
+                     (index/build-tree store params parts)))
+            root' (timer "update tree"
+                    (index/update-tree store params root (vec changes)))
+            expected-data (patch/patch-seq changes records)]
         (is (= expected-data (index/read-all store root' nil)))
-        (tu/check-asserts
-          (validate/run!
-            store
-            (::node/id (meta root'))
-            validate/validate-data-tree
-            (assoc params ::record/count (count expected-data))))
-        ))))
+        (timer "check-asserts"
+          (tu/check-asserts
+            (validate/run!
+              store
+              (::node/id (meta root'))
+              validate/validate-data-tree
+              (assoc params ::record/count (count expected-data)))))
+        (printf "---------------\n")
+        (flush)))))

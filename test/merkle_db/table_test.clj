@@ -1,8 +1,14 @@
 (ns merkle-db.table-test
   (:require
     [clojure.test :refer :all]
+    [clojure.test.check.generators :as gen]
+    [merkledag.core :as mdag]
+    [merkle-db.graph :as graph]
     [merkle-db.key :as key]
-    [merkle-db.table :as table]))
+    [merkle-db.record :as record]
+    [merkle-db.table :as table]
+    [puget.printer :as puget]
+    [test.carly.core :as carly :refer [defop]]))
 
 
 (deftest record-updating-fn
@@ -52,3 +58,166 @@
             (record-updater {:merge-record (constantly nil)
                              :merge-field (constantly nil)}))
           "should be illegal"))))
+
+
+;; ## Table Operations
+
+(defop Keys
+  [query]
+
+  (gen-args
+    [ctx]
+    ; TODO: improve this
+    ; :min-key
+    ; :max-key
+    ; :reverse
+    ; :offset
+    ; :limit
+    [(gen/return {})])
+
+  (apply-op
+    [this table]
+    (doall (table/keys @table query)))
+
+  (check
+    [this model result]
+    ; TODO: query filtering
+    (is (= (keys model) result))))
+
+
+(defop Scan
+  [query]
+
+  (gen-args
+    [ctx]
+    ; TODO: improve this
+    ; :fields
+    ; :min-key
+    ; :max-key
+    ; :reverse
+    ; :offset
+    ; :limit
+    [(gen/return {})])
+
+  (apply-op
+    [this table]
+    (doall (table/scan table query)))
+
+  (check
+    [this model result]
+    ; TODO: query filtering
+    (is (= (seq model) result))))
+
+
+(defop Read
+  [ids fields]
+
+  (gen-args
+    [ctx]
+    [(gen/set (gen/large-integer* {:min 1, :max (:n ctx)}))
+     (gen/fmap not-empty (gen/set (gen/elements #{:a :b :c :d :e})))])
+
+  (apply-op
+    [this table]
+    (table/read table ids {:fields fields}))
+
+  (check
+    [this model result]
+    (is (coll? result))
+    ; TODO: filter keys
+    (is (= (map model (sort ids)) result))))
+
+
+(defop Insert
+  [records]
+
+  (gen-args
+    [ctx]
+    [
+     (gen/fmap
+       (fn [ids] (mapv #(vector % {:a %, :c %}) ids))
+       (gen/set (gen/large-integer* {:min 1, :max (:n ctx)})))])
+
+  (apply-op
+    [this table]
+    (swap! table table/insert records))
+
+  (check
+    [this model result]
+    (is (= table/data-type (:data/type result)))
+    ; TODO: model doesn't get updated first
+    (is (= (count model) (::record/count result)))
+    (is (= (first (keys model)) (::record/first-key result)))
+    (is (= (last (keys model)) (::record/last-key result))))
+
+  (update-model
+    [this model]
+    (into model records)))
+
+
+(defop Delete
+  [rkeys]
+
+  (gen-args
+    [ctx]
+    [(gen/set (gen/large-integer* {:min 1, :max (:n ctx)}))])
+
+  (apply-op
+    [this table]
+    (swap! table table/delete rkeys))
+
+  (check
+    [this model result]
+    (is (= table/data-type (:data/type result)))
+    ,,,)
+
+  (update-model
+    [this model]
+    (apply dissoc model rkeys)))
+
+
+(defop Flush!
+  []
+
+  (apply-op
+    [this table]
+    (swap! table table/flush!)))
+
+
+(def ^:private op-generators
+  (juxt gen->Keys
+        gen->Scan
+        gen->Read
+        gen->Insert
+        gen->Delete
+        gen->Flush!))
+
+
+(def gen-context
+  "Generator for test contexts; this gives the set of possible keys to use in
+  operations."
+  (gen/hash-map
+    :n (gen/large-integer* {:min 1, :max 100})))
+
+
+(deftest table-behavior
+  (let [store (mdag/init-store :types graph/codec-types)]
+    (carly/check-system "table behavior" 50
+      #(atom (table/bare-table
+               store "test-data"
+               {:merkle-db.index/fan-out 4
+                :merkle-db.partition/limit 5
+                :merkle-db.patch/limit 10
+                :merkle-db.record/families {:bc #{:b :c}}
+                :merkle-db.key/lexicoder :long}))
+      op-generators
+      :context gen-context
+      :init-model (constantly (sorted-map))
+      :concurrency 1
+      :repetitions 1
+      :report
+      {:puget {:print-handlers #(get {;Multihash (puget/tagged-handler 'data/hash multihash/base58)
+                                      ;Block (puget/tagged-handler 'data/block (partial into {}))
+                                      }
+                                     %
+                                     (puget/common-handlers %))}})))

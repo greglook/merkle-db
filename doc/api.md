@@ -112,21 +112,33 @@ data from the store. If the fields are `nil` or not provided, all record data
 will be returned.
 
 ```clojure
+; Read the keys of records present in the table. If start and end keys are
+; given, only records within the bounds will be returned. A nil start or end
+; implies the beginning or end of the data, respectively.
+;
+; - :start-key
+; - :end-key
+; - :reverse
+; - :offset
+; - :limit
+(table/keys table opts) => (key ...)
+
 ; Scan the records in a table, returning a sequence of data for the given set of
 ; fields. If start and end keys or indices are given, only records within the
 ; bounds will be returned (inclusive). A nil start or end implies the beginning
 ; or end of the data, respectively.
 ;
-; - fields
-; - from-key
-; - to-key
-; - offset
-; - limit
+; - :fields
+; - :start-key
+; - :end-key
+; - :reverse
+; - :offset
+; - :limit
 (table/scan table opts) => ([key record] ...)
 
 ; Read a set of records from the database, returning data for the given set of
 ; fields for each located record.
-(table/get-records table record-keys opts) => ([key record] ...)
+(table/read table record-keys opts) => ([key record] ...)
 
 ; Write a collection of records to the database, represented as a map of record
 ; key values to record data maps. The options may include merge resolution
@@ -155,8 +167,8 @@ high-performance applications.
 ({:merkledag.node/id Multihash
   :merkle-db.record/count Long
   :merkle-db.record/size Long
-  :merkle-db.partition/first-key key-bytes
-  :merkle-db.partition/last-key key-bytes}
+  :merkle-db.record/first-key key-bytes
+  :merkle-db.record/last-key key-bytes}
  ...)
 
 ; Read all the records in the given partition, returning a sequence of data for

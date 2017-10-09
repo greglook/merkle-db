@@ -2,6 +2,7 @@
   "Tables are named top-level containers of records. Generally, a single table
   corresponds to a certain 'kind' of data. Tables also contain configuration
   determining how keys are encoded and records are stored."
+  (:refer-clojure :exclude [keys read])
   (:require
     [clojure.future :refer [nat-int? pos-int?]]
     [clojure.spec :as s]
@@ -71,7 +72,28 @@
 
   ;; Records
 
-  ; TODO: scan-keys?
+  (keys
+    [table]
+    [table opts]
+    "Scan the table, returning keys of the stored records which match the given
+    options. Returns a lazy sequence of keys.
+
+    If min and max keys are given, only records within the bounds will be
+    returned (inclusive). A nil min or max implies the beginning or end of
+    the data, respectively.
+
+    Options may include:
+
+    - `:min-key`
+      Return records with keys equal to or greater than the marker.
+    - `:max-key`
+      Return records with keys equal to or less than the marker.
+    - `:reverse`
+      Reverse the order the keys are returned in.
+    - `:offset`
+      Skip this many records in the output.
+    - `:limit`
+      Return at most this many records.")
 
   (scan
     [table]
@@ -80,8 +102,8 @@
     Returns a lazy sequence of vectors which each hold a record key and a map
     of the record data.
 
-    If start and end keys or indices are given, only records within the
-    bounds will be returned (inclusive). A nil start or end implies the beginning
+    If min and max keys or indices are given, only records within the
+    bounds will be returned (inclusive). A nil min or max implies the beginning
     or end of the data, respectively.
 
     Options may include:
@@ -90,16 +112,18 @@
       Only return data for the selected set of fields. If provided, only
       records with data for one or more of the fields are returned, otherwise
       all fields and records (including empty ones) are returned.
-    - `:start-key`
+    - `:min-key`
       Return records with keys equal to or greater than the marker.
-    - `:end-key`
+    - `:max-key`
       Return records with keys equal to or less than the marker.
+    - `:reverse`
+      Reverse the order the keys are returned in.
     - `:offset`
       Skip this many records in the output.
     - `:limit`
       Return at most this many records.")
 
-  (get-records
+  (read
     [table id-keys]
     [table id-keys opts]
     "Read a set of records from the database, returning data for each present
@@ -136,12 +160,15 @@
 
   (flush!
     [table]
-    [table apply-patches?]
+    [table opts]
     "Ensure that all local state has been persisted to the storage backend and
     return an updated persisted table.
 
-    If `apply-patches?` is true, the current patch data will be merged into the
-    main data tree and the returned table will have no patch link.")
+    Options may include:
+
+    - `:apply-patches?`
+      If true, the current patch data will be merged into the main data tree
+      and the returned table will have no patch link.")
 
   ;; Partitions
 
@@ -530,7 +557,8 @@
                 (if (some? value)
                   (assoc data field-key value)
                   data)))
-            {} (distinct (concat (keys old-data) (keys new-data))))))
+            {} (distinct (concat (clojure.core/keys old-data)
+                                 (clojure.core/keys new-data))))))
 
     merge-field
       (throw (IllegalArgumentException.

@@ -1,5 +1,6 @@
 (ns merkle-db.table-test
   (:require
+    [clojure.set :as set]
     [clojure.test :refer :all]
     [clojure.test.check.generators :as gen]
     [merkledag.core :as mdag]
@@ -101,7 +102,7 @@
 
   (apply-op
     [this table]
-    (doall (table/scan table query)))
+    (doall (table/scan @table query)))
 
   (check
     [this model result]
@@ -114,18 +115,30 @@
 
   (gen-args
     [ctx]
-    [(gen/set (gen/large-integer* {:min 1, :max (:n ctx)}))
+    [(gen/set (gen/large-integer* {:min 1, :max (:n ctx)})
+              {:max-elements (:n ctx)})
      (gen/fmap not-empty (gen/set (gen/elements #{:a :b :c :d :e})))])
 
   (apply-op
     [this table]
-    (table/read table ids {:fields fields}))
+    (table/read @table ids {:fields fields}))
 
   (check
     [this model result]
-    (is (coll? result))
-    ; TODO: filter keys
-    (is (= (map model (sort ids)) result))))
+    (let [expected (->> ids
+                        (map (juxt identity model))
+                        (filter second)
+                        (map (fn [[k r]]
+                               (if (seq fields)
+                                 [k (select-keys r fields)]
+                                 [k r])))
+                        (sort-by first))]
+      (if (empty? expected)
+        (is (nil? result))
+        (do
+          (is (coll? result))
+          ; TODO: filter keys
+          (is (= expected result)))))))
 
 
 (defop Insert
@@ -133,8 +146,7 @@
 
   (gen-args
     [ctx]
-    [
-     (gen/fmap
+    [(gen/fmap
        (fn [ids] (mapv #(vector % {:a %, :c %}) ids))
        (gen/set (gen/large-integer* {:min 1, :max (:n ctx)})))])
 
@@ -144,11 +156,11 @@
 
   (check
     [this model result]
-    (is (= table/data-type (:data/type result)))
-    ; TODO: model doesn't get updated first
-    (is (= (count model) (::record/count result)))
-    (is (= (first (keys model)) (::record/first-key result)))
-    (is (= (last (keys model)) (::record/last-key result))))
+    (let [extant (set (keys model))
+          rkeys (map first records)
+          added (set/difference (set rkeys) extant)]
+      (is (= (+ (count model) (count added))
+             (::record/count result)))))
 
   (update-model
     [this model]
@@ -168,8 +180,10 @@
 
   (check
     [this model result]
-    (is (= table/data-type (:data/type result)))
-    ,,,)
+    (let [extant (set (keys model))
+          removed (set/intersection extant rkeys)]
+      (is (= (- (count model) (count removed))
+             (::record/count result)))))
 
   (update-model
     [this model]
@@ -202,7 +216,7 @@
 
 (deftest table-behavior
   (let [store (mdag/init-store :types graph/codec-types)]
-    (carly/check-system "table behavior" 50
+    (carly/check-system "table behavior" 100
       #(atom (table/bare-table
                store "test-data"
                {:merkle-db.index/fan-out 4
@@ -211,7 +225,7 @@
                 :merkle-db.record/families {:bc #{:b :c}}
                 :merkle-db.key/lexicoder :long}))
       op-generators
-      :context gen-context
+      :context-gen gen-context
       :init-model (constantly (sorted-map))
       :concurrency 1
       :repetitions 1

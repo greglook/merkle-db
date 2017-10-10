@@ -76,7 +76,7 @@
     [table]
     [table opts]
     "Scan the table, returning keys of the stored records which match the given
-    options. Returns a lazy sequence of keys.
+    options. Returns a lazy sequence of keys, or nil if the table is empty.
 
     If min and max keys are given, only records within the bounds will be
     returned (inclusive). A nil min or max implies the beginning or end of
@@ -100,7 +100,7 @@
     [table opts]
     "Scan the table, returning data from records which match the given options.
     Returns a lazy sequence of vectors which each hold a record key and a map
-    of the record data.
+    of the record data, or nil if the table is empty.
 
     If min and max keys or indices are given, only records within the
     bounds will be returned (inclusive). A nil min or max implies the beginning
@@ -127,7 +127,8 @@
     [table id-keys]
     [table id-keys opts]
     "Read a set of records from the database, returning data for each present
-    record.
+    record. Returns a sequence of vectors which each hold a record key and a map
+    of the record data, or nil if no records were found.
 
     Options may include:
 
@@ -140,7 +141,7 @@
     [table records]
     [table records opts]
     "Insert some record data into the database, represented by a collection
-    of pairs of record key values and field maps.
+    of pairs of record key values and field maps. Returns an updated table.
 
     Options may include:
 
@@ -161,8 +162,8 @@
   (flush!
     [table]
     [table opts]
-    "Ensure that all local state has been persisted to the storage backend and
-    return an updated persisted table.
+    "Ensure that all local state has been persisted to the storage backend.
+    Returns an updated persisted table.
 
     Options may include:
 
@@ -457,6 +458,14 @@
       (.pending table))))
 
 
+(defn- -keys
+  "Internal `keys` implementation."
+  ([table]
+   (-keys table nil))
+  ([table opts]
+   (seq (map first (scan table opts)))))
+
+
 (defn- -scan
   "Internal `scan` implementation."
   ([table]
@@ -494,19 +503,20 @@
          (and (:limit opts) (nat-int? (:offset opts)))
            (take (:limit opts)))
        (->>
-         (map (key-decoder lexicoder)))))))
+         (map (key-decoder lexicoder)))
+       (seq)))))
 
 
-(defn- -get-records
-  "Internal `get-records` implementation."
+(defn- -read
+  "Internal `read` implementation."
   ([table id-keys]
-   (-get-records table id-keys nil))
+   (-read table id-keys nil))
   ([^Table table id-keys opts]
    (let [lexicoder (table-lexicoder table)
-         id-keys (into #{} (map (partial key/encode lexicoder)) id-keys)
+         id-keys (into (sorted-set) (map (partial key/encode lexicoder)) id-keys)
          patch-map (load-changes table)
-         patch-changes (select-keys patch-map id-keys)
-         extra-keys (apply disj id-keys (keys patch-changes))
+         patch-changes (filter (comp id-keys first) patch-map)
+         extra-keys (apply disj id-keys (map first patch-changes))
          patch-changes (patch/filter-changes patch-changes {:fields (:fields opts)})
          data-entries (when-let [data-node (and (seq extra-keys)
                                                 (mdag/get-data
@@ -519,7 +529,8 @@
                           extra-keys))]
      (->> (concat patch-changes data-entries)
           (patch/remove-tombstones)
-          (map (key-decoder lexicoder))))))
+          (map (key-decoder lexicoder))
+          (seq)))))
 
 
 (defn- record-updater
@@ -579,7 +590,7 @@
    (let [{:keys [merge-record merge-field]} opts
          lexicoder (table-lexicoder table)
          update-record (record-updater opts)
-         extant (into {} (-get-records table (map first records)))
+         extant (into {} (-read table (map first records)))
          new-records (map
                        (fn [[k data]]
                          [(key/encode lexicoder k)
@@ -595,7 +606,7 @@
   "Internal `delete` implementation."
   [table id-keys]
   (let [lexicoder (key/lexicoder (::key/lexicoder table :bytes))
-        extant (-get-records table id-keys {:fields {}})]
+        extant (-read table id-keys {:fields {}})]
     (-> table
         (update-pending
           into
@@ -666,8 +677,9 @@
 
   ITable
 
-  {:scan -scan
-   :get-records -get-records
+  {:keys -keys
+   :scan -scan
+   :read -read
    :insert -insert
    :delete -delete
    :flush! -flush!})

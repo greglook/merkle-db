@@ -116,8 +116,8 @@ will be returned.
 ; given, only records within the bounds will be returned. A nil start or end
 ; implies the beginning or end of the data, respectively.
 ;
-; - :start-key
-; - :end-key
+; - :min-key
+; - :max-key
 ; - :reverse
 ; - :offset
 ; - :limit
@@ -129,8 +129,8 @@ will be returned.
 ; or end of the data, respectively.
 ;
 ; - :fields
-; - :start-key
-; - :end-key
+; - :min-key
+; - :max-key
 ; - :reverse
 ; - :offset
 ; - :limit

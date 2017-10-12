@@ -225,8 +225,8 @@
   "Read a lazy sequence of key/map tuples which contain the field data for the
   records whose keys lie in the given range, inclusive. A nil boundary includes
   all records in that range direction."
-  [store part fields start-key end-key]
-  (read-tablets store part fields tablet/read-range start-key end-key))
+  [store part fields min-key max-key]
+  (read-tablets store part fields tablet/read-range min-key max-key))
 
 
 

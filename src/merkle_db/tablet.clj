@@ -108,10 +108,10 @@
   "Read a lazy sequence of key/map tuples which contain the field data for the
   records whose keys lie in the given range, inclusive. A nil boundary includes
   all records in that range direction."
-  [tablet start-key end-key]
+  [tablet min-key max-key]
   ; OPTIMIZE: binary-search to the starting point and then iterate.
   (cond->> (::records tablet)
-    start-key
-      (drop-while #(key/before? (first %) start-key))
-    end-key
-      (take-while #(not (key/after? (first %) end-key)))))
+    min-key
+      (drop-while #(key/before? (first %) min-key))
+    max-key
+      (take-while #(not (key/after? (first %) max-key)))))

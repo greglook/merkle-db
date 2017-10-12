@@ -24,10 +24,10 @@
                  [(key/create [3 0]) {:a 50, :b 51}]]]
     (is (= changes (patch/filter-changes changes {})))
     (is (= [[(key/create [3 0]) {:a 50, :b 51}]]
-           (patch/filter-changes changes {:start-key (key/create [2 5])})))
+           (patch/filter-changes changes {:min-key (key/create [2 5])})))
     (is (= [[(key/create [0 0]) {:a 10, :b 11, :c 12}]
             [(key/create [1 0]) ::patch/tombstone]]
-           (patch/filter-changes changes {:end-key (key/create [1 0])})))
+           (patch/filter-changes changes {:max-key (key/create [1 0])})))
     (is (= [[(key/create [0 0]) {:a 10}]
             [(key/create [1 0]) ::patch/tombstone]
             [(key/create [1 1]) {}]

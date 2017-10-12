@@ -67,10 +67,10 @@
   [patch opts]
   (when (seq patch)
     (cond->> patch
-      (:start-key opts)
-        (drop-while #(key/before? (first %) (:start-key opts)))
-      (:end-key opts)
-        (take-while #(not (key/after? (first %) (:end-key opts))))
+      (:min-key opts)
+        (drop-while #(key/before? (first %) (:min-key opts)))
+      (:max-key opts)
+        (take-while #(not (key/after? (first %) (:max-key opts))))
       (:fields opts)
         (map (fn [[k r]]
                [k (if (map? r) (select-keys r (:fields opts)) r)])))))

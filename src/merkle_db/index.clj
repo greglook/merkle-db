@@ -236,7 +236,7 @@
   "Read a lazy sequence of key/map tuples which contain the field data for the
   records whose keys lie in the given range, inclusive. A nil boundary includes
   all records in that range direction."
-  [store node fields start-key end-key]
+  [store node fields min-key max-key]
   (cond
     (nil? node)
       nil
@@ -245,19 +245,19 @@
       (->
         (child-boundaries node)
         (cond->>
-          start-key
-            (drop-while #(key/before? (nth % 2) start-key))
-          end-key
-            (take-while #(not (key/after? (nth % 1) end-key))))
+          min-key
+            (drop-while #(key/before? (nth % 2) min-key))
+          max-key
+            (take-while #(not (key/after? (nth % 1) max-key))))
         (->>
           (mapcat
             (fn read-child
               [[child-link _ _]]
               (let [child (graph/get-link! store node child-link)]
-                (read-range store child fields start-key end-key))))))
+                (read-range store child fields min-key max-key))))))
 
     (= part/data-type (:data/type node))
-      (part/read-range store node fields start-key end-key)
+      (part/read-range store node fields min-key max-key)
 
     :else
       (throw (ex-info (str "Unsupported index-tree node type: "

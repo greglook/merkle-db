@@ -472,27 +472,27 @@
    (-scan table nil))
   ([^Table table opts]
    (let [lexicoder (table-lexicoder table)
-         start-key (some->> (:start-key opts) (key/encode lexicoder))
-         end-key (some->> (:end-key opts) (key/encode lexicoder))]
+         min-key (some->> (:min-key opts) (key/encode lexicoder))
+         max-key (some->> (:max-key opts) (key/encode lexicoder))]
      (->
        (patch/patch-seq
          ; Merged patch data to apply to the records.
          (patch/filter-changes
            (load-changes table)
            {:fields (:fields opts)
-            :start-key start-key
-            :end-key end-key})
+            :min-key min-key
+            :max-key max-key})
          ; Lazy sequence of matching records from the index tree.
          (when-let [data-node (mdag/get-data
                                 (.store table)
                                 (::data (.root-data table)))]
-           (if (or start-key end-key)
+           (if (or min-key max-key)
              (index/read-range
                (.store table)
                data-node
                (:fields opts)
-               start-key
-               end-key)
+               min-key
+               max-key)
              (index/read-all
                (.store table)
                data-node

@@ -108,23 +108,38 @@
       (::node/data))))
 
 
-(defn build-tree
+(defn- build-tree*
   "Build an index tree from a sequence of child nodes, using the given
-  parameters. Returns the final, persisted root node data."
-  [store params children]
+  parameters. Returns a result vector with the height and final sequence of
+  index nodes which can no longer make a valid higher root node. The height of
+  the result will be at most `ceiling`, if a positive value is given."
+  [store params ceiling children]
   (when (seq children)
     (let [heights (distinct (map #(::height % 0) children))]
       (when (< 1 (count heights))
         (throw (IllegalArgumentException.
                  (str "Cannot build tree from nodes at differing heights: "
                       (pr-str heights)))))
-      (loop [layer children
-             height (inc (first heights))]
-        (if (<= (count layer) 1)
-          (first layer)
+      (loop [height (first heights)
+             layer children]
+        (if (and (<= (min-branches params) (count layer))
+                 (or (nil? ceiling) (< height ceiling)))
+          ; Build the next layer.
           (let [groups (part/split-limited (max-branches params) layer)]
-            (recur (mapv (partial store-index! store height) groups)
-                   (inc height))))))))
+            (recur (inc height)
+                   (mapv (partial store-index! store (inc height)) groups)))
+          ; Hit ceiling, or insufficient children.
+          [height layer])))))
+
+
+(defn build-tree
+  "Build an index tree from a sequence of child nodes, using the given
+  parameters. Returns the final, persisted root node data."
+  [store params children]
+  (when-let [[height nodes] (build-tree* store params nil children)]
+    (if (= 1 (count nodes))
+      (first nodes)
+      (store-index! store (inc height) nodes))))
 
 
 (defn from-records
@@ -268,8 +283,21 @@
 
 ;; ## Update Functions
 
+(defn- node-str
+  "Generate a compact descriptor string for a partition or index node."
+  [node]
+  (if (= data-type (:data/type node))
+    (format "{i%d c:%d r:%d}"
+            (::height node)
+            (count (::children node))
+            (::record/count node))
+    (format "{p r:%d}"
+            (::record/count node))))
+
+
 (defn- carry-back
   [store params nodes carry]
+  (prn ::carry-back nodes carry)
   ; FIXME: implement
   (throw (RuntimeException. "NYI: index/carry-back")))
 
@@ -284,11 +312,21 @@
   vector.
 
   Returns a tuple containing the resulting height and a sequence of updated and
-  valid (but unpersisted) index nodes at that height."
-  [store params height carry inputs]
+  valid index nodes at that height."
+  [store params height carry child-inputs]
+  (prn ::update-index-children
+       height
+       (when carry [(first carry) (count (second carry))])
+       (mapv (juxt (comp node-str first) (comp count second))
+             child-inputs))
   (loop [outputs []
          carry carry
-         inputs inputs]
+         inputs child-inputs]
+    (printf "\tuic\t[%d]\t%s\t%s\n"
+            (count outputs)
+            (when carry [(first carry) (count (second carry))])
+            (when-let [[node changes] (first inputs)]
+              (pr-str [(node-str node) (count changes)])))
     (if (seq inputs)
       ; Process next input node
       (let [[child changes] (first inputs)
@@ -299,29 +337,16 @@
           (nil? result)
             (recur outputs nil (next inputs))
           ; Result elements are output-level nodes.
-          (= rheight height)
+          (= rheight height) ; TODO: can this case ever occur?
             (recur (into outputs elements) nil (next inputs))
           ; Result elements are a carry.
           :else
             (recur outputs result (next inputs))))
       ; No more input nodes.
       (if (seq outputs)
-        (let [[oheight outputs :as result]
-                (if carry
-                  (carry-back store params outputs carry)
-                  [(dec height) outputs])]
-          (if (neg? oheight)
-            ; Got bare records from carry-back
-            result
-            ; Try to build intermediate index layers.
-            ; TODO: build until (= oheight (dec height)) ?
-            (if (<= (min-branches params) (count outputs))
-              ; Build one or more valid index nodes from the outputs.
-              [height (mapv (partial store-index! store (inc oheight))
-                            (part/split-limited (max-branches params)
-                                                outputs))]
-              ; Not enough outputs to make a valid node - return for carrying.
-              result)))
+        (if carry
+          (carry-back store params outputs carry)
+          [height outputs])
         ; No outputs, so return nil or direct carry.
         carry))))
 
@@ -331,9 +356,19 @@
   containing the resulting height and a sequence of updated and valid (but
   unpersisted) index nodes at that height."
   [store params carry index changes]
+  (prn ::update-index-node
+       (when carry [(first carry) (count (second carry))])
+       (node-str index)
+       (count changes))
   (if (and (nil? carry) (empty? changes))
     ; No carry or changes to apply, pass-through node.
-    [(::height index) [index]]
+    (as->
+      [(::height index) [index]]
+      result
+          (do
+            (prn ::update-index-node=>
+                 [(first result) (mapv node-str (second result))])
+            result))
 
     ; Divide up changes and apply to children.
     (let [child-inputs (map (fn [[child child-changes]]
@@ -341,20 +376,38 @@
                                child-changes])
                             (assign-records index changes))
           child-height (dec (::height index))]
-      (cond
-        ; Update children as partitions.
-        (zero? child-height)
-          (part/update-partitions! store params carry child-inputs)
-        ; Adopt carried subnodes.
-        (and carry (= (first carry) child-height))
-          (update-index-children!
-            store params child-height
-            nil (concat (map vector (second carry)) child-inputs))
-        ; Carry forward into child updates.
-        :else
-          (update-index-children!
-            store params child-height
-            carry child-inputs)))))
+      (->
+        (cond
+          ; Update children as partitions.
+          (zero? child-height)
+            (part/update-partitions! store params carry child-inputs)
+          ; Adopt carried subnodes.
+          (and carry (= (first carry) child-height))
+            (update-index-children!
+              store params child-height
+              nil (concat (map vector (second carry)) child-inputs))
+          ; Carry forward into child updates.
+          :else
+            (update-index-children!
+              store params child-height
+              carry child-inputs))
+        (as-> result
+          (if (and (= child-height (first result))
+                   (= (map first child-inputs) (second result)))
+            ; Children remained unchanged after updates, so return original
+            ; index node.
+            [(::height index) [index]]
+            (if (neg? (first result))
+              ; Negative height means directly-carried records
+              result
+              ; Build until the layer is too small or we've reached the original
+              ; index node height.
+              (build-tree* store params child-height (second result))))
+          (do
+            (prn ::update-index-node=>
+                 [(first result) (mapv node-str (second result))])
+            result)
+          )))))
 
 
 (defn update-tree
@@ -364,6 +417,9 @@
   `:merkle-db.data/families`. Returns an updated persisted root node if any
   records remain in the tree."
   [store params root changes]
+  (prn ::update-tree
+       [(::height root 0) (count (::children root)) (::record/count root)]
+       (count changes))
   (cond
     ; No changes, return root as-is.
     (empty? changes)

@@ -77,11 +77,16 @@
 (defmacro ^:private is-index
   [node child-count record-count first-key-idx last-key-idx]
   `(let [node# ~node]
-     (is (= index/data-type (:data/type node#)))
-     (is (= ~child-count (count (::index/children node#))))
-     (is (= ~record-count (::record/count node#)))
-     (is (= (nth-key ~first-key-idx) (::record/first-key node#)))
-     (is (= (nth-key ~last-key-idx) (::record/last-key node#)))))
+     (is (= index/data-type (:data/type node#))
+         "has index data type")
+     (is (= ~child-count (count (::index/children node#)))
+         "has expected number of children")
+     (is (= ~record-count (::record/count node#))
+         "contains expected number of records")
+     (is (= (nth-key ~first-key-idx) (::record/first-key node#))
+         "contains expected first key")
+     (is (= (nth-key ~last-key-idx) (::record/last-key node#))
+         "contains expected last key")))
 
 
 (deftest index-reading
@@ -199,38 +204,51 @@
                (index/read-all store root' nil)))))))
 
 
-(deftest index-tree-updates
+(deftest index-tree-noop-update
   (with-index-fixture
-    (testing "no changes"
-      (is (identical? root (index/update-tree store params root [])))
-      ; TODO: identical? would be a stronger guarantee here
-      (is (= root (index/update-tree store params root
-                                     (tombstones 0))))
-      (is (= root (index/update-tree store params root
-                                     (records 5 10 14 23 30)))))
-    (testing "insert two partitions into B"
-      (let [root' (index/update-tree store params root
-                                     (records 0 1 2 3 9 15 16))]
-        (is-index root' 2 26 0 32)
-        (is (= (records 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 21 23
-                        24 25 30 31 32)
-               (index/read-all store root' nil)))
-        (let [lchild (graph/get-link! store root' (nth (::index/children root') 0))]
-          (is-index lchild 3 15 0 14))
-        (let [rchild (graph/get-link! store root' (nth (::index/children root') 1))]
-          (is-index rchild 3 11 15 32)))
-      )
-    ; TODO: test scenarios
-    ; - insert two partitions into B => redistribute with C
-    ; - remove a whole partition in B => C unchanged
-    ; - underflow partition 1 in B => merged with 2
-    ; - underflow partition 2 in B => merged back with 1
-    ; - remove two partitions in B => part is carried to C
-    ; - remove B entirely => C is new root
-    ; - remove C entirely => B is new root
-    ; - insert full partition into C => B is unchanged
-    ; - insert three partitions into C => split?
-    ))
+    (is (identical? root (index/update-tree store params root [])))
+    ; TODO: identical? would be a stronger guarantee here
+    (is (= root (index/update-tree store params root
+                                   (tombstones 0))))
+    (is (= root (index/update-tree store params root
+                                   (records 5 10 14 23 30))))))
+
+
+(deftest index-tree-insert-2-parts
+  (with-index-fixture
+    (let [root' (index/update-tree store params root
+                                   (records 0 1 2 3 9 15 16))]
+      (is-index root' 2 26 0 32)
+      (is (= (records 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 21 23
+                      24 25 30 31 32)
+             (index/read-all store root' nil)))
+      (let [lchild (graph/get-link! store root' (nth (::index/children root') 0))]
+        (is-index lchild 3 15 0 14))
+      (let [rchild (graph/get-link! store root' (nth (::index/children root') 1))]
+        (is-index rchild 3 11 15 32)))))
+
+
+(deftest index-tree-remove-part-from-B
+  (with-index-fixture
+    (let [root' (index/update-tree store params root
+                                   (tombstones 7 8 10 11))]
+      (is-index root' 4 15 4 32)
+      (is (= (records 4 5 6 12 13 14 17 18 21 23 24 25 30 31 32)
+             (index/read-all store root' nil)))
+      (is (= [part0 part2 part3 part4]
+             (map #(graph/get-link! store root' %) (::index/children root'))))
+      )))
+
+
+; TODO: test scenarios
+; - remove a whole partition in B => C unchanged
+; - underflow partition 1 in B => merged with 2
+; - underflow partition 2 in B => merged back with 1
+; - remove two partitions in B => part is carried to C
+; - remove B entirely => C is new root
+; - remove C entirely => B is new root
+; - insert full partition into C => B is unchanged
+; - insert three partitions into C => split?
 
 
 

@@ -20,147 +20,221 @@
     [merkle-db.validate :as validate]
     [merkle-db.test-utils :as tu]))
 
+;;       A
+;;      / \
+;;     B   C
+;;    /|\ / \
+;;    012 3 4
 
-(def k0 (key/create [0]))
-(def k1 (key/create [1]))
-(def k2 (key/create [2]))
-(def k3 (key/create [3]))
-(def k4 (key/create [4]))
-
-(def r0 {:x 0, :y 0, :a 0, :c 0})
-(def r1 {:x 1, :c 1, :d 1})
-(def r2 {:b 2, :c 2})
-(def r3 {:x 3, :y 3, :a 3, :b 3})
-(def r4 {:z 4, :d 4})
 
 (def params
   {::index/fan-out 4
-   ::part/limit 3
-   ::record/families {:ab #{:a :b}, :cd #{:c :d}}})
+   ::part/limit 5
+   ::record/families {:bc #{:b :c}}})
 
 
-(deftest record-assigment
-  (let [assign-records @#'index/assign-records]
-    (is (= [[:a [[k0 r0] [k1 ::patch/tombstone]]]
-            [:b [[k2 r2] [k3 ::patch/tombstone]]]]
-           (assign-records
-             {::index/keys [k2]
-              ::index/children [:a :b]}
-             [[k0 r0] [k1 ::patch/tombstone]
-              [k2 r2] [k3 ::patch/tombstone]])))
-    (is (= [[:a nil]
-            [:b [[k1 ::patch/tombstone]]]
-            [:c [[k2 r2] [k3 ::patch/tombstone]]]]
-           (assign-records
-             {::index/keys [k0 k2]
-              ::index/children [:a :b :c]}
-             [[k1 ::patch/tombstone] [k2 r2] [k3 ::patch/tombstone]])))
-    (is (= [[:a [[k0 r0] [k1 ::patch/tombstone]]]
-            [:b [[k2 r2] [k3 ::patch/tombstone]]]
-            [:c nil]]
-           (assign-records
-             {::index/keys [k2 k4]
-              ::index/children [:a :b :c]}
-             [[k0 r0] [k1 ::patch/tombstone]
-              [k2 r2] [k3 ::patch/tombstone]])))))
+(defn nth-key
+  "Generate a key for index i."
+  [i]
+  (key/create [i]))
+
+
+(defn nth-record
+  "Generate a record for index i."
+  [i]
+  (cond-> {:a i}
+    (zero? (mod i 3)) (assoc :b (- 100 i))
+    (zero? (mod i 5)) (assoc :c (+ 20 i))))
+
+
+(defn records
+  "Return a sequence of the records at each of the given indexes."
+  [& idxs]
+  (map (juxt nth-key nth-record) idxs))
+
+
+(defn tombstones
+  "Return a sequence of tombstone markers at each of the given indexes."
+  [& idxs]
+  (map (juxt nth-key (constantly ::patch/tombstone)) idxs))
+
+
+(defmacro ^:private with-index-fixture
+  [& body]
+  `(let [store# (mdag/init-store :types graph/codec-types)
+         ~'store store#
+         ~'part0 (part/from-records store# params (records 4 5 6))
+         ~'part1 (part/from-records store# params (records 7 8 10 11))
+         ~'part2 (part/from-records store# params (records 12 13 14 17 18))
+         ~'part3 (part/from-records store# params (records 21 23 24 25))
+         ~'part4 (part/from-records store# params (records 30 31 32))
+         ~'idx0 (index/build-tree store# params [~'part0 ~'part1 ~'part2])
+         ~'idx1 (index/build-tree store# params [~'part3 ~'part4])
+         ~'root (index/build-tree store# params [~'idx0 ~'idx1])]
+     ~@body))
+
+
+(defmacro ^:private is-index
+  [node child-count record-count first-key-idx last-key-idx]
+  `(let [node# ~node]
+     (is (= index/data-type (:data/type node#)))
+     (is (= ~child-count (count (::index/children node#))))
+     (is (= ~record-count (::record/count node#)))
+     (is (= (nth-key ~first-key-idx) (::record/first-key node#)))
+     (is (= (nth-key ~last-key-idx) (::record/last-key node#)))))
 
 
 (deftest index-reading
-  (let [store (mdag/init-store :types graph/codec-types)
-        params {::index/fan-out 4
-                ::part/limit 3
-                ::record/families {:ab #{:a :b}, :cd #{:c :d}}}
-        part0 (part/from-records store params {k0 r0, k1 r1, k2 r2})
-        part1 (part/from-records store params {k3 r3, k4 r4})
-        root (index/build-tree store params [part0 part1])]
+  (with-index-fixture
     (testing "root properties"
       (is (= index/data-type (:data/type root)))
-      (is (= 1 (::index/height root)))
-      (is (= [k3] (::index/keys root)))
+      (is (= 2 (::index/height root)))
       (is (= 2 (count (::index/children root))))
-      (is (= 5 (::record/count root)))
-      (is (= k0 (::record/first-key root)))
-      (is (= k4 (::record/last-key root))))
+      (is (= 19 (::record/count root)))
+      (is (= (nth-key 4) (::record/first-key root)))
+      (is (= (nth-key 32) (::record/last-key root))))
     (testing "read-all"
       (is (thrown? Exception
             (index/read-all store {:data/type :foo} nil)))
-      (is (= [[k0 r0] [k1 r1] [k2 r2] [k3 r3] [k4 r4]]
+      (is (= (records 4 5 6 7 8 10 11 12 13 14 17 18 21 23 24 25 30 31 32)
              (index/read-all store root nil)))
-      (is (= [[k1 {:d 1}] [k4 {:d 4}]]
-             (index/read-all store root #{:d}))))
+      (is (= [[(nth-key 5) {:c 25}]
+              [(nth-key 10) {:c 30}]
+              [(nth-key 25) {:c 45}]
+              [(nth-key 30) {:c 50}]]
+             (index/read-all store root #{:c}))))
     (testing "read-batch"
       (is (thrown? Exception
             (index/read-batch store {:data/type :foo} nil nil)))
-      (is (= [[k1 r1] [k2 r2] [k4 r4]]
-             (index/read-batch store root nil #{k1 k2 k4 (key/create [7])})))
-      (is (= [[k1 {:x 1}] [k3 {:x 3}]]
-             (index/read-batch store root #{:x} #{k1 k3 k4}))))
+      (is (= (records 5 8 23)
+             (index/read-batch
+               store root nil
+               #{(nth-key 8) (nth-key 5) (nth-key 23) (nth-key 80)})))
+      (is (= [[(nth-key 12) {:b 88}]
+              [(nth-key 21) {:b 79}]]
+             (index/read-batch
+               store root #{:b}
+               #{(nth-key 12) (nth-key 21) (nth-key 22)}))))
     (testing "read-range"
       (is (thrown? Exception
             (index/read-range store {:data/type :foo} nil nil nil)))
-      (is (= [[k0 r0] [k1 r1] [k2 r2] [k3 r3] [k4 r4]]
+      (is (= (records 4 5 6 7 8 10 11 12 13 14 17 18 21 23 24 25 30 31 32)
              (index/read-range store root nil nil nil)))
-      (is (= [[k0 {:y 0}] [k3 {:y 3}]]
-             (index/read-range store root #{:y} nil nil)))
-      (is (= [[k0 r0] [k1 r1]]
-             (index/read-range store root nil nil k1)))
-      (is (= [[k2 r2] [k3 r3] [k4 r4]]
-             (index/read-range store root nil k2 nil)))
-      (is (= [[k2 {:c 2}]]
-             (index/read-range store root #{:c} k2 k3))))))
+      (is (= [[(nth-key  6) {:b 94}]
+              [(nth-key 12) {:b 88}]
+              [(nth-key 18) {:b 82}]
+              [(nth-key 21) {:b 79}]
+              [(nth-key 24) {:b 76}]
+              [(nth-key 30) {:b 70}]]
+             (index/read-range store root #{:b} nil nil)))
+      (is (= (records 4 5 6 7 8 10)
+             (index/read-range store root nil nil (nth-key 10))))
+      (is (= (records 21 23 24 25 30 31 32)
+             (index/read-range
+               store root nil
+               (nth-key 20) nil)))
+      (is (= [[(nth-key  5) {:c 25}]
+              [(nth-key 10) {:c 30}]
+              [(nth-key 25) {:c 45}]
+              [(nth-key 30) {:c 50}]]
+             (index/read-range store root #{:c} (nth-key 5) (nth-key 30)))))))
 
 
-(deftest index-update-empty-root
+(deftest empty-root-updates
   (let [store (mdag/init-store :types graph/codec-types)
-        root (index/update-tree store params nil [[k0 r0] [k1 ::patch/tombstone]])]
-    (is (nil? (index/update-tree store params nil nil)))
-    (is (= part/data-type (:data/type root)))
-    (is (= 1 (::record/count root)))
-    (is (= [[k0 r0]] (index/read-all store root nil)))))
+        root nil]
+    (testing "bad input"
+      (is (thrown? Exception (index/update-tree store params {:data/type :foo}
+                                                (records 1)))))
+    (testing "unchanged contents"
+      (is (nil? (index/update-tree store params root [])))
+      (is (nil? (index/update-tree store params root (tombstones 0)))))
+    (testing "insertion"
+      (let [root' (index/update-tree store params nil
+                                     (concat (tombstones 1 2 3)
+                                             (records 4 5)
+                                             (tombstones 6 7 8)))]
+        (is (= part/data-type (:data/type root')))
+        (is (= 2 (::record/count root')))
+        (is (= (nth-key 4) (::record/first-key root')))
+        (is (= (nth-key 5) (::record/last-key root')))
+        (is (= (records 4 5) (index/read-all store root' nil)))))))
 
 
-(deftest index-updates-partition-root
+(deftest partition-root-updates
   (let [store (mdag/init-store :types graph/codec-types)
-        part0 (part/from-records store params {k0 r0, k1 r1, k2 r2})
-        root (index/update-tree store params part0 [[k3 r3] [k4 r4]])]
-    (is (= part0 (index/update-tree store params part0 [])))
-    (is (= index/data-type (:data/type root)))
-    (is (= 5 (::record/count root)))
-    (is (= 2 (count (::index/children root))))
-    (is (= [[k0 r0] [k1 r1] [k2 r2] [k3 r3] [k4 r4]]
-           (index/read-all store root nil)))))
+        root (part/from-records store params (records 4 5 6))]
+    (testing "unchanged contents"
+      (is (identical? root (index/update-tree store params root [])))
+      (is (identical? root (index/update-tree store params root (tombstones 1 2 7)))))
+    (testing "full deletion"
+      (is (nil? (index/update-tree store params root (tombstones 4 5 6)))))
+    (testing "underflow"
+      (let [root' (index/update-tree store params root (tombstones 4 6))]
+        (is (= part/data-type (:data/type root')))
+        (is (= 1 (::record/count root')))
+        (is (= (nth-key 5) (::record/first-key root')))
+        (is (= (nth-key 5) (::record/last-key root')))
+        (is (= (records 5) (index/read-all store root' nil)))))
+    (testing "update"
+      (let [root' (index/update-tree store params root
+                                     [[(nth-key 3) {:x 123}]
+                                      [(nth-key 5) {:y 456}]
+                                      [(nth-key 7) {:z 789}]])]
+        (is (= part/data-type (:data/type root')))
+        (is (= 5 (::record/count root')))
+        (is (= (nth-key 3) (::record/first-key root')))
+        (is (= (nth-key 7) (::record/last-key root')))
+        (is (= [[(nth-key 3) {:x 123}]
+                [(nth-key 4) {:a 4}]
+                [(nth-key 5) {:y 456}]
+                [(nth-key 6) {:a 6, :b 94}]
+                [(nth-key 7) {:z 789}]]
+               (index/read-all store root' nil)))))
+    (testing "overflow"
+      (let [root' (index/update-tree store params root
+                                     (records 1 2 3 8 9))]
+        (is-index root' 2 8 1 9)
+        (is (= (records 1 2 3 4 5 6 8 9)
+               (index/read-all store root' nil)))))))
 
 
-(deftest index-updates-index-root
-  (let [store (mdag/init-store :types graph/codec-types)
-        k5 (key/create [5])
-        k6 (key/create [6])
-        k7 (key/create [7])
-        k8 (key/create [8])
-        k9 (key/create [9])
-        r5 {:a 5, :x 5}
-        r6 {:b 6, :y 6}
-        r7 {:b 7, :y 7}
-        r8 {:b 8, :y 8}
-        r9 {:b 9, :y 9}
-        part0 (part/from-records store params {k0 r0, k1 r1})
-        part1 (part/from-records store params {k3 r3, k4 r4})
-        part2 (part/from-records store params {k5 r5, k7 r7})
-        part3 (part/from-records store params {k8 r8, k9 r9})
-        idx00 (index/build-tree store params [part0 part1])
-        idx01 (index/build-tree store params [part2 part3])
-        idx10 (index/build-tree store params [idx00 idx01])
-        root (index/update-tree store params idx10 [[k2 r2] [k6 r6] [k7 ::patch/tombstone]])]
-    ;(prn ::root root)
-    (is (= index/data-type (:data/type root)))
-    (is (= 9 (::record/count root)))
-    (is (= 4 (count (::index/children root))))
-    (is (= k0 (::record/first-key root)))
-    (is (= k9 (::record/last-key root)))
-    (is (= [[k0 r0] [k1 r1] [k2 r2] [k3 r3] [k4 r4]
-            [k5 r5] [k6 r6] [k8 r8] [k9 r9]]
-           (index/read-all store root nil)))))
+(deftest index-tree-updates
+  (with-index-fixture
+    (testing "no changes"
+      (is (identical? root (index/update-tree store params root [])))
+      ; TODO: identical? would be a stronger guarantee here
+      (is (= root (index/update-tree store params root
+                                     (tombstones 0))))
+      (is (= root (index/update-tree store params root
+                                     (records 5 10 14 23 30)))))
+    (testing "insert two partitions into B"
+      (let [root' (index/update-tree store params root
+                                     (records 0 1 2 3 9 15 16))]
+        (is-index root' 2 26 0 32)
+        (is (= (records 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 21 23
+                        24 25 30 31 32)
+               (index/read-all store root' nil)))
+        (let [lchild (graph/get-link! store root' (nth (::index/children root') 0))]
+          (is-index lchild 3 15 0 14))
+        (let [rchild (graph/get-link! store root' (nth (::index/children root') 1))]
+          (is-index rchild 3 11 15 32)))
+      )
+    ; TODO: test scenarios
+    ; - insert two partitions into B => redistribute with C
+    ; - remove a whole partition in B => C unchanged
+    ; - underflow partition 1 in B => merged with 2
+    ; - underflow partition 2 in B => merged back with 1
+    ; - remove two partitions in B => part is carried to C
+    ; - remove B entirely => C is new root
+    ; - remove C entirely => B is new root
+    ; - insert full partition into C => B is unchanged
+    ; - insert three partitions into C => split?
+    ))
 
+
+
+;; ## Generative Tests
 
 (defmacro timer
   [label & body]
@@ -172,6 +246,7 @@
      result#))
 
 
+#_
 (deftest ^:generative index-updates
   (let [field-keys #{:a :b :c :d}]
     (checking "tree updates" 50

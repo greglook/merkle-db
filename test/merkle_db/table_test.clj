@@ -214,6 +214,7 @@
     :n (gen/large-integer* {:min 1, :max 100})))
 
 
+#_
 (deftest table-behavior
   (let [store (mdag/init-store :types graph/codec-types)]
     (carly/check-system "table behavior" 100

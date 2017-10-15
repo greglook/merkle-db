@@ -142,16 +142,6 @@
       (store-index! store (inc height) nodes))))
 
 
-(defn from-records
-  "Build an index tree from a sequence of records. Not performant for large
-  numbers of records!"
-  [store params records]
-  (->>
-    (sort-by first records)
-    (part/partition-records store params)
-    (build-tree store params)))
-
-
 
 ;; ## Read Functions
 
@@ -392,17 +382,18 @@
               store params child-height
               carry child-inputs))
         (as-> result
-          (if (and (= child-height (first result))
-                   (= (map first child-inputs) (second result)))
-            ; Children remained unchanged after updates, so return original
-            ; index node.
-            [(::height index) [index]]
-            (if (neg? (first result))
-              ; Negative height means directly-carried records
-              result
-              ; Build until the layer is too small or we've reached the original
-              ; index node height.
-              (build-tree* store params (::height index) (second result))))
+          (when result
+            (if (and (= child-height (first result))
+                     (= (map first child-inputs) (second result)))
+              ; Children remained unchanged after updates, so return original
+              ; index node.
+              [(::height index) [index]]
+              (if (neg? (first result))
+                ; Negative height means directly-carried records
+                result
+                ; Build until the layer is too small or we've reached the original
+                ; index node height.
+                (build-tree* store params (::height index) (second result)))))
           (do
             (prn ::update-index-node=>
                  [(first result) (mapv node-str (second result))])

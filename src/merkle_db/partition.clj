@@ -315,8 +315,13 @@
           ; No pending records or changes, so use "pass through" logic.
           (recur (conj outputs part) nil (next inputs))
           ; Load partition data or use pending records.
-          (let [[parts pending] (patch-records store params pending part changes)]
-            (recur (into outputs parts) pending (next inputs)))))
+          (if (and (empty? changes) (<= (min-limit params) (count pending)))
+            ; Avoid changing an existing partition.
+            (let [parts (partition-records store params pending)]
+              (recur (conj (into outputs parts) part) nil (next inputs)))
+            ; Load updated partition records into pending.
+            (let [[parts pending] (patch-records store params pending part changes)]
+              (recur (into outputs parts) pending (next inputs))))))
       ; No more partitions to process.
       (if (empty? pending)
         ; No pending data to handle, we're done.
@@ -331,6 +336,7 @@
   with height zero and the updated sequence of partitions, or a -1 height result
   if there were not enough records left."
   [store params parts carry]
+  (prn ::carry-back (count parts) carry)
   (cond
     (nil? carry)
       [0 parts]

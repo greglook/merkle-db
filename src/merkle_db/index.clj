@@ -402,7 +402,7 @@
               result
               ; Build until the layer is too small or we've reached the original
               ; index node height.
-              (build-tree* store params child-height (second result))))
+              (build-tree* store params (::height index) (second result))))
           (do
             (prn ::update-index-node=>
                  [(first result) (mapv node-str (second result))])

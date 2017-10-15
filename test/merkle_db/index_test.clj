@@ -59,6 +59,12 @@
   (map (juxt nth-key (constantly ::patch/tombstone)) idxs))
 
 
+(defn nth-child
+  "Loads and returns the nth child of the given index node."
+  [store node i]
+  (graph/get-link! store node (nth (::index/children node) i)))
+
+
 (defmacro ^:private with-index-fixture
   [& body]
   `(let [store# (mdag/init-store :types graph/codec-types)
@@ -75,10 +81,12 @@
 
 
 (defmacro ^:private is-index
-  [node child-count record-count first-key-idx last-key-idx]
+  [node height child-count record-count first-key-idx last-key-idx]
   `(let [node# ~node]
      (is (= index/data-type (:data/type node#))
          "has index data type")
+     (is (= ~height (::index/height node#))
+         "has expected height")
      (is (= ~child-count (count (::index/children node#)))
          "has expected number of children")
      (is (= ~record-count (::record/count node#))
@@ -199,7 +207,7 @@
     (testing "overflow"
       (let [root' (index/update-tree store params root
                                      (records 1 2 3 8 9))]
-        (is-index root' 2 8 1 9)
+        (is-index root' 1 2 8 1 9)
         (is (= (records 1 2 3 4 5 6 8 9)
                (index/read-all store root' nil)))))))
 
@@ -218,30 +226,39 @@
   (with-index-fixture
     (let [root' (index/update-tree store params root
                                    (records 0 1 2 3 9 15 16))]
-      (is-index root' 2 26 0 32)
+      (is-index root' 2 2 26 0 32)
       (is (= (records 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 21 23
                       24 25 30 31 32)
              (index/read-all store root' nil)))
-      (let [lchild (graph/get-link! store root' (nth (::index/children root') 0))]
-        (is-index lchild 3 15 0 14))
-      (let [rchild (graph/get-link! store root' (nth (::index/children root') 1))]
-        (is-index rchild 3 11 15 32)))))
+      (is-index (nth-child store root' 0) 1 4 19 0 18)
+      (is-index (nth-child store root' 1) 1 2 7 21 32))))
 
 
 (deftest index-tree-remove-part-from-B
   (with-index-fixture
     (let [root' (index/update-tree store params root
                                    (tombstones 7 8 10 11))]
-      (is-index root' 4 15 4 32)
+      (is-index root' 2 2 15 4 32)
       (is (= (records 4 5 6 12 13 14 17 18 21 23 24 25 30 31 32)
              (index/read-all store root' nil)))
-      (is (= [part0 part2 part3 part4]
-             (map #(graph/get-link! store root' %) (::index/children root'))))
-      )))
+      (let [lchild (nth-child store root' 0)]
+        (is-index lchild 1 2 8 4 18)
+        (is (= part0 (nth-child store lchild 0)))
+        (is (= part2 (nth-child store lchild 1))))
+      (is (= idx1 (nth-child store root' 1))))))
+
+
+(deftest index-tree-underflow-part-in-B
+  (with-index-fixture
+    (let [root' (index/update-tree store params root
+                                   (tombstones 6))]
+      (is-index root' 2 2 18 4 32)
+      (is (= (records 4 5 7 8 10 11 12 13 14 17 18 21 23 24 25 30 31 32)
+             (index/read-all store root' nil)))
+      (is (= idx1 (nth-child store root' 1))))))
 
 
 ; TODO: test scenarios
-; - remove a whole partition in B => C unchanged
 ; - underflow partition 1 in B => merged with 2
 ; - underflow partition 2 in B => merged back with 1
 ; - remove two partitions in B => part is carried to C

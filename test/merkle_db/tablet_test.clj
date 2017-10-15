@@ -10,6 +10,11 @@
   (tablet/from-records []))
 
 
+(deftest tablet-spec
+  (is (not (s/valid? ::tablet/node-data {})))
+  (is (s/valid? ::tablet/node-data (tablet/from-records [[(key/create [0]) {:a 123}]]))))
+
+
 (deftest key-reads
   (let [k1 (key/create [1 2 3])
         r1 {:foo 123}

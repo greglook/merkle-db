@@ -83,6 +83,8 @@
 (defmacro ^:private is-index
   [node height child-count record-count first-key-idx last-key-idx]
   `(let [node# ~node]
+     (is (~'valid? ::index/node-data node#)
+         "spec is valid")
      (is (= index/data-type (:data/type node#))
          "has index data type")
      (is (= ~height (::index/height node#))

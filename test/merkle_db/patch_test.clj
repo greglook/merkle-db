@@ -1,9 +1,18 @@
 (ns merkle-db.patch-test
   (:require
+    [clojure.spec :as s]
     [clojure.test :refer :all]
-    (merkle-db
-      [key :as key]
-      [patch :as patch])))
+    [merkle-db.key :as key]
+    [merkle-db.patch :as patch]))
+
+
+(deftest patch-spec
+  (is (not (s/valid? ::patch/node-data {:data/type :foo})))
+  (is (not (s/valid? ::patch/node-data {:data/type :merkle-db/patch})))
+  (is (s/valid? ::patch/node-data (patch/from-changes [[(key/create [0]) {:a 5}]])))
+  (is (s/valid? ::patch/node-data (patch/from-changes [[(key/create [1]) ::patch/tombstone]])))
+  (is (s/valid? ::patch/node-data (assoc (patch/from-changes [[(key/create [1]) ::patch/tombstone]])
+                                         :foo 123))))
 
 
 (deftest tombstone-removal

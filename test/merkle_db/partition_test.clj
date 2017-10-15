@@ -79,6 +79,13 @@
            (record-seq [seq-a seq-b seq-c])))))
 
 
+(deftest partition-spec
+  (let [store (mdag/init-store :types graph/codec-types)]
+    (is (not (s/valid? ::part/node-data {:data/type :foo})))
+    (is (not (s/valid? ::part/node-data {:data/type :merkle-db/partition})))
+    (is (valid? ::part/node-data (part/from-records store {} [[(key/create [0]) {:a 5}]])))))
+
+
 (deftest partition-properties
   (let [store (mdag/init-store :types graph/codec-types)
         k0 (key/create [0 1 2])

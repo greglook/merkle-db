@@ -336,7 +336,6 @@
   with height zero and the updated sequence of partitions, or a -1 height result
   if there were not enough records left."
   [store params parts carry]
-  (prn ::carry-back (count parts) carry)
   (cond
     (nil? carry)
       [0 parts]

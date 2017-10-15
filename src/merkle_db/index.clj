@@ -273,18 +273,6 @@
 
 ;; ## Update Functions
 
-(defn- node-str
-  "Generate a compact descriptor string for a partition or index node."
-  [node]
-  (if (= data-type (:data/type node))
-    (format "{i%d c:%d r:%d}"
-            (::height node)
-            (count (::children node))
-            (::record/count node))
-    (format "{p r:%d}"
-            (::record/count node))))
-
-
 (defn- carry-back
   [store params height nodes carry]
   {:pre [(number? height) (vector? nodes)]}
@@ -321,19 +309,9 @@
   Returns a tuple containing the resulting height and a sequence of updated and
   valid index nodes at that height."
   [store params height carry child-inputs]
-  (prn ::update-index-children
-       height
-       (when carry [(first carry) (count (second carry))])
-       (mapv (juxt (comp node-str first) (comp count second))
-             child-inputs))
   (loop [outputs []
          carry carry
          inputs child-inputs]
-    (printf "\tuic\t[%d]\t%s\t%s\n"
-            (count outputs)
-            (when carry [(first carry) (count (second carry))])
-            (when-let [[node changes] (first inputs)]
-              (pr-str [(node-str node) (count changes)])))
     (if (seq inputs)
       ; Process next input node
       (let [[child changes] (first inputs)
@@ -344,7 +322,7 @@
           (nil? result)
             (recur outputs nil (next inputs))
           ; Result elements are output-level nodes.
-          (= rheight height) ; TODO: can this case ever occur?
+          (= rheight height)
             (recur (into outputs elements) nil (next inputs))
           ; Result elements are a carry.
           :else
@@ -363,19 +341,9 @@
   containing the resulting height and a sequence of updated and valid (but
   unpersisted) index nodes at that height."
   [store params carry index changes]
-  (prn ::update-index-node
-       (when carry [(first carry) (count (second carry))])
-       (node-str index)
-       (count changes))
   (if (and (nil? carry) (empty? changes))
     ; No carry or changes to apply, pass-through node.
-    (as->
-      [(::height index) [index]]
-      result
-          (do
-            (prn ::update-index-node=>
-                 [(first result) (mapv node-str (second result))])
-            result))
+    [(::height index) [index]]
 
     ; Divide up changes and apply to children.
     (let [child-inputs (map (fn [[child child-changes]]
@@ -410,12 +378,7 @@
                 result
                 ; Build until the layer is too small or we've reached the original
                 ; index node height.
-                (build-tree* store params (::height index) (second result)))))
-          (do
-            (prn ::update-index-node=>
-                 [(first result) (mapv node-str (second result))])
-            result)
-          )))))
+                (build-tree* store params (::height index) (second result))))))))))
 
 
 (defn update-tree
@@ -425,9 +388,6 @@
   `:merkle-db.data/families`. Returns an updated persisted root node if any
   records remain in the tree."
   [store params root changes]
-  (prn ::update-tree
-       [(::height root 0) (count (::children root)) (::record/count root)]
-       (count changes))
   (cond
     ; No changes, return root as-is.
     (empty? changes)

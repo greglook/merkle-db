@@ -286,10 +286,27 @@
 
 
 (defn- carry-back
-  [store params nodes carry]
-  (prn ::carry-back nodes carry)
-  ; FIXME: implement
-  (throw (RuntimeException. "NYI: index/carry-back")))
+  [store params height nodes carry]
+  {:pre [(number? height) (vector? nodes)]}
+  (cond
+    ; No remaining nodes - return carry value.
+    (empty? nodes)
+      carry
+
+    ; Carry matches node height, concat result.
+    (= height (first carry))
+      [height (into nodes (second carry))]
+
+    ; Otherwise recursively fold last element.
+    :else
+      (let [nodes' (pop nodes)
+            children (mapv #(graph/get-link! store (peek nodes) %)
+                           (::children (peek nodes)))
+            result (if (= 1 height)
+                     (part/carry-back store params children carry)
+                     (carry-back store params (dec height) children carry))
+            carry' (build-tree* store params height (second result))]
+        (recur store params height nodes' carry'))))
 
 
 (declare update-index-node!)
@@ -335,7 +352,7 @@
       ; No more input nodes.
       (if (seq outputs)
         (if carry
-          (carry-back store params outputs carry)
+          (carry-back store params height outputs carry)
           [height outputs])
         ; No outputs, so return nil or direct carry.
         carry))))

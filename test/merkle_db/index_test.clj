@@ -336,26 +336,28 @@
              (index/read-all store root nil))))))
 
 
-#_
 (deftest index-tree-carry-back-part
   (with-index-fixture
     (let [root (index/update-tree store params idxA
                                   (tombstones 21 23 24 25))]
-      (is-index root 1 4 9 8 32)
+      (is-index root 1 4 15 4 32)
+      (is (= part0 (nth-child store root 0)))
+      (is (= part1 (nth-child store root 1)))
+      (is (= part2 (nth-child store root 2)))
+      (is (= part4 (nth-child store root 3)))
       (is (= (records 4 5 6 7 8 10 11 12 13 14 17 18 30 31 32)
-             (index/read-all store root nil)))
-      #_(is (= part4 (nth-child store root 2))))))
+             (index/read-all store root nil))))))
 
 
-#_
 (deftest index-tree-carry-back-records
   (with-index-fixture
     (let [root (index/update-tree store params idxA
                                   (tombstones 21 23 24 25 31))]
-      (is-index root 1 3 9 8 32)
-      (is (= (records 8 14 21 23 24 25 30 31 32)
+      (is-index root 1 4 14 4 32)
+      (is (= (records 4 5 6 7 8 10 11 12 13 14 17 18 30 32)
              (index/read-all store root nil)))
-      (is (= part4 (nth-child store root 2))))))
+      (is (= part0 (nth-child store root 0)))
+      (is (= part1 (nth-child store root 1))))))
 
 
 (deftest index-tree-delete-all
@@ -368,19 +370,13 @@
 
 (deftest index-tree-adopt-subtree
   (with-index-fixture
-    ;;         ..W..
-    ;;        /     \
-    ;;       A       X
-    ;;      / \     / \
-    ;;     B   C   Y   Z
-    ;;    /|\ / \ / \ / \
-    ;;    012 3 4 5 6 7 8
-    ;; =>
-    ;;       ..X'.
-    ;;      /  |  \
-    ;;     C   Y   Z
-    ;;    / \ / \ / \
-    ;;    3 4 5 6 7 8
+    ;      ..W..
+    ;     /     \
+    ;    A       X
+    ;   / \     / \
+    ;  B   C   Y   Z
+    ; /|\ / \ / \ / \
+    ; 012 3 4 5 6 7 8
     (let [part5 (part/from-records store params (records 35 36 37))
           part6 (part/from-records store params (records 40 42 44))
           part7 (part/from-records store params (records 45 46 49))
@@ -388,16 +384,35 @@
           idxY (index/build-tree store params [part5 part6])
           idxZ (index/build-tree store params [part7 part8])
           idxX (index/build-tree store params [idxY idxZ])
-          idxW (index/build-tree store params [idxA idxX])
-          root (index/update-tree store params idxW
-                                  (tombstones
-                                    4 5 6
-                                    7 8 10 11
-                                    12 13 14 17 18))]
-      (is-index root 2 3 19 21 53)
-      (is (= idxC (nth-child store root 0)))
-      (is (= idxY (nth-child store root 1)))
-      (is (= idxZ (nth-child store root 2))))))
+          idxW (index/build-tree store params [idxA idxX])]
+      (testing "carry subtree forward"
+        ;    ..X'.
+        ;   /  |  \
+        ;  C   Y   Z
+        ; / \ / \ / \
+        ; 3 4 5 6 7 8
+        (let [root (index/update-tree
+                     store params idxW
+                     (tombstones 4 5 6
+                                 7 8 10 11
+                                 12 13 14 17 18))]
+          (is-index root 2 3 19 21 53)
+          (is (= idxC (nth-child store root 0)))
+          (is (= idxY (nth-child store root 1)))
+          (is (= idxZ (nth-child store root 2)))))
+      (testing "carry subtree backward"
+        ;    ..A'.
+        ;   /  |  \
+        ;  B   C   Z
+        ; / \ / \ / \
+        ; 012 3 4 7 8
+        (let [root (index/update-tree
+                     store params idxW
+                     (tombstones 35 36 37 40 42 44))]
+          (is-index root 2 3 25 4 53)
+          (is (= idxB (nth-child store root 0)))
+          (is (= idxC (nth-child store root 1)))
+          (is (= idxZ (nth-child store root 2))))))))
 
 
 

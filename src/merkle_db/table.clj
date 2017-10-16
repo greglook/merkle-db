@@ -40,16 +40,12 @@
 ;; Tables may have a patch tablet containing recent unmerged data.
 (s/def ::patch mdag/link?)
 
-;; Time the table was last modified.
-(s/def ::modified-at #(instance? Instant %))
-
 ;; Table root node.
 (s/def ::node-data
   (s/and
     (s/keys :req [::record/count
                   ::index/fan-out
-                  ::part/limit
-                  ::modified-at]
+                  ::part/limit]
             :opt [::data
                   ::patch
                   ::patch/limit

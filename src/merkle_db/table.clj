@@ -683,3 +683,17 @@
    :insert -insert
    :delete -delete
    :flush! -flush!})
+
+
+; TODO: table statistics:
+; - count of records in table
+; - cumulative table node size
+; - patch data:
+;   - record count
+;   - node size
+; - tree data:
+;   - root height
+;   - index node count
+;   - cumulative index node size
+;   - partition count
+;   - cumulative partition/tablet node size

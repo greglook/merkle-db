@@ -621,10 +621,12 @@
       ; Check for force or limit overflow.
       (if (or full? (< (::patch/limit table 0) (count changes)))
         ; Combine pending changes and patch tablet and update data tree.
-        [nil (index/update-tree (.store table)
-                                table
-                                (mdag/get-data (.store table) (::data table))
-                                changes)]
+        [nil (->> changes
+                  (index/update-tree
+                    (.store table)
+                    table
+                    (mdag/get-data (.store table) (::data table)))
+                  (mdag/link "data"))]
         ; Flush any pending changes to the patch tablet.
         [(->> (patch/from-changes changes)
               (mdag/store-node! (.store table) nil)

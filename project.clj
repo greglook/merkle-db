@@ -64,7 +64,7 @@
     [[org.clojure/test.check "0.9.0"]
      [com.gfredericks/test.chuck "0.2.7"]
      [commons-logging "1.2"]
-     [mvxcvi/test.carly "0.3.0"]
+     [mvxcvi/test.carly "0.4.0"]
      [riddley "0.1.14"]]}
 
    :repl

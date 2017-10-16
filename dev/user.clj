@@ -3,6 +3,7 @@
   (:require
     [blocks.core :as block]
     [blocks.store.file :refer [file-block-store]]
+    [clojure.data.csv :as csv]
     [clojure.java.io :as io]
     [clojure.repl :refer :all]
     [clojure.set :as set]
@@ -130,7 +131,10 @@
 (defn viz-update
   [update-case]
   (let [store (mdag/init-store :types graph/codec-types)
-        root (index/from-records store update-case (:records update-case))]
+        root (->> (:records update-case)
+                  (sort-by first)
+                  (part/partition-records store update-case)
+                  (index/build-tree store update-case))]
     (try
       (let [root' (index/update-tree store update-case root
                                      (sort-by first (:changes update-case)))

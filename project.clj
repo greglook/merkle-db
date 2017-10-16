@@ -61,7 +61,8 @@
   :profiles
   {:dev
    {:dependencies
-    [[org.clojure/test.check "0.9.0"]
+    [[org.clojure/data.csv "0.1.4"]
+     [org.clojure/test.check "0.9.0"]
      [com.gfredericks/test.chuck "0.2.7"]
      [commons-logging "1.2"]
      [mvxcvi/test.carly "0.4.0"]

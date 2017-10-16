@@ -163,7 +163,7 @@
 
     Options may include:
 
-    - `:apply-patches?`
+    - `:apply-patch?`
       If true, the current patch data will be merged into the main data tree
       and the returned table will have no patch link.")
 
@@ -640,10 +640,10 @@
   "Ensure that all local state has been persisted to the storage backend and
   return an updated non-dirty table."
   ([table]
-   (-flush! table false))
-  ([^Table table apply-patches?]
+   (-flush! table nil))
+  ([^Table table opts]
    (if (dirty? table)
-     (let [[patch-link data-link] (flush-changes table apply-patches?)
+     (let [[patch-link data-link] (flush-changes table (:apply-patch? opts))
            root-data (-> (.root-data table)
                          (assoc :data/type data-type)
                          (dissoc ::patch ::data)

@@ -46,8 +46,8 @@
 ;; ## Partition Limits
 
 (def default-limit
-  "The default number of records to build partitions up to."
-  10000)
+  "The default number of records to hold in each partition."
+  1000)
 
 
 (defn max-limit

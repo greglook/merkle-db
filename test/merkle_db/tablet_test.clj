@@ -12,6 +12,8 @@
 
 
 (deftest tablet-spec
+  (is (invalid? ::tablet/node-data nil))
+  (is (invalid? ::tablet/node-data []))
   (is (invalid? ::tablet/node-data {}))
   (is (valid? ::tablet/node-data (tablet/from-records [[(key/create [0]) {:a 123}]]))))
 

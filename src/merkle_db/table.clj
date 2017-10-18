@@ -358,7 +358,7 @@
 
 
 (defn ^:no-doc bare-table
-  "Build a new ephemeral table value without a backing store."
+  "Build a new detached table value with the given backing store."
   [store table-name opts]
   (->Table
     store

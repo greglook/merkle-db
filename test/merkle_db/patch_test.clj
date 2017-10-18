@@ -8,8 +8,12 @@
 
 
 (deftest patch-spec
+  (is (invalid? ::patch/node-data nil))
+  (is (invalid? ::patch/node-data []))
   (is (invalid? ::patch/node-data {:data/type :foo}))
   (is (invalid? ::patch/node-data {:data/type :merkle-db/patch}))
+  (is (invalid? ::patch/node-data {:data/type :merkle-db/patch
+                                   ::patch/changes "wat"}))
   (is (valid? ::patch/node-data (patch/from-changes [[(key/create [0]) {:a 5}]])))
   (is (valid? ::patch/node-data (patch/from-changes [[(key/create [1]) ::patch/tombstone]])))
   (is (valid? ::patch/node-data (assoc (patch/from-changes [[(key/create [1]) ::patch/tombstone]])

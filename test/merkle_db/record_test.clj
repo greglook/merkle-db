@@ -1,9 +1,28 @@
 (ns merkle-db.record-test
   (:require
+    [clojure.spec :as s]
     [clojure.test :refer :all]
-    (merkle-db
-      [key :as key]
-      [record :as record])))
+    [merkle-db.key :as key]
+    [merkle-db.record :as record]
+    [merkle-db.test-utils]))
+
+
+(deftest record-specs
+  (testing "record data"
+    (is (invalid? ::record/data nil))
+    (is (invalid? ::record/data []))
+    (is (valid? ::record/data {}))
+    (is (valid? ::record/data {:foo true, :bar "---", :baz 123})))
+  (testing "family maps"
+    (is (invalid? ::record/families nil))
+    (is (invalid? ::record/families []))
+    (is (valid? ::record/families {}))
+    (is (valid? ::record/families {:bc #{:b :c}}))
+    (is (valid? ::record/families {:bc #{:b :c}, :ad #{:a :d}}))
+    (is (invalid? ::record/families {"foo" #{:a}}))
+    (is (invalid? ::record/families {:qualified/family #{:a}}))
+    (is (invalid? ::record/families {:not-a-set [:a]}))
+    (is (invalid? ::record/families {:bc #{:b :c}, :cd #{:c :d}}))))
 
 
 (deftest family-grouping

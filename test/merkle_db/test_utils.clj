@@ -5,44 +5,45 @@
     [clojure.test :as test]))
 
 
+(defn check-spec
+  "Internal implementation of `valid?` and `invalid?`."
+  [msg spec-form spec value valid?]
+  (let [conformed (s/conform spec value)
+        explained (s/explain-data spec value)]
+    (if (= valid? (= ::s/invalid conformed))
+      (test/do-report
+        {:type :fail
+         :message msg
+         :expected spec-form
+         :actual explained})
+      (test/do-report
+        {:type :pass
+         :message msg
+         :expected spec-form
+         :actual conformed}))
+    conformed))
+
+
 ;; (is (valid? s expr))
 ;; Asserts that the result of `expr` is valid for spec `s`.
 ;; Returns the conformed value.
 (defmethod test/assert-expr 'valid?
   [msg form]
-  `(let [spec# ~(second form)
-         value# ~(nth form 2)
-         conformed# (s/conform spec# value#)]
-     (if (= ::s/invalid conformed#)
-       (test/do-report
-         {:type :fail
-          :message ~msg,
-          :expected '~(second form)
-          :actual (s/explain-data spec# value#)})
-       (test/do-report
-         {:type :pass
-          :message ~msg,
-          :expected '~(second form)
-          :actual conformed#}))
-     conformed#))
+  `(check-spec
+     ~msg
+     '~(second form)
+     ~(second form)
+     ~(nth form 2)
+     true))
 
 
 ;; (is (invalid? s expr))
 ;; Asserts that the result of `expr` is not valid for spec `s`.
 (defmethod test/assert-expr 'invalid?
   [msg form]
-  `(let [spec# ~(second form)
-         value# ~(nth form 2)
-         conformed# (s/conform spec# value#)]
-     (if (= ::s/invalid conformed#)
-       (test/do-report
-         {:type :pass
-          :message ~msg,
-          :expected '~('not (second form))
-          :actual (s/explain-data spec# value#)})
-       (test/do-report
-         {:type :fail
-          :message ~msg,
-          :expected '~('not (second form))
-          :actual conformed#}))
-     conformed#))
+  `(check-spec
+     ~msg
+     '~(second form)
+     ~(second form)
+     ~(nth form 2)
+     false))

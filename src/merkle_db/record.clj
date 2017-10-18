@@ -1,7 +1,7 @@
 (ns merkle-db.record
   "Core record specs and functions."
   (:require
-    [clojure.future :refer [any? nat-int?]]
+    [clojure.future :refer [any? nat-int? simple-keyword?]]
     [clojure.spec :as s]
     [merkle-db.key :as key]))
 
@@ -31,7 +31,7 @@
 (s/def ::entry (s/tuple ::key ::data))
 
 ;; Valid family keys.
-(s/def ::family-key keyword?)
+(s/def ::family-key simple-keyword?)
 
 ;; Map of family keywords to sets of contained fields.
 (s/def ::families

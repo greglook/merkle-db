@@ -103,12 +103,30 @@
          (mdag/store-node! store nil tablet))])))
 
 
+(defn- validate-keys!
+  "Checks that the given sequence of values are all record keys and are sorted
+  in ascending order."
+  [rkeys]
+  (loop [last-key nil
+         rkeys rkeys]
+    (when (seq rkeys)
+      (let [next-key (first rkeys)]
+        (when-not (key/key? next-key)
+          (throw (ex-info "Cannot construct a partition with a non-key value!"
+                          {:next-key next-key})))
+        (when (and last-key (not (key/before? last-key next-key)))
+          (throw (ex-info "Cannot construct a partition with unordered keys!"
+                          {:last-key last-key
+                           :next-key next-key})))
+        (recur next-key (next rkeys))))))
+
+
 (defn from-records
   "Constructs a new partition from the given map of record data. The records
   will be split into tablets matching the given families, if provided. Returns
   the node data for the persisted partition."
   [store params records]
-  (let [records (vec (sort-by first (patch/remove-tombstones records))) ; TODO: don't sort?
+  (let [records (vec (patch/remove-tombstones records))
         limit (max-limit params)
         families (or (::record/families params) {})]
     (when (< limit (count records))
@@ -117,6 +135,7 @@
                        (count records) limit)
                {::record/count (count records)
                 ::limit limit})))
+    (validate-keys! (map first records))
     (when (seq records)
       (->>
         {:data/type data-type
@@ -135,13 +154,33 @@
 
 
 (defn partition-records
-  "Divides the given records into one or more partitions. Returns a sequence of
-  node data for the persisted partitions."
+  "Divides the given (possibly lazy) sequence of records into one or more
+  partitions. Returns a sequence of node data for the persisted partitions."
   [store params records]
-  (->> records
-       (patch/remove-tombstones)
-       (split-limited (max-limit params))
-       (mapv #(from-records store params %))))
+  (let [part-size (max-limit params)
+        threshold (+ part-size (min-limit params))]
+    ; TODO: callback on partition creation?
+    (loop [partitions []
+           pending []
+           records (patch/remove-tombstones records)]
+      (cond
+        ; Enough pending records to serialize a full partition.
+        (<= threshold (count pending))
+          (let [[output remnant] (split-at part-size pending)
+                part (from-records store params output)]
+            (recur (conj partitions part) (vec remnant) records))
+        ; Pull next record into pending.
+        (seq records)
+          (recur partitions (conj pending (first records)) (next records))
+        ; No more records, but too many pending to fit in one partition.
+        (< part-size (count pending))
+          (let [[output remnant] (split-at (int (/ (count pending) 2)) pending)
+                part (from-records store params output)]
+            (recur (conj partitions part) (vec remnant) nil))
+        ; Emit one final partition.
+        :else
+          (let [part (from-records store params pending)]
+            (conj partitions part))))))
 
 
 

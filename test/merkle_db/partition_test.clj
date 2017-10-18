@@ -6,15 +6,14 @@
     [clojure.test.check.generators :as gen]
     [com.gfredericks.test.chuck.clojure-test :refer [checking]]
     [merkledag.core :as mdag]
-    (merkle-db
-      [generators :as mdgen]
-      [graph :as graph]
-      [key :as key]
-      [partition :as part]
-      [patch :as patch]
-      [record :as record]
-      [tablet :as tablet]
-      [test-utils :as tu])))
+    [merkle-db.generators :as mdgen]
+    [merkle-db.graph :as graph]
+    [merkle-db.key :as key]
+    [merkle-db.partition :as part]
+    [merkle-db.patch :as patch]
+    [merkle-db.record :as record]
+    [merkle-db.tablet :as tablet]
+    [merkle-db.test-utils]))
 
 
 ;; ## Unit Tests
@@ -68,8 +67,8 @@
 
 (deftest partition-spec
   (let [store (mdag/init-store :types graph/codec-types)]
-    (is (not (s/valid? ::part/node-data {:data/type :foo})))
-    (is (not (s/valid? ::part/node-data {:data/type :merkle-db/partition})))
+    (is (invalid? ::part/node-data {:data/type :foo}))
+    (is (invalid? ::part/node-data {:data/type :merkle-db/partition}))
     (is (valid? ::part/node-data (part/from-records store {} [[(key/create [0]) {:a 5}]])))))
 
 

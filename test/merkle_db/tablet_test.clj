@@ -3,7 +3,8 @@
     [clojure.spec :as s]
     [clojure.test :refer :all]
     [merkle-db.key :as key]
-    [merkle-db.tablet :as tablet]))
+    [merkle-db.tablet :as tablet]
+    [merkle-db.test-utils]))
 
 
 (def empty-tablet
@@ -11,8 +12,8 @@
 
 
 (deftest tablet-spec
-  (is (not (s/valid? ::tablet/node-data {})))
-  (is (s/valid? ::tablet/node-data (tablet/from-records [[(key/create [0]) {:a 123}]]))))
+  (is (invalid? ::tablet/node-data {}))
+  (is (valid? ::tablet/node-data (tablet/from-records [[(key/create [0]) {:a 123}]]))))
 
 
 (deftest key-reads

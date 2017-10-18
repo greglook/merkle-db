@@ -502,7 +502,7 @@
             expected-data (patch/patch-seq changes records)]
         (is (= expected-data (index/read-all store root' nil)))
         (timer "check-asserts"
-          (tu/check-asserts
+          (validate/check-asserts
             (validate/run!
               store
               (::node/id (meta root'))

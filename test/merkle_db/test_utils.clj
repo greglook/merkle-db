@@ -2,10 +2,7 @@
   (:require
     [clojure.string :as str]
     [clojure.spec :as s]
-    [clojure.test :as test]
-    [merkledag.node :as node]
-    [merkle-db.validate :as validate]
-    [multihash.core :as multihash]))
+    [clojure.test :as test]))
 
 
 ;; (is (valid? s expr))
@@ -30,19 +27,22 @@
      conformed#))
 
 
-(defmacro check-asserts
-  [results]
-  `(doseq [[node-id# info#] ~results
-           result# (::validate/results info#)]
-     (test/do-report
-       {:type (::validate/state result#)
-        :message (format "Node %s (%s): %s"
-                         (multihash/base58 node-id#)
-                         (str/join ", " (map (partial str/join "/") (::validate/paths info#)))
-                         (::validate/message result#))
-        :expected (::validate/expected
-                    result#
-                    [(::validate/type result#)
-                     (str/join \/ (::validate/path result#))
-                     (::node/id result#)])
-        :actual (::validate/actual result# (::validate/state result#))})))
+;; (is (invalid? s expr))
+;; Asserts that the result of `expr` is not valid for spec `s`.
+(defmethod test/assert-expr 'invalid?
+  [msg form]
+  `(let [spec# ~(second form)
+         value# ~(nth form 2)
+         conformed# (s/conform spec# value#)]
+     (if (= ::s/invalid conformed#)
+       (test/do-report
+         {:type :pass
+          :message ~msg,
+          :expected '~('not (second form))
+          :actual (s/explain-data spec# value#)})
+       (test/do-report
+         {:type :fail
+          :message ~msg,
+          :expected '~('not (second form))
+          :actual conformed#}))
+     conformed#))

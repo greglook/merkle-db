@@ -5,6 +5,7 @@
     [clojure.future :refer [any? qualified-keyword?]]
     [clojure.set :as set]
     [clojure.spec :as s]
+    [clojure.test :as test]
     [merkledag.core :as mdag]
     [merkledag.link :as link]
     [merkledag.node :as node]
@@ -12,7 +13,8 @@
     [merkle-db.key :as key]
     [merkle-db.partition :as part]
     [merkle-db.record :as record]
-    [merkle-db.tablet :as tablet]))
+    [merkle-db.tablet :as tablet]
+    [multihash.core :as multihash]))
 
 
 ;; Path from the validation root to the node being checked.
@@ -175,6 +177,24 @@
                        (update-in [node-id ::results] (fnil into []) (:results output)))))))
       ; No more checks, return result aggregate.
       results)))
+
+
+(defmacro check-asserts
+  [results]
+  `(doseq [[node-id# info#] ~results
+           result# (::results info#)]
+     (test/do-report
+       {:type (::state result#)
+        :message (format "Node %s (%s): %s"
+                         (multihash/base58 node-id#)
+                         (str/join ", " (map (partial str/join "/") (::paths info#)))
+                         (::message result#))
+        :expected (::expected
+                    result#
+                    [(::type result#)
+                     (str/join \/ (::path result#))
+                     (::node/id result#)])
+        :actual (::actual result# (::state result#))})))
 
 
 

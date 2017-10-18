@@ -77,14 +77,14 @@
 (defn split-data
   "Split new record values into collections grouped by family. Each configured
   family and `:base` will have an entry in the resulting map, containing a
-  sorted map of record keys to new values. The values may be `nil` if the
-  record had no data for that family, an empty map if the family is `:base` and
-  all the record's data is in other families, or a map of field data belonging
-  to that family.
+  vector of record keys to new values. The values may be `nil` if the record
+  had no data for that family, an empty map if the family is `:base` and all
+  the record's data is in other families, or a map of field data belonging to
+  that family.
 
   ```
-  {:base {#merkle-db/key \"00\" {:a 123}, ...}
-   :bc {#merkle-db/key \"00\" {:b true, :c \"cat\"}, ...}
+  {:base [[#merkle-db/key \"00\" {:a 123}] ...]
+   :bc [[#merkle-db/key \"00\" {:b true, :c \"cat\"}] ...]
    ...}
   ```"
   [families records]
@@ -94,7 +94,7 @@
       (reduce-kv
         (fn assign-updates
           [updates family fdata]
-          (update updates family (fnil assoc (sorted-map)) record-key fdata))
+          (update updates family (fnil conj []) [record-key fdata]))
         updates
         (family-groups families data)))
     {} records))

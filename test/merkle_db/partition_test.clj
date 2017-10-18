@@ -24,20 +24,7 @@
     (is (= part/default-limit (part/max-limit {})))
     (is (= 420 (part/max-limit {::part/limit 420})))
     (is (= 2 (part/min-limit {::part/limit 4})))
-    (is (= 3 (part/min-limit {::part/limit 5}))))
-  (testing "split-limited"
-    (is (nil? (part/split-limited 3 [])))
-    (is (= [[:a]]
-           (part/split-limited 3 [:a])))
-    (is (= [[:a :b :c]]
-           (part/split-limited 3 [:a :b :c])))
-    (is (= [[:a :b] [:c :d :e]]
-           (part/split-limited 3 [:a :b :c :d :e])))
-    (is (= [100 100 101 100 101]
-           (->>
-             (range 502)
-             (part/split-limited 120)
-             (map count))))))
+    (is (= 3 (part/min-limit {::part/limit 5})))))
 
 
 (deftest tablet-selection

@@ -62,28 +62,6 @@
   (int (Math/ceil (/ (max-limit params) 2))))
 
 
-(defn split-limited
-  "Returns a sequence of groups of the elements of `coll` such that:
-  - No group has more than `limit` elements
-  - The number of groups is minimized
-  - Groups are approximately equal in size
-
-  This method eagerly realizes the input collection."
-  [limit coll]
-  (let [cnt (count coll)
-        n (min (int (Math/ceil (/ cnt limit))) cnt)]
-    (when (pos? cnt)
-      (loop [i 0
-             mark 0
-             groups []
-             xs coll]
-        (if (seq xs)
-          (let [mark' (int (* (/ (inc i) n) cnt))
-                [head tail] (split-at (- mark' mark) xs)]
-            (recur (inc i) (int mark') (conj groups head) tail))
-          groups)))))
-
-
 
 ;; ## Construction Functions
 

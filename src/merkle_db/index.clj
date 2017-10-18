@@ -108,6 +108,28 @@
       (::node/data))))
 
 
+(defn- split-limited
+  "Returns a sequence of groups of the elements of `coll` such that:
+  - No group has more than `limit` elements
+  - The number of groups is minimized
+  - Groups are approximately equal in size
+
+  This method eagerly realizes the input collection."
+  [limit coll]
+  (let [cnt (count coll)
+        n (min (int (Math/ceil (/ cnt limit))) cnt)]
+    (when (pos? cnt)
+      (loop [i 0
+             mark 0
+             groups []
+             xs coll]
+        (if (seq xs)
+          (let [mark' (int (* (/ (inc i) n) cnt))
+                [head tail] (split-at (- mark' mark) xs)]
+            (recur (inc i) (int mark') (conj groups head) tail))
+          groups)))))
+
+
 (defn- build-tree*
   "Build an index tree from a sequence of child nodes, using the given
   parameters. Returns a result vector with the height and final sequence of
@@ -125,7 +147,7 @@
         (if (and (<= (min-branches params) (count layer))
                  (or (nil? ceiling) (< height ceiling)))
           ; Build the next layer.
-          (let [groups (part/split-limited (max-branches params) layer)]
+          (let [groups (split-limited (max-branches params) layer)]
             (recur (inc height)
                    (mapv (partial store-index! store (inc height)) groups)))
           ; Hit ceiling, or insufficient children.

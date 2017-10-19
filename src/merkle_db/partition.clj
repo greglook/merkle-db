@@ -74,11 +74,7 @@
                  (tablet/prune))]
     (when (seq (tablet/read-all tablet))
       [family-key
-       (mdag/link
-         (if (namespace family-key)
-           (str (namespace family-key) ":" (name family-key))
-           (name family-key))
-         (mdag/store-node! store nil tablet))])))
+       (mdag/link (name family-key) (mdag/store-node! store nil tablet))])))
 
 
 (defn- validate-keys!

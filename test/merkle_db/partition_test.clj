@@ -16,7 +16,24 @@
     [merkle-db.test-utils]))
 
 
-;; ## Unit Tests
+(deftest partition-spec
+  (is (invalid? ::part/node-data nil))
+  (is (invalid? ::part/node-data []))
+  (is (invalid? ::part/node-data
+        {:data/type :foo}))
+  (is (invalid? ::part/node-data
+        {:data/type :merkle-db/partition}))
+  (is (invalid? ::part/node-data
+        {:data/type :merkle-db/partition
+         ::part/tablets nil}))
+  (is (invalid? ::part/node-data
+        {:data/type :merkle-db/partition
+         ::part/tablets {:base "foo"}}))
+  (let [store (mdag/init-store :types graph/codec-types)]
+    (is (valid? ::part/node-data (part/from-records store {} [[(key/create [0]) {:a 5}]])))
+    ,,,)
+  ,,,)
+
 
 (deftest partition-limits
   (testing "limits"
@@ -63,13 +80,6 @@
             [k5 {:b 5}]
             [k7 {:a 7, :b 7, :c 7}]]
            (record-seq [seq-a seq-b seq-c])))))
-
-
-(deftest partition-spec
-  (let [store (mdag/init-store :types graph/codec-types)]
-    (is (invalid? ::part/node-data {:data/type :foo}))
-    (is (invalid? ::part/node-data {:data/type :merkle-db/partition}))
-    (is (valid? ::part/node-data (part/from-records store {} [[(key/create [0]) {:a 5}]])))))
 
 
 (deftest partition-properties

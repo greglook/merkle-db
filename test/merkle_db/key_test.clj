@@ -117,8 +117,8 @@
    [key/string-lexicoder
     (gen/such-that not-empty gen/string)]
 
-   :long
-   [key/long-lexicoder
+   :integer
+   [key/integer-lexicoder
     gen/large-integer]
 
    :double

@@ -504,28 +504,46 @@
 
 
 
-;; ## Long Lexicoder
+;; ## Integer Lexicoder
 
-;; The long lexicoder converts integer values into key bytes.
-(deftype LongLexicoder [])
+;; The integer lexicoder converts integer values into key bytes.
+;;
+;; In order to reduce key size, the value is encoded with an initial sorting
+;; byte which gives the sign of the value and the number of bytes required to
+;; represent it. This is similar to the exponent field in a floating-point
+;; number.
+;;
+;; Values between 0 and 255 are represented with a leading byte of 0x80,
+;; followed by one byte holding the integer value. This encodes zero as 0x8000.
+;; Values between -256 and -1 are represented with a leading byte of 0x7F, so
+;; that they sort just before the smallest positive values. The byte following
+;; holds the two's-complement representation, so -256 is 0x7F00 and -1 is
+;; 0x7FFF.
+;;
+;; Each further offset from the center increments the number of bytes used to
+;; represent the integer value, so 0x7E and 0x81 use two additional bytes, 0x7D
+;; and 0x82 use three, 0x7C and 0x83 use four, and so on. This means a 64-bit
+;; integer can be encoded with leading bytes 0x78-0x87 in a total of 2-9 bytes.
+;;
+(deftype IntegerLexicoder [])
 
 
-(def long-lexicoder
+(def integer-lexicoder
   "Lexicoder for long integer values."
-  (->LongLexicoder))
+  (->IntegerLexicoder))
 
 
-(ns-unmap *ns* '->LongLexicoder)
+(ns-unmap *ns* '->IntegerLexicoder)
 
 
-;; Returns the global double lexicoder.
-(defmethod lexicoder :long
+;; Returns the global integer lexicoder.
+(defmethod lexicoder :integer
   [config]
   (when (config-params config)
     (throw (ex-info
-             (str "Long lexicoder config takes no parameters: " (pr-str config))
+             (str "Integer lexicoder config takes no parameters: " (pr-str config))
              {:config config})))
-  long-lexicoder)
+  integer-lexicoder)
 
 
 (defn- flip-long-sign
@@ -538,22 +556,38 @@
 (defn- get-long-byte
   "Return the `i`th byte in a long, where 0 gives the least significant byte."
   [l i]
-  (bit-and 0xFF (bit-shift-right l (* i 8))))
+  (bit-and 0xFF (unsigned-bit-shift-right l (* i 8))))
 
 
-(extend-type LongLexicoder
+(defn- long-prefix-length
+  "Find the number of bytes (starting from the most-significant) which are
+  all zeroes or ones for positive or negative numbers, respectively.
+
+  If the number is 0 or -1, then value should be 8; for -256 to -2 and 1 to 255
+  the value will be 7, etc."
+  [value]
+  (let [prefix (if (neg? value) 0xFF 0x00)]
+    (loop [length 0
+           shift 56]
+      (if (and (< length 8)
+               (= prefix (bit-and 0xFF (unsigned-bit-shift-right value shift))))
+        (recur (inc length) (- shift 8))
+        length))))
+
+
+(extend-type IntegerLexicoder
 
   Lexicoder
 
   (lexicoder-config
     [_]
-    :long)
+    :integer)
 
   (encode*
     [_ value]
     (when-not (integer? value)
       (throw (IllegalArgumentException.
-               (format "LongLexicoder cannot encode non-integer value: %s (%s)"
+               (format "IntegerLexicoder cannot encode non-integer value: %s (%s)"
                        (pr-str value)
                        (.getName (class value))))))
     ; Flip sign bit so that positive values sort after negative values.
@@ -625,7 +659,7 @@
                        (pr-str value)
                        (.getName (class value))))))
     (encode*
-      long-lexicoder
+      integer-lexicoder
       (let [bits (Double/doubleToRawLongBits
                    (if (zero? value) 0.0 (double value)))]
         (if (neg? bits)
@@ -634,11 +668,11 @@
 
   (decode*
     [_ data offset len]
-    (let [bits (decode* long-lexicoder data offset len)]
+    (let [bits (decode* integer-lexicoder data offset len)]
       (Double/longBitsToDouble
-        (if-not (neg? bits)
-          bits
-          (bit-not (flip-long-sign bits)))))))
+        (if (neg? bits)
+          (bit-not (flip-long-sign bits))
+          bits)))))
 
 
 
@@ -681,11 +715,11 @@
                (format "InstantLexicoder cannot encode non-instant value: %s (%s)"
                        (pr-str value)
                        (.getName (class value))))))
-    (encode* long-lexicoder (.toEpochMilli ^Instant value)))
+    (encode* integer-lexicoder (.toEpochMilli ^Instant value)))
 
   (decode*
     [_ data offset len]
-    (Instant/ofEpochMilli (decode* long-lexicoder data offset len))))
+    (Instant/ofEpochMilli (decode* integer-lexicoder data offset len))))
 
 
 
@@ -773,7 +807,7 @@
 ;; configurations:
 ;;
 ;;     ; Composite ordering by name then numeric version.
-;;     [:tuple :string :long]
+;;     [:tuple :string :integer]
 ;;
 (defmethod lexicoder :tuple
   [config]

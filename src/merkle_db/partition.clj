@@ -148,7 +148,7 @@
           (recur partitions (conj pending (first records)) (next records))
         ; No more records, but too many pending to fit in one partition.
         (< part-size (count pending))
-          (let [[output remnant] (split-at (int (/ (count pending) 2)) pending)
+          (let [[output remnant] (split-at (int (Math/ceil (/ (count pending) 2))) pending)
                 part (from-records store params output)]
             (recur (conj partitions part) (vec remnant) nil))
         ; Emit one final partition.
@@ -349,16 +349,11 @@
   with height zero and the updated sequence of partitions, or a -1 height result
   if there were not enough records left."
   [store params parts carry]
-  (cond
-    (nil? carry)
-      [0 parts]
-
-    (zero? (first carry))
-      [0 (into parts (second carry))]
-
-    (neg? (first carry))
-      (merge-into store params parts (second carry))
-
-    :else
-      (throw (IllegalArgumentException.
-               (str "Illegal carry type: " (pr-str carry))))))
+  {:pre [(vector? carry) (number? (first carry))]}
+  (when (pos? (first carry))
+    (throw (IllegalArgumentException.
+             (str "Cannot carry index subtrees into partitions: "
+                  (pr-str carry)))))
+  (if (zero? (first carry))
+    [0 (into parts (second carry))]
+    (merge-into store params parts (second carry))))

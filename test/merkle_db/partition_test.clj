@@ -82,6 +82,39 @@
            (record-seq [seq-a seq-b seq-c])))))
 
 
+(deftest partition-construction
+  (let [store (mdag/init-store :types graph/codec-types)]
+    (is (thrown? Exception
+          (part/from-records
+            store {::part/limit 5}
+            [["not a key!" {:foo 123}]]))
+        "should error for non-key entries")
+    (is (thrown? Exception
+          (part/from-records
+            store {::part/limit 5}
+            [[(key/parse "01")]
+             [(key/parse "03")]
+             [(key/parse "02")]]))
+        "out of order records should error")))
+
+
+(deftest record-partitioning
+  (let [store (mdag/init-store :types graph/codec-types)
+        nth-key #(key/create [%])
+        nth-entry #(vector (key/create [%]) {:a %})
+        records (mapv nth-entry (range 17))
+        parts (part/partition-records
+                store {::part/limit 5}
+                records)]
+    (is (= 4 (count parts)))
+    (is (= [5 5 4 3] (map ::record/count parts)))
+    (is (= [[(key/parse "00") (key/parse "04")]
+            [(key/parse "05") (key/parse "09")]
+            [(key/parse "0A") (key/parse "0D")]
+            [(key/parse "0E") (key/parse "10")]]
+           (map (juxt ::record/first-key ::record/last-key) parts)))))
+
+
 (deftest partition-properties
   (let [store (mdag/init-store :types graph/codec-types)
         k0 (key/create [0 1 2])
@@ -271,12 +304,22 @@
         (is (zero? height))
         (is (= 2 (count parts)))
         (is (= [[k0 {:a 0}]
-                [k1 {:b 1}]]
+                [k1 {:b 1}]
+                [k5 {:d 5, :x 5}]]
                (part/read-all store a nil)))
-        (is (= [[k5 {:d 5, :x 5}]
-                [k6 {:a 6, :c 6}]
+        (is (= [[k6 {:a 6, :c 6}]
                 [k7 {:e 7}]]
                (part/read-all store b nil)))))))
+
+
+(deftest carry-back-logic
+  (let [store nil
+        params nil]
+    (is (thrown? IllegalArgumentException
+          (part/carry-back
+            store params
+            [:a :b :c]
+            [1 [:x :y]])))))
 
 
 
@@ -288,12 +331,13 @@
   (set (mapcat (comp keys second) (tablet/read-all tablet))))
 
 
-(deftest ^:generative partition-construction
+(deftest ^:generative partition-construction-gen
   (checking "valid properties" 20
     [[field-keys families records] mdgen/data-context]
     (is (valid? ::record/families families))
     (let [store (mdag/init-store :types graph/codec-types)
-          part (part/from-records store {::record/families families} records)
+          part (part/from-records store {::record/families families}
+                                  (sort-by first records))
           tablets (into {}
                         (map (juxt key #(mdag/get-data store (val %))))
                         (::part/tablets part))]

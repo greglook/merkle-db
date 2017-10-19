@@ -110,6 +110,14 @@
           (- (count as) (count bs)))))))
 
 
+(defmacro ^:private is-reflexive
+  [coder value hex]
+  `(let [coder# ~coder
+         key# (key/parse ~hex)]
+     (is (= key# (key/encode coder# ~value)))
+     (is (= ~value (key/decode coder# key#)))))
+
+
 (def lexicoder-generators
   "Map of lexicoder types to tuples of a lexicoder instance and a generator for
   values matching that lexicoder."
@@ -136,21 +144,28 @@
 
 
 (deftest bytes-lexicoder
-  (is (identical? key/bytes-lexicoder (key/lexicoder :bytes)))
-  (is (satisfies? key/Lexicoder key/bytes-lexicoder))
-  (is (= :bytes (key/lexicoder-config key/bytes-lexicoder)))
-  (is (thrown? Exception
-        (key/lexicoder [:bytes :foo]))
-      "should not accept any config parameters")
-  (is (thrown? IllegalArgumentException
-        (key/encode key/bytes-lexicoder "foo"))
-      "should not encode non-byte-arrays")
-  (is (thrown? IllegalArgumentException
-        (key/encode key/bytes-lexicoder (byte-array 0)))
-      "should not encode empty bytes")
-  (is (thrown? IllegalArgumentException
-        (key/decode key/bytes-lexicoder (byte-array 0)))
-      "should not decode empty bytes"))
+  (testing "construction"
+    (is (identical? key/bytes-lexicoder (key/lexicoder :bytes)))
+    (is (satisfies? key/Lexicoder key/bytes-lexicoder))
+    (is (= :bytes (key/lexicoder-config key/bytes-lexicoder)))
+    (is (thrown? Exception
+          (key/lexicoder [:bytes :foo]))
+        "should not accept any config parameters"))
+  (testing "bad values"
+    (is (thrown? IllegalArgumentException
+          (key/encode key/bytes-lexicoder "foo"))
+        "should not encode non-byte-arrays")
+    (is (thrown? IllegalArgumentException
+          (key/encode key/bytes-lexicoder (byte-array 0)))
+        "should not encode empty bytes")
+    (is (thrown? IllegalArgumentException
+          (key/decode key/bytes-lexicoder (byte-array 0)))
+        "should not decode empty bytes"))
+  (testing "basic values"
+    (is (= (key/parse "00")
+           (key/encode key/bytes-lexicoder (byte-array [0]))))
+    (is (= (key/parse "012345")
+           (key/encode key/bytes-lexicoder (byte-array [1 35 69]))))))
 
 
 (deftest ^:generative bytes-lexicoding
@@ -161,22 +176,27 @@
 
 
 (deftest string-lexicoder
-  (is (identical? key/string-lexicoder (key/lexicoder :string)))
-  (is (satisfies? key/Lexicoder (key/lexicoder [:string "UTF-8"])))
-  (is (= :string (key/lexicoder-config key/string-lexicoder)))
-  (is (= [:string "US-ASCII"] (key/lexicoder-config (key/string-lexicoder* "US-ASCII"))))
-  (is (thrown? Exception
-        (key/lexicoder [:string "UTF-8" :bar]))
-      "should only accept one config parameter")
-  (is (thrown? IllegalArgumentException
-        (key/encode key/string-lexicoder 123))
-      "should not encode non-strings")
-  (is (thrown? IllegalArgumentException
-        (key/encode key/string-lexicoder ""))
-      "should not encode empty strings")
-  (is (thrown? IllegalArgumentException
-        (key/decode key/string-lexicoder (byte-array 0)))
-      "should not decode empty bytes"))
+  (testing "construction"
+    (is (identical? key/string-lexicoder (key/lexicoder :string)))
+    (is (satisfies? key/Lexicoder (key/lexicoder [:string "UTF-8"])))
+    (is (= :string (key/lexicoder-config key/string-lexicoder)))
+    (is (= [:string "US-ASCII"] (key/lexicoder-config (key/string-lexicoder* "US-ASCII"))))
+    (is (thrown? Exception
+          (key/lexicoder [:string "UTF-8" :bar]))
+        "should only accept one config parameter"))
+  (testing "bad values"
+    (is (thrown? IllegalArgumentException
+          (key/encode key/string-lexicoder 123))
+        "should not encode non-strings")
+    (is (thrown? IllegalArgumentException
+          (key/encode key/string-lexicoder ""))
+        "should not encode empty strings")
+    (is (thrown? IllegalArgumentException
+          (key/decode key/string-lexicoder (byte-array 0)))
+        "should not decode empty bytes"))
+  (testing "basic values"
+    (is-reflexive key/string-lexicoder "foo" "666F6F")
+    (is-reflexive key/string-lexicoder "bar" "626172")))
 
 
 (deftest ^:generative string-lexicoding
@@ -184,34 +204,46 @@
     (gen/return (:string lexicoder-generators)) ))
 
 
-(deftest long-lexicoder
-  (is (identical? key/long-lexicoder (key/lexicoder :long)))
-  (is (= :long (key/lexicoder-config key/long-lexicoder)))
-  (is (thrown? Exception
-        (key/lexicoder [:long :bar]))
-      "should not accept any config parameters")
-  (is (thrown? IllegalArgumentException
-        (key/encode key/long-lexicoder 0.0))
-      "should not encode non-integers")
-  (is (thrown? IllegalArgumentException
-        (key/decode key/long-lexicoder (byte-array 7)))
-      "should require 8 bytes"))
+(deftest integer-lexicoder
+  (testing "construction"
+    (is (identical? key/integer-lexicoder (key/lexicoder :integer)))
+    (is (= :integer (key/lexicoder-config key/integer-lexicoder)))
+    (is (thrown? Exception
+          (key/lexicoder [:integer :bar]))
+        "should not accept any config parameters"))
+  (testing "bad values"
+    (is (thrown? IllegalArgumentException
+          (key/encode key/integer-lexicoder 0.0))
+        "should not encode non-integers")
+    (is (thrown? IllegalArgumentException
+          (key/decode key/integer-lexicoder (key/parse "80")))
+        "should not encode too-short keys"))
+  (testing "basic values"
+    (is-reflexive key/integer-lexicoder  0 "8000")
+    (is-reflexive key/integer-lexicoder -1 "7FFF")
+    (is-reflexive key/integer-lexicoder -0x7FFFFFFFFF000000 "788000000001000000")))
 
 
-(deftest ^:generative long-lexicoding
+(deftest ^:generative integer-lexicoding
   (check-lexicoder
-    (gen/return (:long lexicoder-generators)) ))
+    (gen/return (:integer lexicoder-generators)) ))
 
 
 (deftest double-lexicoder
-  (is (identical? key/double-lexicoder (key/lexicoder :double)))
-  (is (= :double (key/lexicoder-config key/double-lexicoder)))
-  (is (thrown? Exception
-        (key/lexicoder [:double :bar]))
-      "should not accept any config parameters")
-  (is (thrown? IllegalArgumentException
-        (key/encode key/double-lexicoder 123))
-      "should not encode non-floats"))
+  (testing "construction"
+    (is (identical? key/double-lexicoder (key/lexicoder :double)))
+    (is (= :double (key/lexicoder-config key/double-lexicoder)))
+    (is (thrown? Exception
+          (key/lexicoder [:double :bar]))
+        "should not accept any config parameters"))
+  (testing "bad values"
+    (is (thrown? IllegalArgumentException
+          (key/encode key/double-lexicoder 123))
+        "should not encode non-floats"))
+  (testing "basic values"
+    (is-reflexive key/double-lexicoder 0.0 "8000")
+    (is-reflexive key/double-lexicoder 1.0 "873FF0000000000000")
+    (is-reflexive key/double-lexicoder -1.0 "78C00FFFFFFFFFFFFF")))
 
 
 (deftest ^:generative double-lexicoding
@@ -220,14 +252,16 @@
 
 
 (deftest instant-lexicoder
-  (is (identical? key/instant-lexicoder (key/lexicoder :instant)))
-  (is (= :instant (key/lexicoder-config key/instant-lexicoder)))
-  (is (thrown? Exception
-        (key/lexicoder [:instant :bar]))
-      "should not accept any config parameters")
-  (is (thrown? IllegalArgumentException
-        (key/encode key/instant-lexicoder ""))
-      "should not encode non-instant value"))
+  (testing "construction"
+    (is (identical? key/instant-lexicoder (key/lexicoder :instant)))
+    (is (= :instant (key/lexicoder-config key/instant-lexicoder)))
+    (is (thrown? Exception
+          (key/lexicoder [:instant :bar]))
+        "should not accept any config parameters"))
+  (testing "bad values"
+    (is (thrown? IllegalArgumentException
+          (key/encode key/instant-lexicoder ""))
+        "should not encode non-instant value")))
 
 
 (deftest ^:generative instant-lexicoding
@@ -236,17 +270,19 @@
 
 
 (deftest sequence-lexicoder
-  (is (satisfies? key/Lexicoder (key/lexicoder [:seq :long])))
-  (is (= [:seq :long] (key/lexicoder-config (key/sequence-lexicoder key/long-lexicoder))))
-  (is (thrown? Exception
-        (key/lexicoder :seq))
-      "should require at least one config parameter")
-  (is (thrown? Exception
-        (key/lexicoder [:seq :string :foo]))
-      "should only accept one config parameter")
-  (is (thrown? IllegalArgumentException
-        (key/encode (key/sequence-lexicoder key/long-lexicoder) #{123}))
-      "should not encode non-sequential values"))
+  (testing "construction"
+    (is (satisfies? key/Lexicoder (key/lexicoder [:seq :integer])))
+    (is (= [:seq :integer] (key/lexicoder-config (key/sequence-lexicoder key/integer-lexicoder))))
+    (is (thrown? Exception
+          (key/lexicoder :seq))
+        "should require at least one config parameter")
+    (is (thrown? Exception
+          (key/lexicoder [:seq :string :foo]))
+        "should only accept one config parameter"))
+  (testing "bad values"
+    (is (thrown? IllegalArgumentException
+          (key/encode (key/sequence-lexicoder key/integer-lexicoder) #{123}))
+        "should not encode non-sequential values")))
 
 
 (deftest ^:generative sequence-lexicoding
@@ -260,29 +296,31 @@
 
 
 (deftest tuple-lexicoder
-  (is (satisfies? key/Lexicoder (key/lexicoder [:tuple :string])))
-  (is (= [:tuple :long :string] (key/lexicoder-config (key/tuple-lexicoder
-                                                        key/long-lexicoder
-                                                        key/string-lexicoder))))
-  (is (thrown? Exception
-        (key/lexicoder [:tuple]))
-      "should require at least one config parameter")
-  (is (thrown? IllegalArgumentException
-        (key/encode (key/tuple-lexicoder key/long-lexicoder) #{123}))
-      "should not encode non-sequential values")
-  (is (thrown? IllegalArgumentException
-        (key/encode (key/tuple-lexicoder key/long-lexicoder) [0 0]))
-      "should not encode tuples larger than coders")
-  (is (thrown? IllegalArgumentException
-        (key/encode (key/lexicoder [:tuple :long :string])
-                    [0]))
-      "should not encode tuples smaller than coders")
-  (is (thrown? IllegalArgumentException
-        (key/decode (key/tuple-lexicoder key/string-lexicoder)
-                    (key/encode (key/tuple-lexicoder key/string-lexicoder
-                                                     key/long-lexicoder)
-                                ["foo" 123])))
-      "should not decode tuple longer than coders"))
+  (testing "construction"
+    (is (satisfies? key/Lexicoder (key/lexicoder [:tuple :string])))
+    (is (= [:tuple :integer :string] (key/lexicoder-config (key/tuple-lexicoder
+                                                             key/integer-lexicoder
+                                                             key/string-lexicoder))))
+    (is (thrown? Exception
+          (key/lexicoder [:tuple]))
+        "should require at least one config parameter"))
+  (testing "bad values"
+    (is (thrown? IllegalArgumentException
+          (key/encode (key/tuple-lexicoder key/integer-lexicoder) #{123}))
+        "should not encode non-sequential values")
+    (is (thrown? IllegalArgumentException
+          (key/encode (key/tuple-lexicoder key/integer-lexicoder) [0 0]))
+        "should not encode tuples larger than coders")
+    (is (thrown? IllegalArgumentException
+          (key/encode (key/lexicoder [:tuple :integer :string])
+                      [0]))
+        "should not encode tuples smaller than coders")
+    (is (thrown? IllegalArgumentException
+          (key/decode (key/tuple-lexicoder key/string-lexicoder)
+                      (key/encode (key/tuple-lexicoder key/string-lexicoder
+                                                       key/integer-lexicoder)
+                                  ["foo" 123])))
+        "should not decode tuple longer than coders")))
 
 
 (deftest ^:generative tuple-lexicoding
@@ -295,12 +333,13 @@
 
 
 (deftest reverse-lexicoder
-  (is (satisfies? key/Lexicoder (key/lexicoder [:reverse :instant])))
-  (is (= [:reverse :bytes] (key/lexicoder-config (key/reverse-lexicoder key/bytes-lexicoder))))
-  (is (thrown? Exception
-        (key/lexicoder [:reverse])))
-  (is (thrown? Exception
-        (key/lexicoder [:reverse :long :string]))))
+  (testing "construction"
+    (is (satisfies? key/Lexicoder (key/lexicoder [:reverse :instant])))
+    (is (= [:reverse :bytes] (key/lexicoder-config (key/reverse-lexicoder key/bytes-lexicoder))))
+    (is (thrown? Exception
+          (key/lexicoder [:reverse])))
+    (is (thrown? Exception
+          (key/lexicoder [:reverse :integer :string])))))
 
 
 (deftest ^:generative reverse-lexicoding

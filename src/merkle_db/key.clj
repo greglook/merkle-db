@@ -271,6 +271,18 @@
 
 ;; ## Key Encoding Utilities
 
+(defn- to-byte
+  "Coerces a number to a byte value."
+  [x]
+  (if (< 127 x) (- x 256) x))
+
+
+(defn- from-byte
+  "Coerces a byte value to a number."
+  [x]
+  (if (neg? x) (+ 256 x) x))
+
+
 (defn- escape-bytes
   "Escape the given byte sequence, replacing any 0x00 bytes with 0x0101 and any
   0x01 bytes with 0x0102."
@@ -559,20 +571,20 @@
   (bit-and 0xFF (unsigned-bit-shift-right l (* i 8))))
 
 
-(defn- long-prefix-length
-  "Find the number of bytes (starting from the most-significant) which are
-  all zeroes or ones for positive or negative numbers, respectively.
+(defn- integer-byte-length
+  "Returns the number of bytes required to represent the given integer value,
+  ignoring the sign bit.
 
-  If the number is 0 or -1, then value should be 8; for -256 to -2 and 1 to 255
-  the value will be 7, etc."
+  If the number is between -256 and 255, then value should be 1; for -65536 to
+  -257 and 256 to 65535, the value should be 2; and so on."
   [value]
-  (let [prefix (if (neg? value) 0xFF 0x00)]
-    (loop [length 0
-           shift 56]
-      (if (and (< length 8)
-               (= prefix (bit-and 0xFF (unsigned-bit-shift-right value shift))))
-        (recur (inc length) (- shift 8))
-        length))))
+  (let [prefix (if (neg? value) 0xFF 0x00)
+        value (long value)]
+    (loop [index 7]
+      (if (and (pos? index)
+               (= prefix (bit-and 0xFF (unsigned-bit-shift-right value (* 8 index)))))
+        (recur (dec index))
+        (inc index)))))
 
 
 (extend-type IntegerLexicoder
@@ -590,32 +602,38 @@
                (format "IntegerLexicoder cannot encode non-integer value: %s (%s)"
                        (pr-str value)
                        (.getName (class value))))))
-    ; Flip sign bit so that positive values sort after negative values.
-    (let [lexed (flip-long-sign (long value))
-          data (byte-array 8)]
-      (dotimes [i 8]
-        (->
-          (get-long-byte lexed (- 7 i))
-          (as-> b (if (< 127 b) (- b 256) b))
-          (->> (aset-byte data i))))
+    (let [int-length (integer-byte-length value)
+          data (byte-array (inc int-length))
+          header (if (neg? value)
+                   (- 0x80 int-length)
+                   (+ 0x7F int-length))]
+      (aset-byte data 0 (to-byte header))
+      (dotimes [i int-length]
+        (->> (get-long-byte value (- int-length i 1))
+             (to-byte)
+             (aset-byte data (inc i))))
       data))
 
   (decode*
     [_ data offset len]
-    (when (not= len 8)
-      (throw (IllegalArgumentException.
-               (str "Can only read 8 byte long keys: " len))))
-    (loop [i 0
-           value 0]
-      (if (< i 8)
-        (recur (inc i)
-               (->
-                 (aget ^bytes data (+ offset i))
-                 (as-> b (if (neg? b) (+ b 256) b))
-                 (bit-shift-left (- 56 (* i 8)))
-                 (+ value)))
-        ; Unflip sign bit.
-        (flip-long-sign value)))))
+    (let [header (from-byte (aget ^bytes data offset))
+          int-length (if (< header 0x80)
+                       (- 0x80 header)
+                       (- header 0x7F))]
+      (when (< len (inc int-length))
+        (throw (IllegalArgumentException.
+                 (format "Not enough bytes to decode %d-byte integer value: %d left"
+                         int-length (dec len)))))
+      (loop [i (+ offset len -1)
+             shift 0
+             value 0]
+        (if (<= (inc offset) i)
+          (recur (dec i)
+                 (+ shift 8)
+                 (+ value (bit-shift-left (from-byte (aget ^bytes data i)) shift)))
+          (if (and (< header 0x80) (< int-length 8))
+            (bit-or value (bit-shift-left -1 (* 8 int-length)))
+            value))))))
 
 
 
@@ -660,8 +678,9 @@
                        (.getName (class value))))))
     (encode*
       integer-lexicoder
-      (let [bits (Double/doubleToRawLongBits
-                   (if (zero? value) 0.0 (double value)))]
+      (let [bits (if (zero? value)
+                   0
+                   (Double/doubleToRawLongBits (double value)))]
         (if (neg? bits)
           (flip-long-sign (bit-not bits))
           bits))))

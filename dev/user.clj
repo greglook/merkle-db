@@ -107,7 +107,7 @@
   [filename fan-out part-limit n]
   (let [field-keys #{:a :b :c :d :e :f}
         families {:bc #{:b :c}, :de #{:d :e}}
-        record-keys (map (partial key/encode key/long-lexicoder) (range n))
+        record-keys (map (partial key/encode key/integer-lexicoder) (range n))
         record-data (sample-record-data field-keys n)
         records (zipmap record-keys record-data)
         store (mdag/init-store :types graph/codec-types)
@@ -128,7 +128,7 @@
   "Generate an example update case for the given set of fields, families, and
   number of contextual records."
   [field-keys families n]
-  (let [record-keys (map (partial key/encode key/long-lexicoder) (range n))
+  (let [record-keys (map (partial key/encode key/integer-lexicoder) (range n))
         extant-keys (sample-subset 0.5 record-keys)
         records (zipmap extant-keys
                         (sample-record-data

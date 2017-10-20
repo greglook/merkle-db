@@ -665,10 +665,6 @@
                          (cond->
                            patch-link (assoc ::patch patch-link)
                            data-link (assoc ::data data-link)))]
-       (when-not (s/valid? ::node-data root-data)
-         (throw (ex-info (str "Cannot write invalid table root node: "
-                              (s/explain-str ::node-data root-data))
-                         {:type ::invalid-root})))
        (let [node (mdag/store-node! (.store table) nil root-data)
              table-info (assoc (.table-info table)
                                ::node/id (::node/id node)

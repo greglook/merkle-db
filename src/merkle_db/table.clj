@@ -368,7 +368,8 @@
        ::part/limit part/default-limit
        ::patch/limit patch/default-limit}
       (dissoc opts ::data ::patch)
-      {::record/count 0})
+      {:data/type data-type
+       ::record/count 0})
     (sorted-map)
     true
     nil))
@@ -614,14 +615,12 @@
 (defn- -delete
   "Internal `delete` implementation."
   [table id-keys]
-  (let [lexicoder (key/lexicoder (::key/lexicoder table :bytes))
-        extant (-read table id-keys {:fields {}})]
+  (let [lexicoder (table-lexicoder table)
+        extant (-read table id-keys {})]
     (-> table
         (update-pending
           into
-          (comp
-            (map first)
-            (map (fn [k] [(key/encode lexicoder k) ::patch/tombstone])))
+          (map #(vector (key/encode lexicoder (first %)) ::patch/tombstone))
           extant)
         (update ::record/count - (count extant)))))
 

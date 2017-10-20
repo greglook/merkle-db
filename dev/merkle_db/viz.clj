@@ -156,6 +156,17 @@
   (apply graph-tree rhizome/save-graph store root-id follow? :filename filename args))
 
 
+(defn view-table
+  ([table]
+   (view-table table (constantly true)))
+  ([^merkle_db.db.Table table follow?]
+   (when-not (::node/id table)
+     (throw (IllegalArgumentException.
+              (str "Cannot vizualize database with no node id: "
+                   (pr-str db)))))
+   (view-tree (.store store) (::node/id store) follow?)))
+
+
 (defn view-database
   ([db]
    (view-database db (constantly true)))

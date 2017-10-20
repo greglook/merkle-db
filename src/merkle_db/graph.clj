@@ -52,3 +52,41 @@
                        {:parent node-id
                         :child link})))
      child)))
+
+
+(defn- enqueue-links
+  "Helper function for a breadth-first search algorithm which adds all of the
+  node's links to the queue in vectors with the node data type."
+  [queue node]
+  (let [source-type (get-in node [::node/data :data/type])]
+    (into queue
+          (map (partial vector source-type))
+          (::node/links node))))
+
+
+(defn find-nodes
+  "Explore the DAG by following links from the given root node. The `follow?`
+  function will be called with the source node `:data/type` and a link, and
+  should determine whether to follow the link or not. Returns a map of
+  multihash ids to loaded node maps."
+  [store visited root follow?]
+  (loop [visited (assoc visited (::node/id root) root)
+         pending (enqueue-links (clojure.lang.PersistentQueue/EMPTY) root)]
+    (if-let [[source-type link] (peek pending)]
+      (if (visited (::link/target link))
+        ; Already visited the target.
+        (recur visited (pop pending))
+        ; Determine whether to visit the link and recurse.
+        (if-let [child (and (follow? source-type link)
+                            (mdag/get-node store link))]
+          (recur (assoc visited (::node/id child) child)
+                 (enqueue-links (pop pending) child))
+          ; Don't visit the link, add a placeholder instead.
+          (recur (assoc visited
+                        (::link/target link)
+                        {::node/id (::link/target link)
+                         ::node/size (::link/rsize link)
+                         ::node/data {:data/type ::placeholder}})
+                 (pop pending))))
+      ; No more links to visit, we're done.
+      visited)))

@@ -273,13 +273,18 @@
         (child-boundaries node)
         (cond->>
           min-key
-            (drop-while #(key/before? (nth % 2) min-key))
+            (drop-while #(if-let [last-key (nth % 2)]
+                           (key/before? last-key min-key)
+                           false))
           max-key
-            (take-while #(not (key/after? (nth % 1) max-key))))
+            (take-while #(if-let [first-key (nth % 1)]
+                           (not (key/after? first-key max-key))
+                           true)))
         (->>
+          (map first)
           (mapcat
             (fn read-child
-              [[child-link _ _]]
+              [child-link]
               (let [child (graph/get-link! store node child-link)]
                 (read-range store child fields min-key max-key))))))
 

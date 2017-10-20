@@ -3,17 +3,19 @@
     [clojure.string :as str]
     [clojure.spec :as s]
     [clojure.test :as test]
-    [puget.printer :as puget]))
+    [puget.printer :as puget]
+    [merkledag.link :as link]
+    [multihash.core :as multihash]))
 
 
 (defn print-handler
   [t]
   (condp = t
     multihash.core.Multihash
-    (puget/tagged-handler 'data/hash multihash.core/base58)
+    (puget/tagged-handler 'data/hash multihash/base58)
 
     merkledag.link.MerkleLink
-    (puget/tagged-handler 'merkledag/link merkledag.link/link->form)
+    (puget/tagged-handler 'merkledag/link link/link->form)
 
     (puget/common-handlers t)))
 

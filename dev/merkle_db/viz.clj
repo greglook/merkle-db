@@ -159,12 +159,12 @@
 (defn view-table
   ([table]
    (view-table table (constantly true)))
-  ([^merkle_db.db.Table table follow?]
+  ([^merkle_db.table.Table table follow?]
    (when-not (::node/id table)
      (throw (IllegalArgumentException.
-              (str "Cannot vizualize database with no node id: "
-                   (pr-str db)))))
-   (view-tree (.store store) (::node/id store) follow?)))
+              (str "Cannot vizualize table with no node id: "
+                   (pr-str table)))))
+   (view-tree (.store table) (::node/id table) follow?)))
 
 
 (defn view-database

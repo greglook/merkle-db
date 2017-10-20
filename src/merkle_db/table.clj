@@ -508,6 +508,8 @@
                (.store table)
                data-node
                (:fields opts)))))
+       (->>
+         (filter (comp seq second)))
        (cond->>
          (and (:offset opts) (pos? (:offset opts)))
            (drop (:offset opts))
@@ -606,6 +608,7 @@
                          [(key/encode lexicoder k)
                           (update-record k (get extant k) data)])
                        records)]
+     ; TODO: empty maps should turn into tombstones?
      ; Add new data maps to pending changes.
      (-> table
          (update-pending into new-records)
@@ -633,12 +636,12 @@
       ; Check for force or limit overflow.
       (if (or full? (< (::patch/limit table 0) (count changes)))
         ; Combine pending changes and patch tablet and update data tree.
-        [nil (->> changes
-                  (index/update-tree
-                    (.store table)
-                    table
-                    (mdag/get-data (.store table) (::data table)))
-                  (mdag/link "data"))]
+        [nil (when-let [data (index/update-tree
+                               (.store table)
+                               table
+                               (mdag/get-data (.store table) (::data table))
+                               changes)]
+               (mdag/link "data" data))]
         ; Flush any pending changes to the patch tablet.
         [(->> (patch/from-changes changes)
               (mdag/store-node! (.store table) nil)

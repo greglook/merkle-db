@@ -3,6 +3,7 @@
     [clojure.set :as set]
     [clojure.test :refer :all]
     [clojure.test.check.generators :as gen]
+    [com.gfredericks.test.chuck.generators :as tcgen]
     [merkledag.core :as mdag]
     [merkle-db.graph :as graph]
     [merkle-db.key :as key]
@@ -63,18 +64,46 @@
 
 ;; ## Table Operations
 
+(defn- gen-range-query
+  [ctx]
+  (let [n+ (+ (:n ctx) 10)]
+    (gen/bind
+      (gen/hash-map
+        :fields (gen/fmap not-empty (gen/set (gen/elements #{:a :b :c :d :e})))
+        :min-key (gen/large-integer* {:min -10, :max n+})
+        :max-key (gen/large-integer* {:min -10, :max n+})
+        ; TODO: :reverse gen/boolean
+        :offset (gen/large-integer* {:min 0, :max n+})
+        :limit (gen/large-integer* {:min 1, :max n+}))
+      tcgen/sub-map)))
+
+
+(defn- scan-range
+  [model query]
+  (cond->> (seq model)
+    (seq (:fields query))
+      (keep (fn [[k r]]
+              (let [r' (select-keys r (:fields query))]
+                (when (seq r')
+                  [k r']))))
+    (:min-key query)
+      (drop-while #(< (first %) (:min-key query)))
+    (:max-key query)
+      (take-while #(<= (first %) (:max-key query)))
+    (:reverse query)
+      (reverse)
+    (:offset query)
+      (drop (:offset query))
+    (:limit query)
+      (take (:limit query))))
+
+
 (defop Keys
   [query]
 
   (gen-args
     [ctx]
-    ; TODO: improve this
-    ; :min-key
-    ; :max-key
-    ; :reverse
-    ; :offset
-    ; :limit
-    [(gen/return {})])
+    [(gen-range-query ctx)])
 
   (apply-op
     [this table]
@@ -82,8 +111,8 @@
 
   (check
     [this model result]
-    ; TODO: query filtering
-    (is (= (keys model) result))))
+    (let [expected (map first (scan-range model query))]
+      (is (= expected result)))))
 
 
 (defop Scan
@@ -91,14 +120,7 @@
 
   (gen-args
     [ctx]
-    ; TODO: improve this
-    ; :fields
-    ; :min-key
-    ; :max-key
-    ; :reverse
-    ; :offset
-    ; :limit
-    [(gen/return {})])
+    [(gen-range-query ctx)])
 
   (apply-op
     [this table]
@@ -106,8 +128,8 @@
 
   (check
     [this model result]
-    ; TODO: query filtering
-    (is (= (seq model) result))))
+    (let [expected (scan-range model query)]
+      (is (= expected result)))))
 
 
 (defop Read
@@ -127,18 +149,13 @@
     [this model result]
     (let [expected (->> ids
                         (map (juxt identity model))
-                        (filter second)
                         (map (fn [[k r]]
                                (if (seq fields)
                                  [k (select-keys r fields)]
                                  [k r])))
+                        (filter (comp seq second))
                         (sort-by first))]
-      (if (empty? expected)
-        (is (nil? result))
-        (do
-          (is (coll? result))
-          ; TODO: filter keys
-          (is (= expected result)))))))
+      (is (= expected result)))))
 
 
 (defop Insert
@@ -223,15 +240,14 @@
                 :merkle-db.partition/limit 5
                 :merkle-db.patch/limit 10
                 :merkle-db.record/families {:bc #{:b :c}}
-                :merkle-db.key/lexicoder :long}))
+                :merkle-db.key/lexicoder :integer}))
       op-generators
       :context-gen gen-context
       :init-model (constantly (sorted-map))
       :concurrency 1
       :repetitions 1
       :report
-      {:puget {:print-handlers #(get {;Multihash (puget/tagged-handler 'data/hash multihash/base58)
-                                      ;Block (puget/tagged-handler 'data/block (partial into {}))
-                                      }
+      {:puget {:print-handlers #(get {multihash.core.Multihash (puget/tagged-handler 'data/hash multihash.core/base58)
+                                      merkledag.link.MerkleLink (puget/tagged-handler 'merkledag/link merkledag.link/link->form)}
                                      %
                                      (puget/common-handlers %))}})))

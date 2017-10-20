@@ -61,21 +61,6 @@
   (remove (comp tombstone? second) rs))
 
 
-(defn filter-changes
-  "Takes a full set of patch data and returns a filtered sequence based on the
-  given options."
-  [patch opts]
-  (when (seq patch)
-    (cond->> patch
-      (:min-key opts)
-        (drop-while #(key/before? (first %) (:min-key opts)))
-      (:max-key opts)
-        (take-while #(not (key/after? (first %) (:max-key opts))))
-      (:fields opts)
-        (map (fn [[k r]]
-               [k (if (map? r) (select-keys r (:fields opts)) r)])))))
-
-
 (defn patch-seq
   "Combines an ordered sequence of patch data with a lazy sequence of record
   keys and data. Any records present in the patch will appear in the output

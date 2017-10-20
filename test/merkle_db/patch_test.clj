@@ -33,6 +33,7 @@
             [:e 5]]))))
 
 
+#_ ; TODO: move to table?
 (deftest change-filtering
   (let [changes [[(key/create [0 0]) {:a 10, :b 11, :c 12}]
                  [(key/create [1 0]) ::patch/tombstone]

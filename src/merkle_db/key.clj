@@ -679,7 +679,7 @@
     (encode*
       integer-lexicoder
       (let [bits (if (zero? value)
-                   0
+                   0 ; prevent -0.0
                    (Double/doubleToRawLongBits (double value)))]
         (if (neg? bits)
           (flip-long-sign (bit-not bits))

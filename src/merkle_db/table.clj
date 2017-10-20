@@ -454,12 +454,29 @@
       (.pending table))))
 
 
+(defn- filter-records
+  "Takes a sequence of record entries and returns a filtered sequence based on
+  the given options."
+  [opts records]
+  (when (seq records)
+    (cond->> records
+      (:min-key opts)
+        (drop-while #(key/before? (first %) (:min-key opts)))
+      (:max-key opts)
+        (take-while #(not (key/after? (first %) (:max-key opts))))
+      (:fields opts)
+        (map (fn select-fields
+               [[k r]]
+               [k (if (map? r) (select-keys r (:fields opts)) r)])))))
+
+
 (defn- -keys
   "Internal `keys` implementation."
   ([table]
    (-keys table nil))
   ([table opts]
-   (seq (map first (scan table opts)))))
+   ; OPTIMIZE: push down key-only read to avoid scanning non-base tablets
+   (map first (scan table opts))))
 
 
 (defn- -scan
@@ -468,27 +485,24 @@
    (-scan table nil))
   ([^Table table opts]
    (let [lexicoder (table-lexicoder table)
-         min-key (some->> (:min-key opts) (key/encode lexicoder))
-         max-key (some->> (:max-key opts) (key/encode lexicoder))]
+         min-k (some->> (:min-key opts) (key/encode lexicoder))
+         max-k (some->> (:max-key opts) (key/encode lexicoder))
+         opts (assoc opts :min-key min-k, :max-key max-k)]
      (->
        (patch/patch-seq
          ; Merged patch data to apply to the records.
-         (patch/filter-changes
-           (load-changes table)
-           {:fields (:fields opts)
-            :min-key min-key
-            :max-key max-key})
+         (filter-records opts (load-changes table))
          ; Lazy sequence of matching records from the index tree.
          (when-let [data-node (mdag/get-data
                                 (.store table)
                                 (::data (.root-data table)))]
-           (if (or min-key max-key)
+           (if (or min-k max-k)
              (index/read-range
                (.store table)
                data-node
                (:fields opts)
-               min-key
-               max-key)
+               min-k
+               max-k)
              (index/read-all
                (.store table)
                data-node
@@ -496,11 +510,10 @@
        (cond->>
          (and (:offset opts) (pos? (:offset opts)))
            (drop (:offset opts))
-         (and (:limit opts) (nat-int? (:offset opts)))
+         (and (:limit opts) (nat-int? (:limit opts)))
            (take (:limit opts)))
        (->>
-         (map (key-decoder lexicoder)))
-       (seq)))))
+         (map (key-decoder lexicoder)))))))
 
 
 (defn- -read
@@ -513,7 +526,7 @@
          patch-map (load-changes table)
          patch-changes (filter (comp id-keys first) patch-map)
          extra-keys (apply disj id-keys (map first patch-changes))
-         patch-changes (patch/filter-changes patch-changes {:fields (:fields opts)})
+         patch-changes (filter-records {:fields (:fields opts)} patch-changes)
          data-entries (when-let [data-node (and (seq extra-keys)
                                                 (mdag/get-data
                                                   (.store table)
@@ -523,10 +536,10 @@
                           data-node
                           (:fields opts)
                           extra-keys))]
-     (->> (concat patch-changes data-entries)
-          (patch/remove-tombstones)
-          (map (key-decoder lexicoder))
-          (seq)))))
+     (->> data-entries
+          (patch/patch-seq patch-changes)
+          (remove (comp empty? second))
+          (map (key-decoder lexicoder))))))
 
 
 (defn- record-updater

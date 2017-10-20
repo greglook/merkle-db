@@ -10,7 +10,7 @@
     [merkle-db.patch :as patch]
     [merkle-db.record :as record]
     [merkle-db.table :as table]
-    [puget.printer :as puget]
+    [merkle-db.test-utils :as tu]
     [test.carly.core :as carly :refer [defop]]))
 
 
@@ -69,7 +69,7 @@
                  [(key/create [1 1]) {:b 30, :c 32}]
                  [(key/create [2 0]) ::patch/tombstone]
                  [(key/create [3 0]) {:a 50, :b 51}]]]
-    (is (= changes (@#'table/filter-records changes {})))
+    (is (= changes (@#'table/filter-records {} changes)))
     (is (= [[(key/create [3 0]) {:a 50, :b 51}]]
            (@#'table/filter-records {:min-key (key/create [2 5])} changes)))
     (is (= [[(key/create [0 0]) {:a 10, :b 11, :c 12}]
@@ -125,7 +125,9 @@
 
   (gen-args
     [ctx]
-    [(gen-range-query ctx)])
+    [(gen/fmap
+       #(dissoc % :fields)
+       (gen-range-query ctx))])
 
   (apply-op
     [this table]
@@ -151,7 +153,7 @@
   (check
     [this model result]
     (let [expected (scan-range model query)]
-      (is (= expected result)))))
+      (is (= (or expected []) result)))))
 
 
 (defop Read
@@ -186,6 +188,7 @@
   (gen-args
     [ctx]
     [(gen/fmap
+       ; TODO: more sophisticated value generation
        (fn [ids] (mapv #(vector % {:a %, :c %}) ids))
        (gen/set (gen/large-integer* {:min 1, :max (:n ctx)})))])
 
@@ -195,6 +198,7 @@
 
   (check
     [this model result]
+    (is (valid? ::table/node-data result))
     (let [extant (set (keys model))
           rkeys (map first records)
           added (set/difference (set rkeys) extant)]
@@ -219,6 +223,7 @@
 
   (check
     [this model result]
+    (is (valid? ::table/node-data result))
     (let [extant (set (keys model))
           removed (set/intersection extant rkeys)]
       (is (= (- (count model) (count removed))
@@ -234,7 +239,11 @@
 
   (apply-op
     [this table]
-    (swap! table table/flush!)))
+    (swap! table table/flush!))
+
+  (check
+    [this model result]
+    (is (valid? ::table/node-data result))))
 
 
 (def ^:private op-generators
@@ -269,7 +278,4 @@
       :concurrency 1
       :repetitions 1
       :report
-      {:puget {:print-handlers #(get {multihash.core.Multihash (puget/tagged-handler 'data/hash multihash.core/base58)
-                                      merkledag.link.MerkleLink (puget/tagged-handler 'merkledag/link merkledag.link/link->form)}
-                                     %
-                                     (puget/common-handlers %))}})))
+      {:puget {:print-handlers tu/print-handler}})))

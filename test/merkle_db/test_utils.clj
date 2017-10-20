@@ -2,7 +2,20 @@
   (:require
     [clojure.string :as str]
     [clojure.spec :as s]
-    [clojure.test :as test]))
+    [clojure.test :as test]
+    [puget.printer :as puget]))
+
+
+(defn print-handler
+  [t]
+  (condp = t
+    multihash.core.Multihash
+    (puget/tagged-handler 'data/hash multihash.core/base58)
+
+    merkledag.link.MerkleLink
+    (puget/tagged-handler 'merkledag/link merkledag.link/link->form)
+
+    (puget/common-handlers t)))
 
 
 (defn check-spec

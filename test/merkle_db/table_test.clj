@@ -7,6 +7,7 @@
     [merkledag.core :as mdag]
     [merkle-db.graph :as graph]
     [merkle-db.key :as key]
+    [merkle-db.patch :as patch]
     [merkle-db.record :as record]
     [merkle-db.table :as table]
     [puget.printer :as puget]
@@ -60,6 +61,27 @@
             (record-updater {:merge-record (constantly nil)
                              :merge-field (constantly nil)}))
           "should be illegal"))))
+
+
+(deftest record-filtering
+  (let [changes [[(key/create [0 0]) {:a 10, :b 11, :c 12}]
+                 [(key/create [1 0]) ::patch/tombstone]
+                 [(key/create [1 1]) {:b 30, :c 32}]
+                 [(key/create [2 0]) ::patch/tombstone]
+                 [(key/create [3 0]) {:a 50, :b 51}]]]
+    (is (= changes (@#'table/filter-records changes {})))
+    (is (= [[(key/create [3 0]) {:a 50, :b 51}]]
+           (@#'table/filter-records {:min-key (key/create [2 5])} changes)))
+    (is (= [[(key/create [0 0]) {:a 10, :b 11, :c 12}]
+            [(key/create [1 0]) ::patch/tombstone]]
+           (@#'table/filter-records {:max-key (key/create [1 0])} changes)))
+    (is (= [[(key/create [0 0]) {:a 10}]
+            [(key/create [1 0]) ::patch/tombstone]
+            [(key/create [1 1]) {}]
+            [(key/create [2 0]) ::patch/tombstone]
+            [(key/create [3 0]) {:a 50}]]
+           (@#'table/filter-records {:fields #{:a}} changes)))))
+
 
 
 ;; ## Table Operations

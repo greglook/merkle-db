@@ -33,27 +33,6 @@
             [:e 5]]))))
 
 
-#_ ; TODO: move to table?
-(deftest change-filtering
-  (let [changes [[(key/create [0 0]) {:a 10, :b 11, :c 12}]
-                 [(key/create [1 0]) ::patch/tombstone]
-                 [(key/create [1 1]) {:b 30, :c 32}]
-                 [(key/create [2 0]) ::patch/tombstone]
-                 [(key/create [3 0]) {:a 50, :b 51}]]]
-    (is (= changes (patch/filter-changes changes {})))
-    (is (= [[(key/create [3 0]) {:a 50, :b 51}]]
-           (patch/filter-changes changes {:min-key (key/create [2 5])})))
-    (is (= [[(key/create [0 0]) {:a 10, :b 11, :c 12}]
-            [(key/create [1 0]) ::patch/tombstone]]
-           (patch/filter-changes changes {:max-key (key/create [1 0])})))
-    (is (= [[(key/create [0 0]) {:a 10}]
-            [(key/create [1 0]) ::patch/tombstone]
-            [(key/create [1 1]) {}]
-            [(key/create [2 0]) ::patch/tombstone]
-            [(key/create [3 0]) {:a 50}]]
-           (patch/filter-changes changes {:fields #{:a}})))))
-
-
 (deftest sequence-patching
   (let [changes [[(key/create [0 0]) {:a 10, :b 11, :c 12}]
                  [(key/create [1 0]) ::patch/tombstone]

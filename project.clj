@@ -6,19 +6,7 @@
 
   :aliases
   {"coverage" ["with-profile" "+coverage" "cloverage"
-               "--ns-exclude-regex" "merkle-db.validate"]
-   "docs" ["do" ["codox"] ["doc-lit"]]
-   "doc-lit" ["marg" "--dir" "target/doc/marginalia"
-              "src/merkle_db/bloom.clj"
-              "src/merkle_db/graph.clj"
-              "src/merkle_db/key.clj"
-              "src/merkle_db/record.clj"
-              "src/merkle_db/tablet.clj"
-              "src/merkle_db/partition.clj"
-              "src/merkle_db/index.clj"
-              "src/merkle_db/table.clj"
-              "src/merkle_db/db.clj"
-              "src/merkle_db/connection.clj"]}
+               "--ns-exclude-regex" "merkle-db.validate"]}
 
   :deploy-branches ["master"]
   :pedantic? :abort

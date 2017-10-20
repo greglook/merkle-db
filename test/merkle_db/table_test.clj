@@ -86,12 +86,28 @@
 
 ;; ## Table Operations
 
+
+(defn- gen-fields
+  [ctx]
+  (gen/fmap not-empty (gen/set (gen/elements #{:a :b :c :d :e}))))
+
+
+(defn- gen-id
+  [ctx]
+  (gen/large-integer* {:min 1, :max (:n ctx)}))
+
+
+(defn- gen-ids
+  [ctx]
+  (gen/set (gen-id ctx) {:max-elements (:n ctx)}))
+
+
 (defn- gen-range-query
   [ctx]
   (let [n+ (+ (:n ctx) 10)]
     (gen/bind
       (gen/hash-map
-        :fields (gen/fmap not-empty (gen/set (gen/elements #{:a :b :c :d :e})))
+        :fields (gen-fields ctx)
         :min-key (gen/large-integer* {:min -10, :max n+})
         :max-key (gen/large-integer* {:min -10, :max n+})
         ; TODO: :reverse gen/boolean
@@ -161,9 +177,7 @@
 
   (gen-args
     [ctx]
-    [(gen/set (gen/large-integer* {:min 1, :max (:n ctx)})
-              {:max-elements (:n ctx)})
-     (gen/fmap not-empty (gen/set (gen/elements #{:a :b :c :d :e})))])
+    [(gen-ids ctx) (gen-fields ctx)])
 
   (apply-op
     [this table]
@@ -187,10 +201,16 @@
 
   (gen-args
     [ctx]
-    [(gen/fmap
-       ; TODO: more sophisticated value generation
-       (fn [ids] (mapv #(vector % {:a %, :c %}) ids))
-       (gen/set (gen/large-integer* {:min 1, :max (:n ctx)})))])
+    [(gen/vector
+       (gen/tuple
+         (gen-id ctx)
+         (gen/bind
+           (gen/hash-map
+             :a gen/large-integer
+             :b gen/boolean
+             :c (gen/scale #(/ % 10) gen/string)
+             :d gen/double)
+           tcgen/sub-map)))])
 
   (apply-op
     [this table]

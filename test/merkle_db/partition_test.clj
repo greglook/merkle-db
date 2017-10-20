@@ -331,6 +331,7 @@
   (set (mapcat (comp keys second) (tablet/read-all tablet))))
 
 
+#_
 (deftest ^:generative partition-construction-gen
   (checking "valid properties" 20
     [[field-keys families records] mdgen/data-context]

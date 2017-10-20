@@ -196,6 +196,21 @@
       (is (= expected result)))))
 
 
+(defn- model-insert
+  "Models an insertion into the database, where some records may turn into
+  deletions if all the fields are nulled out."
+  [model records]
+  (reduce
+    (fn [db [k v]]
+      (let [prev (get db k)
+            v' (into {} (remove (comp nil? val)) (merge prev v))]
+        (if (empty? v')
+          (dissoc db k)
+          (assoc db k v'))))
+    model
+    (into (sorted-map) records)))
+
+
 (defop Insert
   [records]
 
@@ -209,7 +224,7 @@
              :a gen/large-integer
              :b gen/boolean
              :c (gen/scale #(/ % 10) gen/string)
-             :d gen/double)
+             :d (gen/double* {:NaN? false, :infinite? false}))
            tcgen/sub-map)))])
 
   (apply-op
@@ -219,15 +234,12 @@
   (check
     [this model result]
     (is (valid? ::table/node-data result))
-    (let [extant (set (keys model))
-          rkeys (map first records)
-          added (set/difference (set rkeys) extant)]
-      (is (= (+ (count model) (count added))
-             (::record/count result)))))
+    (let [model' (model-insert model records)]
+      (is (= (count model') (::record/count result)))))
 
   (update-model
     [this model]
-    (into model records)))
+    (model-insert model records)))
 
 
 (defop Delete

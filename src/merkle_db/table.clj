@@ -599,20 +599,30 @@
   ([table records]
    (-insert table records nil))
   ([table records opts]
-   (let [{:keys [merge-record merge-field]} opts
-         lexicoder (table-lexicoder table)
-         update-record (record-updater opts)
-         extant (into {} (-read table (map first records)))
-         new-records (map
-                       (fn [[k data]]
-                         [(key/encode lexicoder k)
-                          (update-record k (get extant k) data)])
-                       records)]
-     ; TODO: empty maps should turn into tombstones?
-     ; Add new data maps to pending changes.
-     (-> table
-         (update-pending into new-records)
-         (update ::record/count + (- (count records) (count extant)))))))
+   (if (seq records)
+     (let [{:keys [merge-record merge-field]} opts
+           lexicoder (table-lexicoder table)
+           update-record (record-updater opts)
+           records (into (sorted-map) records)
+           extant (into {} (-read table (clojure.core/keys records)))
+           new-records (keep (fn [[k data]]
+                               (let [prev (get extant k)
+                                     data' (update-record k prev data)
+                                     k' (key/encode lexicoder k)]
+                                 (if (empty? data')
+                                   (when prev
+                                     [k' ::patch/tombstone])
+                                   (vary-meta [k' data']
+                                              assoc ::added? (nil? prev)))))
+                             records)
+           added (count (filter (comp ::added? meta) new-records))
+           removed (count (filter (comp patch/tombstone? second) new-records))]
+       ; Add new data maps to pending changes.
+       (-> table
+           (update-pending into new-records)
+           (update ::record/count + added (- removed))))
+     ; No records inserted, return table unchanged.
+     table)))
 
 
 (defn- -delete

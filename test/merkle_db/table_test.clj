@@ -235,11 +235,15 @@
 
 
 (defop Flush!
-  []
+  [opts]
+
+  (gen-args
+    [ctx]
+    [(gen/hash-map :apply-patch? gen/boolean)])
 
   (apply-op
     [this table]
-    (swap! table table/flush!))
+    (swap! table table/flush! opts))
 
   (check
     [this model result]

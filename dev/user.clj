@@ -163,12 +163,14 @@
     (try
       (let [root' (index/update-tree store update-case root
                                      (sort-by first (:changes update-case)))
-            old-nodes (viz/find-nodes store {}
-                                      (mdag/get-node store (::node/id (meta root)))
-                                      (constantly true))
-            new-nodes (viz/find-nodes store {}
-                                      (mdag/get-node store (::node/id (meta root')))
-                                      (constantly true))
+            old-nodes (graph/find-nodes
+                        store {}
+                        (mdag/get-node store (::node/id (meta root)))
+                        (constantly true))
+            new-nodes (graph/find-nodes
+                        store {}
+                        (mdag/get-node store (::node/id (meta root')))
+                        (constantly true))
             all-nodes (merge old-nodes new-nodes)
             shared-ids (set/intersection (set (keys old-nodes)) (set (keys new-nodes)))]
         (rhizome/view-graph

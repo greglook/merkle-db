@@ -6,6 +6,8 @@
     [merkle-db.key :as key]))
 
 
+;; ## Record Keys
+
 ;; Count of the records contained under a node.
 (s/def ::count nat-int?)
 
@@ -21,14 +23,69 @@
 ;; Marker for the last key value present in a range.
 (s/def ::last-key ::key)
 
+
+
+;; ## Record Entries
+
+;; Unique identifier for the record, after decoding.
+(s/def ::id any?)
+
 ;; Valid field key values.
-(s/def ::field-key any?)
+(s/def ::field-key
+  (s/or :n number?
+        :s string?
+        :k keyword?
+        :y symbol?))
+
+;; Projection of the record key to identity field values.
+(s/def ::id-field
+  (s/or :field ::field-key
+        :tuple (s/coll-of ::field-key
+                          :kind vector?
+                          :distinct true)))
 
 ;; Map of record field data.
 (s/def ::data (s/map-of ::field-key any?))
 
 ;; Record key/data tuple.
 (s/def ::entry (s/tuple ::key ::data))
+
+
+(defn project-id
+  "Projects a record into its uniquely-identifying value."
+  [id-field record]
+  (if (vector? id-field)
+    (mapv record id-field)
+    (get record (or id-field ::id))))
+
+
+(defn encode-entry
+  "Project a map of record data into an entry with the encoded key and a data
+  map with the key fields removed."
+  [lexicoder id-field record]
+  (let [id-field (or id-field ::id)]
+    (if (vector? id-field)
+      [(key/encode lexicoder (mapv record id-field))
+       (apply dissoc record ::id id-field)]
+      [(key/encode lexicoder (get record id-field))
+       (dissoc record ::id id-field)])))
+
+
+(defn decode-entry
+  "Merge a record entry with an encoded key into a record data map with the
+  decoded id in associated key fields."
+  [lexicoder id-field [rkey data]]
+  (let [id-field (or id-field ::id)
+        id (key/decode lexicoder rkey)]
+    (->
+      (if (vector? id-field)
+        (merge data (zipmap id-field id))
+        (assoc data id-field id))
+      (vary-meta assoc ::id id))))
+
+
+
+;; ## Family Functions
 
 ;; Valid family keys.
 (s/def ::family-key simple-keyword?)
@@ -42,9 +99,6 @@
     #(= (reduce + (map count (vals %)))
         (count (distinct (apply concat (vals %)))))))
 
-
-
-;; ## Family Functions
 
 (defn- family-lookup
   "Build a lookup function for field families. Takes a map from family keys to
@@ -98,3 +152,39 @@
         updates
         (family-groups families data)))
     {} records))
+
+
+
+;; ## Updating Functions
+
+(defn field-merger
+  "Construct a new record updating function from the given merge spec. The
+  resulting function accepts three arguments, the record id, the existing
+  record data (or nil), and the new record data map.
+
+  If the merge spec is a function, it will be called with
+  `(f field-key old-val new-val)` for each field in the record and the
+  field-key will be set to the resulting value.
+
+  If the merge spec is a map, the keys will be used to look up a merge function
+  for each field in the record, which will be called with `(f old-val new-val)`.
+  If a field has no entry in the spec, the new value is always used."
+  [spec]
+  {:pre [(or (fn? spec) (map? spec))]}
+  (let [merger (if (map? spec)
+                 (fn merger
+                   [fk l r]
+                   (if-let [f (get spec fk)]
+                     (f l r)
+                     r))
+                 spec)]
+    (fn merge-fields
+      [id old-data new-data]
+      (reduce
+        (fn [data field-key]
+          (let [left (get old-data field-key)
+                right (get new-data field-key)
+                value (merger field-key left right)]
+            (assoc data field-key value)))
+        (empty old-data)
+        (distinct (concat (keys old-data) (keys new-data)))))))

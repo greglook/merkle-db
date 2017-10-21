@@ -9,6 +9,7 @@
     [clojure.string :as str]
     [merkledag.core :as mdag]
     [merkledag.node :as node]
+    [merkle-db.graph :as graph]
     [merkle-db.index :as index]
     [merkle-db.key :as key]
     [merkle-db.partition :as part]
@@ -45,6 +46,7 @@
             :opt [::data
                   ::patch
                   ::patch/limit
+                  ::record/id-field
                   ::record/families
                   ::key/lexicoder])
     #(= :merkle-db/table (:data/type %))))
@@ -80,7 +82,7 @@
       Return records with keys equal to or greater than the marker.
     - `:max-key`
       Return records with keys equal to or less than the marker.
-    - `:reverse`
+    - `:reverse` (NYI)
       Reverse the order the keys are returned in.
     - `:offset`
       Skip this many records in the output.
@@ -91,8 +93,7 @@
     [table]
     [table opts]
     "Scan the table, returning data from records which match the given options.
-    Returns a lazy sequence of vectors which each hold a record key and a map
-    of the record data, or nil if the table is empty.
+    Returns a lazy sequence of record data maps, sorted by key.
 
     If min and max keys or indices are given, only records within the
     bounds will be returned (inclusive). A nil min or max implies the beginning
@@ -108,7 +109,7 @@
       Return records with keys equal to or greater than the marker.
     - `:max-key`
       Return records with keys equal to or less than the marker.
-    - `:reverse`
+    - `:reverse` (NYI)
       Reverse the order the keys are returned in.
     - `:offset`
       Skip this many records in the output.
@@ -119,8 +120,7 @@
     [table id-keys]
     [table id-keys opts]
     "Read a set of records from the database, returning data for each present
-    record. Returns a sequence of vectors which each hold a record key and a map
-    of the record data, or nil if no records were found.
+    record. Returns a sequence of record data maps.
 
     Options may include:
 
@@ -133,15 +133,15 @@
     [table records]
     [table records opts]
     "Insert some record data into the database, represented by a collection
-    of pairs of record key values and field maps. Returns an updated table.
+    of record data maps. Returns an updated table.
 
     Options may include:
 
-    - `:merge-field`
+    - `:update-field`
       A function which will be called with `(f field-key old-val new-val)`, and
       should return the new value to use for that field. By default, `new-val`
       is used directly.
-    - `:merge-record`
+    - `:update-record`
       A function which will be called with `(f record-key old-data new-data)`,
       and should return the data map to use for the record. By default, this
       merges the data maps and removes nil-valued fields.")
@@ -243,7 +243,7 @@
     ; TODO: something different with ::data or ::patch?
     (if (contains? info-keys k)
       (get table-info k not-found)
-      ; TODO: link-expand value
+      ; TODO: link-expand value?
       (get root-data k not-found)))
 
 
@@ -430,13 +430,6 @@
   (key/lexicoder (::key/lexicoder table :bytes)))
 
 
-(defn- key-decoder
-  "Return a function which will decode the keys in record entries with the
-  given lexicoder."
-  [lexicoder]
-  (fn decode-entry [[k r]] [(key/decode lexicoder k) r]))
-
-
 (defn- load-changes
   "Return the table's patch changes as a map from keys to records or
   tombstones. This will load the table's patch tablet if present and merge in
@@ -472,8 +465,9 @@
   ([table]
    (-keys table nil))
   ([table opts]
-   ; OPTIMIZE: push down key-only read to avoid scanning non-base tablets
-   (map first (scan table opts))))
+   ; OPTIMIZE: push down key-only read to avoid loading non-base tablets
+   (map (comp ::record/id meta)
+        (scan table opts))))
 
 
 (defn- -scan
@@ -504,90 +498,92 @@
                (.store table)
                data-node
                (:fields opts)))))
-       (->>
-         (filter (comp seq second)))
        (cond->>
+         (seq (:fields opts))
+           (remove (comp empty? second))
          (and (:offset opts) (pos? (:offset opts)))
            (drop (:offset opts))
          (and (:limit opts) (nat-int? (:limit opts)))
            (take (:limit opts)))
        (->>
-         (map (key-decoder lexicoder)))))))
+         (map (partial record/decode-entry
+                       lexicoder
+                       (::record/id-field table))))))))
+
+
+(defn- read-batch
+  "Retrieve a batch of records from the table by key. Returns a sequence of
+  record entries."
+  [^Table table id-keys opts]
+  (let [id-keys (set id-keys)
+        patch-map (load-changes table)
+        patch-changes (filter (comp id-keys key) patch-map)
+        extra-keys (apply disj id-keys (map key patch-changes))
+        patch-changes (filter-records {:fields (:fields opts)} patch-changes)
+        data-entries (when-let [data-node (and (seq extra-keys)
+                                               (graph/get-link!
+                                                 (.store table)
+                                                 table
+                                                 (::data table)))]
+                       (index/read-batch
+                         (.store table)
+                         data-node
+                         (:fields opts)
+                         extra-keys))]
+    (patch/patch-seq patch-changes data-entries)))
 
 
 (defn- -read
   "Internal `read` implementation."
-  ([table id-keys]
-   (-read table id-keys nil))
-  ([^Table table id-keys opts]
-   (let [lexicoder (table-lexicoder table)
-         id-keys (into (sorted-set) (map (partial key/encode lexicoder)) id-keys)
-         patch-map (load-changes table)
-         patch-changes (filter (comp id-keys first) patch-map)
-         extra-keys (apply disj id-keys (map first patch-changes))
-         patch-changes (filter-records {:fields (:fields opts)} patch-changes)
-         data-entries (when-let [data-node (and (seq extra-keys)
-                                                (mdag/get-data
-                                                  (.store table)
-                                                  (::data (.root-data table))))]
-                        (index/read-batch
-                          (.store table)
-                          data-node
-                          (:fields opts)
-                          extra-keys))]
-     (->> data-entries
-          (patch/patch-seq patch-changes)
-          (remove (comp empty? second))
-          (map (key-decoder lexicoder))))))
+  ([table ids]
+   (-read table ids nil))
+  ([^Table table ids opts]
+   (if (seq ids)
+     (let [lexicoder (table-lexicoder table)
+           id-keys (into (sorted-set) (map (partial key/encode lexicoder)) ids)]
+       (->
+         (read-batch table id-keys opts)
+         ; TODO: is this really the best place for this filtering?
+         (cond->>
+           (seq (:fields opts))
+             (remove (comp empty? second)))
+         (->>
+           (map (partial record/decode-entry
+                         lexicoder
+                         (::record/id-field table))))))
+     (list))))
 
 
 (defn- record-updater
   "Construct a new record updating function from the given options. The
   resulting function accepts three arguments, the record key, the existing
   record data (or nil), and the new record data map."
-  [{:keys [merge-record merge-field]}]
+  [{:keys [update-record update-field]}]
   (cond
-    (and merge-record merge-field)
+    (and update-record update-field)
       (throw (IllegalArgumentException.
-               "Record updates cannot make use of both :merge-field and :merge-record at the same time."))
+               "Record updates cannot make use of both :update-field and :update-record at the same time."))
 
-    (fn? merge-record)
-      merge-record
+    (fn? update-record)
+      update-record
 
-    merge-record
+    update-record
       (throw (IllegalArgumentException.
-               (str "Record update :merge-record must be a function: "
-                    (pr-str merge-record))))
+               (str "Record update :update-record must be a function: "
+                    (pr-str update-record))))
 
-    (or (map? merge-field) (fn? merge-field))
-      (fn merge-fields
-        [_ old-data new-data]
-        (let [merger (if (map? merge-field)
-                       (fn [fk l r]
-                         (if-let [f (get merge-field fk)]
-                           (f l r)
-                           r))
-                       merge-field)]
-          (reduce
-            (fn [data field-key]
-              (let [left (get old-data field-key)
-                    right (get new-data field-key)
-                    value (merger field-key left right)]
-                (if (some? value)
-                  (assoc data field-key value)
-                  data)))
-            {} (distinct (concat (clojure.core/keys old-data)
-                                 (clojure.core/keys new-data))))))
+    (or (map? update-field) (fn? update-field))
+      (record/field-merger update-field)
 
-    merge-field
+    update-field
       (throw (IllegalArgumentException.
-               (str "Record update :merge-field must be a function or map of field functions: "
-                    (pr-str merge-field))))
+               (str "Record update :update-field must be a function or map of field functions: "
+                    (pr-str update-field))))
 
     :else
-      (fn merge-simple
+      (fn update-simple
         [_ old-data new-data]
-        (into {} (filter (comp some? val)) (merge old-data new-data)))))
+        (merge old-data new-data))))
 
 
 (defn- -insert
@@ -596,42 +592,43 @@
    (-insert table records nil))
   ([table records opts]
    (if (seq records)
-     (let [{:keys [merge-record merge-field]} opts
-           lexicoder (table-lexicoder table)
-           update-record (record-updater opts)
-           records (into (sorted-map) records)
-           extant (into {} (-read table (clojure.core/keys records)))
-           new-records (keep (fn [[k data]]
-                               (let [prev (get extant k)
-                                     data' (update-record k prev data)
-                                     k' (key/encode lexicoder k)]
-                                 (if (empty? data')
-                                   (when prev
-                                     [k' ::patch/tombstone])
-                                   (vary-meta [k' data']
-                                              assoc ::added? (nil? prev)))))
-                             records)
-           added (count (filter (comp ::added? meta) new-records))
-           removed (count (filter (comp patch/tombstone? second) new-records))]
+     (let [lexicoder (table-lexicoder table)
+           update-rec (record-updater opts)
+           records (mapv (partial record/encode-entry
+                                  lexicoder
+                                  (::record/id-field table))
+                         records)
+           extant (into {} (read-batch table (map first records) nil))
+           records (reduce
+                     (fn [acc [k r]]
+                       (let [prev (get acc k)
+                             data (update-rec k prev r)]
+                         (assoc acc k (not-empty data))))
+                     extant records)
+           added (- (count records) (count extant))]
        ; Add new data maps to pending changes.
        (-> table
-           (update-pending into new-records)
-           (update ::record/count + added (- removed))))
+           (update-pending into records)
+           (update ::record/count + added)))
      ; No records inserted, return table unchanged.
      table)))
 
 
 (defn- -delete
   "Internal `delete` implementation."
-  [table id-keys]
-  (let [lexicoder (table-lexicoder table)
-        extant (-read table id-keys {})]
-    (-> table
-        (update-pending
-          into
-          (map #(vector (key/encode lexicoder (first %)) ::patch/tombstone))
-          extant)
-        (update ::record/count - (count extant)))))
+  [table ids]
+  (if (seq ids)
+    (let [lexicoder (table-lexicoder table)
+          id-keys (mapv (partial key/encode lexicoder) ids)
+          extant-keys (into #{} (map first) (read-batch table id-keys nil))]
+      (-> table
+          (update-pending
+            into
+            (map #(vector % ::patch/tombstone))
+            extant-keys)
+          (update ::record/count - (count extant-keys))))
+    ; No records deleted, return table unchanged.
+    table))
 
 
 (defn- flush-changes

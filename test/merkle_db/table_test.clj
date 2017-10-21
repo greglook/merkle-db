@@ -17,49 +17,54 @@
 (deftest record-updating-fn
   (let [record-updater @#'table/record-updater]
     (testing "default behavior"
-      (let [merge-simple (record-updater {})]
-        (is (= {:a "abc", :b 4}
-               (merge-simple nil {:a "abc", :c true} {:b 4, :c nil})))))
-    (testing "explicit merge-record"
-      (let [merge-record (fn custom-merge [rk l r] r)]
-        (is (identical? merge-record (record-updater {:merge-record merge-record}))
+      (let [update-simple (record-updater {})]
+        (is (= {:a "abc", :b 4, :c nil}
+               (update-simple nil {:a "abc", :c true} {:b 4, :c nil})))))
+    (testing "explicit update-record"
+      (let [update-record (fn custom-merge [rk l r] r)]
+        (is (identical? update-record (record-updater {:update-record update-record}))
             "function should be used directly"))
       (is (thrown? IllegalArgumentException
-            (record-updater {:merge-record "not a function"})
+            (record-updater {:update-record "not a function"})
             "non-function should be illegal")))
-    (testing "merge-field"
+    (testing "update-field"
       (testing "with map of update functions"
-        (let [merge-fields (record-updater {:merge-field {:a +, :c conj}})]
-          (is (= {:a 3} (merge-fields nil {:a 1} {:a 2})))
+        (let [update-fields (record-updater {:update-field {:a +, :c conj}})]
+          (is (= {:a 3}
+                 (update-fields nil {:a 1} {:a 2})))
           (is (= {:c #{"foo" "bar"}}
-                 (merge-fields nil {:c #{"bar"}} {:c "foo"})))
-          (is (= {:b 3} (merge-fields nil {:d 1} {:b 3, :d nil})))
+                 (update-fields nil {:c #{"bar"}} {:c "foo"})))
+          (is (= {:b 3, :d nil}
+                 (update-fields nil {:d 1} {:b 3, :d nil})))
           (is (= {:a 468, :b 4, :c ["abc"]}
-                 (merge-fields nil
-                               {:a 123, :b 1, :c []}
-                               {:a 345, :b 4, :c "abc"})))))
+                 (update-fields nil
+                                {:a 123, :b 1, :c []}
+                                {:a 345, :b 4, :c "abc"})))))
       (testing "with custom function"
-        (let [merge-fields (record-updater
-                             {:merge-field (fn [fk l r]
-                                             (case fk
-                                               :a (+ l r)
-                                               :c (conj l r)
-                                               :d (when-not (= r "foo") r)
-                                               (* r 2)))})]
-          (is (= {:a 3} (merge-fields nil {:a 1} {:a 2})))
-          (is (= {:d "bar"} (merge-fields nil {} {:d "bar"})))
-          (is (= {:b 6} (merge-fields nil {:d "abc"} {:b 3, :d nil})))
-          (is (= {:a 468, :b 8, :c ["abc"]}
-                 (merge-fields nil
-                               {:a 123, :b 1, :c []}
-                               {:a 345, :b 4, :c "abc", :d "foo"})))))
+        (let [update-fields (record-updater
+                              {:update-field (fn [fk l r]
+                                               (case fk
+                                                 :a (+ l r)
+                                                 :c (conj l r)
+                                                 :d (when-not (= r "foo") r)
+                                                 (* r 2)))})]
+          (is (= {:a 3}
+                 (update-fields nil {:a 1} {:a 2})))
+          (is (= {:d "bar"}
+                 (update-fields nil {} {:d "bar"})))
+          (is (= {:b 6, :d nil}
+                 (update-fields nil {:d "abc"} {:b 3, :d nil})))
+          (is (= {:a 468, :b 8, :c ["abc"], :d nil}
+                 (update-fields nil
+                                {:a 123, :b 1, :c []}
+                                {:a 345, :b 4, :c "abc", :d "foo"})))))
       (is (thrown? IllegalArgumentException
-            (record-updater {:merge-field "not a map or function"})
+            (record-updater {:update-field "not a map or function"})
             "non-function should be illegal")))
-    (testing "specifying both merge-record and merge-field"
+    (testing "specifying both update-record and update-field"
       (is (thrown? IllegalArgumentException
-            (record-updater {:merge-record (constantly nil)
-                             :merge-field (constantly nil)}))
+            (record-updater {:update-record (constantly nil)
+                             :update-field (constantly nil)}))
           "should be illegal"))))
 
 
@@ -135,7 +140,9 @@
     (:offset query)
       (drop (:offset query))
     (:limit query)
-      (take (:limit query))))
+      (take (:limit query))
+    true
+      (map (fn [[k r]] (assoc r :id k)))))
 
 
 (defop Keys
@@ -155,7 +162,7 @@
 
   (check
     [this model result]
-    (let [expected (map first (scan-range model query))]
+    (let [expected (map :id (scan-range model query))]
       (is (= expected result)))))
 
 
@@ -175,7 +182,7 @@
   (check
     [this model result]
     (let [expected (scan-range model query)]
-      (is (= (or expected []) result)))))
+      (is (= expected result)))))
 
 
 (defop Read
@@ -192,13 +199,15 @@
   (check
     [this model result]
     (let [expected (->> ids
-                        (map (juxt identity model))
-                        (map (fn [[k r]]
-                               (if (seq fields)
-                                 [k (select-keys r fields)]
-                                 [k r])))
-                        (filter (comp seq second))
-                        (sort-by first))]
+                        (keep (partial find model))
+                        (keep
+                          (if (seq fields)
+                            (fn [[k r]]
+                              (when-let [r' (not-empty (select-keys r fields))]
+                                [k r']))
+                            identity))
+                        (sort-by first)
+                        (map (fn [[k r]] (assoc r :id k))))]
       (is (= expected result)))))
 
 
@@ -207,14 +216,11 @@
   deletions if all the fields are nulled out."
   [model records]
   (reduce
-    (fn [db [k v]]
-      (let [prev (get db k)
-            v' (into {} (remove (comp nil? val)) (merge prev v))]
-        (if (empty? v')
-          (dissoc db k)
-          (assoc db k v'))))
-    model
-    (into (sorted-map) records)))
+    (fn [db r]
+      (let [k (:id r)
+            v (dissoc r :id)]
+        (update db k merge v)))
+    model records))
 
 
 (defop Insert
@@ -223,13 +229,16 @@
   (gen-args
     [ctx]
     [(gen/vector
-       (gen/tuple
-         (gen-id ctx)
-         (gen-some-map
-           :a gen/large-integer
-           :b gen/boolean
-           :c (gen/scale #(/ % 10) gen/string)
-           :d (gen/double* {:NaN? false, :infinite? false}))))])
+       (gen/fmap
+         (fn [[id data]]
+           (assoc data :id id))
+         (gen/tuple
+           (gen-id ctx)
+           (gen-some-map
+             :a gen/large-integer
+             :b gen/boolean
+             :c (gen/scale #(/ % 10) gen/string)
+             :d (gen/double* {:NaN? false, :infinite? false})))))])
 
   (apply-op
     [this table]
@@ -313,6 +322,7 @@
                 :merkle-db.partition/limit 5
                 :merkle-db.patch/limit 10
                 :merkle-db.record/families {:bc #{:b :c}}
+                :merkle-db.record/id-field :id
                 :merkle-db.key/lexicoder :integer}))
       op-generators
       :context-gen gen-context

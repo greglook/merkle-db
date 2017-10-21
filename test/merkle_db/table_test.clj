@@ -86,6 +86,10 @@
 
 ;; ## Table Operations
 
+(defn- gen-some-map
+  [& kvs]
+  (gen/bind (apply gen/hash-map kvs) tcgen/sub-map))
+
 
 (defn- gen-fields
   [ctx]
@@ -105,15 +109,13 @@
 (defn- gen-range-query
   [ctx]
   (let [n+ (+ (:n ctx) 10)]
-    (gen/bind
-      (gen/hash-map
-        :fields (gen-fields ctx)
-        :min-key (gen/large-integer* {:min -10, :max n+})
-        :max-key (gen/large-integer* {:min -10, :max n+})
-        ; TODO: :reverse gen/boolean
-        :offset (gen/large-integer* {:min 0, :max n+})
-        :limit (gen/large-integer* {:min 1, :max n+}))
-      tcgen/sub-map)))
+    (gen-some-map
+      :fields (gen-fields ctx)
+      :min-key (gen/large-integer* {:min -10, :max n+})
+      :max-key (gen/large-integer* {:min -10, :max n+})
+      ; TODO: :reverse gen/boolean
+      :offset (gen/large-integer* {:min 0, :max n+})
+      :limit (gen/large-integer* {:min 1, :max n+}))))
 
 
 (defn- scan-range
@@ -147,7 +149,9 @@
 
   (apply-op
     [this table]
-    (doall (table/keys @table query)))
+    (doall (if (seq query)
+             (table/keys @table query)
+             (table/keys @table))))
 
   (check
     [this model result]
@@ -164,7 +168,9 @@
 
   (apply-op
     [this table]
-    (doall (table/scan @table query)))
+    (doall (if (seq query)
+             (table/scan @table query)
+             (table/scan @table))))
 
   (check
     [this model result]
@@ -219,13 +225,11 @@
     [(gen/vector
        (gen/tuple
          (gen-id ctx)
-         (gen/bind
-           (gen/hash-map
-             :a gen/large-integer
-             :b gen/boolean
-             :c (gen/scale #(/ % 10) gen/string)
-             :d (gen/double* {:NaN? false, :infinite? false}))
-           tcgen/sub-map)))])
+         (gen-some-map
+           :a gen/large-integer
+           :b gen/boolean
+           :c (gen/scale #(/ % 10) gen/string)
+           :d (gen/double* {:NaN? false, :infinite? false}))))])
 
   (apply-op
     [this table]
@@ -271,11 +275,13 @@
 
   (gen-args
     [ctx]
-    [(gen/hash-map :apply-patch? gen/boolean)])
+    [(gen-some-map :apply-patch? gen/boolean)])
 
   (apply-op
     [this table]
-    (swap! table table/flush! opts))
+    (if (seq opts)
+      (swap! table table/flush! opts)
+      (swap! table table/flush!)))
 
   (check
     [this model result]

@@ -57,25 +57,20 @@
   (apply alter-var-root #'db f args))
 
 
-(defn parse-movie-row
-  [[id title genres]]
-  [(Long/parseLong id)
-   {:movie/title title
-    :movie/genres (set (map (comp keyword str/lower-case #(str/replace % #"[^a-zA-Z0-9]+" "_")) 
-                            (str/split genres #"\|")))}])
-
-
 (defn build-table
   [table-name params records]
   (let [store (.store conn)
         lexicoder (key/lexicoder (::key/lexicoder params :bytes))
-        records' (map (fn [[k r]] [(key/encode lexicoder k) r]) records)
+        records' (mapv (partial record/encode-entry
+                                lexicoder
+                                (::record/id-field params))
+                       records)
         parts (vec (part/partition-records store params records'))
         root (index/build-tree store params parts)
         node (-> params
                  (assoc :data/type :merkle-db/table
-                        ::table/data (mdag/link "data" root)
-                        ::record/count (::record/count root))
+                        ::record/count (::record/count root 0))
+                 (cond-> root (assoc ::table/data (mdag/link "data" root)))
                  (dissoc ::table/patch)
                  (->> (mdag/store-node! store nil))
                  (::node/data))]

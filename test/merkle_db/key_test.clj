@@ -239,7 +239,10 @@
   (testing "bad values"
     (is (thrown? IllegalArgumentException
           (key/encode key/double-lexicoder 123))
-        "should not encode non-floats"))
+        "should not encode non-floats")
+    (is (thrown? IllegalArgumentException
+          (key/encode key/double-lexicoder Double/NaN))
+        "should not encode NaN values"))
   (testing "basic values"
     (is-reflexive key/double-lexicoder 0.0 "8000")
     (is-reflexive key/double-lexicoder 1.0 "873FF0000000000000")

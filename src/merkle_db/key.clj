@@ -676,6 +676,9 @@
                (format "DoubleLexicoder cannot encode non-floating-point value: %s (%s)"
                        (pr-str value)
                        (.getName (class value))))))
+    (when (Double/isNaN value)
+      (throw (IllegalArgumentException.
+               "DoubleLexicoder cannot encode NaN value as a valid key")))
     (encode*
       integer-lexicoder
       (let [bits (if (zero? value)

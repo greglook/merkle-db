@@ -8,6 +8,17 @@
 
 
 (deftest record-specs
+  (testing "id fields"
+    (is (invalid? ::record/id-field nil))
+    (is (invalid? ::record/id-field #{:a}))
+    (is (invalid? ::record/id-field []))
+    (is (valid? ::record/id-field :id))
+    (is (valid? ::record/id-field [:a]))
+    (is (valid? ::record/id-field [:a :b :c]))
+    (is (invalid? ::record/id-field [:a :a])
+        "no duplicates")
+    (is (invalid? ::record/id-field [#{:foo} :bar nil])
+        "elements must be valid field keys"))
   (testing "record data"
     (is (invalid? ::record/data nil))
     (is (invalid? ::record/data []))
@@ -23,6 +34,52 @@
     (is (invalid? ::record/families {:qualified/family #{:a}}))
     (is (invalid? ::record/families {:not-a-set [:a]}))
     (is (invalid? ::record/families {:bc #{:b :c}, :cd #{:c :d}}))))
+
+
+(deftest entry-encoding
+  (testing "id projection"
+    (is (= 123 (record/project-id nil {::record/id 123}))
+        "field defaults to ::record/id")
+    (is (= "xyz" (record/project-id :id {:id "xyz"})))
+    (is (= [123 "abc"] (record/project-id [:a :b] {:a 123, :b "abc"}))))
+  (testing "encoding"
+    (is (= [(key/parse "807B")
+            {:a "abc", :b true}]
+           (record/encode-entry
+             key/integer-lexicoder
+             nil
+             {::record/id 123
+              :a "abc"
+              :b true})))
+    (is (= [(key/parse "807B00810102C8")
+            {:z :foo}]
+           (record/encode-entry
+             (key/tuple-lexicoder
+               key/integer-lexicoder
+               key/integer-lexicoder)
+             [:x :y]
+             {:x 123
+              :y 456
+              :z :foo}))))
+  (testing "decoding"
+    (is (= {::record/id 123
+            :a "abc"
+            :b true}
+           (record/decode-entry
+             key/integer-lexicoder
+             nil
+            [(key/parse "807B")
+             {:a "abc", :b true}])))
+    (is (= {:x 123
+            :y 456
+            :z :foo}
+           (record/decode-entry
+             (key/tuple-lexicoder
+               key/integer-lexicoder
+               key/integer-lexicoder)
+             [:x :y]
+             [(key/parse "807B00810102C8")
+              {:z :foo}])))))
 
 
 (deftest family-grouping

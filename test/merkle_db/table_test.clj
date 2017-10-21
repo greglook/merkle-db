@@ -194,7 +194,9 @@
 
   (apply-op
     [this table]
-    (table/read @table ids {:fields fields}))
+    (if (seq fields)
+      (table/read @table ids {:fields fields})
+      (table/read @table ids)))
 
   (check
     [this model result]
@@ -318,7 +320,7 @@
     (carly/check-system "table behavior" 100
       #(atom (table/bare-table
                store "test-data"
-               {:merkle-db.index/fan-out 4
+               {:merkle-db.index/fan-out 5
                 :merkle-db.partition/limit 5
                 :merkle-db.patch/limit 10
                 :merkle-db.record/families {:bc #{:b :c}}

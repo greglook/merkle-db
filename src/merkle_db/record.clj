@@ -42,6 +42,7 @@
   (s/or :field ::field-key
         :tuple (s/coll-of ::field-key
                           :kind vector?
+                          :min-count 1
                           :distinct true)))
 
 ;; Map of record field data.
@@ -63,12 +64,12 @@
   "Project a map of record data into an entry with the encoded key and a data
   map with the key fields removed."
   [lexicoder id-field record]
-  (let [id-field (or id-field ::id)]
-    (if (vector? id-field)
-      [(key/encode lexicoder (mapv record id-field))
-       (apply dissoc record ::id id-field)]
-      [(key/encode lexicoder (get record id-field))
-       (dissoc record ::id id-field)])))
+  (let [id-field (or id-field ::id)
+        id (project-id id-field record)]
+    [(key/encode lexicoder id)
+     (if (vector? id-field)
+       (apply dissoc record ::id id-field)
+       (dissoc record ::id id-field))]))
 
 
 (defn decode-entry

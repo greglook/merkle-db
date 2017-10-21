@@ -10,11 +10,6 @@
 
 ;; ## Specs
 
-(def ^:const data-type
-  "Value of `:data/type` that indicates a tablet node."
-  :merkle-db/tablet)
-
-
 ;; Sorted vector of record entries.
 (s/def ::records
   (s/coll-of ::record/entry :kind vector?))
@@ -23,7 +18,7 @@
 (s/def ::node-data
   (s/and
     (s/keys :req [::records])
-    #(= data-type (:data/type %))))
+    #(= :merkle-db/tablet (:data/type %))))
 
 
 
@@ -60,7 +55,7 @@
   "Constructs a new tablet node. Does not ensure that the records are sorted."
   [records]
   (when (seq (filter (comp map? second) records))
-    {:data/type data-type
+    {:data/type :merkle-db/tablet
      ::records (vec records)}))
 
 

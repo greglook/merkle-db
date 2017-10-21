@@ -8,11 +8,6 @@
     [merkle-db.record :as record]))
 
 
-(def ^:const data-type
-  "Value of `:data/type` that indicates a patch tablet node."
-  :merkle-db/patch)
-
-
 (def default-limit
   "The default number of changes to hold in a patch tablet."
   100)
@@ -39,7 +34,7 @@
 (s/def ::node-data
   (s/and
     (s/keys :req [::changes])
-    #(= data-type (:data/type %))))
+    #(= :merkle-db/patch (:data/type %))))
 
 
 
@@ -48,7 +43,7 @@
 (defn from-changes
   "Construct a patch tablet node data from a map of change data."
   [changes]
-  {:data/type data-type
+  {:data/type :merkle-db/patch
    ::changes (vec changes)})
 
 

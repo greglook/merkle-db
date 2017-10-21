@@ -20,11 +20,6 @@
     [merkle-db.record :as record]))
 
 
-(def ^:const data-type
-  "Value of `:data/type` that indicates an index tree node."
-  :merkle-db/index)
-
-
 ;; The fan-out determines the number of children an index node in the data tree
 ;; can have.
 (s/def ::fan-out (s/and pos-int? #(<= 4 %)))
@@ -48,7 +43,7 @@
                   ::record/count
                   ::record/first-key
                   ::record/last-key])
-    #(= data-type (:data/type %))
+    #(= :merkle-db/index (:data/type %))
     #(= (count (::children %))
         (inc (count (::keys %))))))
 
@@ -97,7 +92,7 @@
         links (numbered-child-links children)
         record-count (reduce + 0 (map ::record/count children))]
     (->>
-      {:data/type data-type
+      {:data/type :merkle-db/index
        ::height height
        ::keys ckeys
        ::children links
@@ -211,25 +206,22 @@
   for every record in the subtree. This function works on both index nodes and
   partitions."
   [store node fields]
-  (cond
-    (nil? node)
-      nil
+  (when node
+    (case (:data/type node)
+      :merkle-db/index
+        (mapcat
+          (fn read-child
+            [child-link]
+            (let [child (graph/get-link! store node child-link)]
+              (read-all store child fields)))
+          (::children node))
 
-    (= data-type (:data/type node))
-      (mapcat
-        (fn read-child
-          [child-link]
-          (let [child (graph/get-link! store node child-link)]
-            (read-all store child fields)))
-        (::children node))
+      :merkle-db/partition
+        (part/read-all store node fields)
 
-    (= part/data-type (:data/type node))
-      (part/read-all store node fields)
-
-    :else
       (throw (ex-info (str "Unsupported index-tree node type: "
                            (pr-str (:data/type node)))
-                      {:data/type (:data/type node)}))))
+                      {:data/type (:data/type node)})))))
 
 
 (defn read-batch
@@ -237,26 +229,23 @@
   for the records whose keys are in the given collection. This function works on
   both index nodes and partitions."
   [store node fields record-keys]
-  (cond
-    (nil? node)
-      nil
+  (when node
+    (case (:data/type node)
+      :merkle-db/index
+        (mapcat
+          (fn read-child
+            [[child-link record-keys]]
+            (when (seq record-keys)
+              (let [child (graph/get-link! store node child-link)]
+                (read-batch store child fields (map first record-keys)))))
+          (assign-records node (map vector record-keys)))
 
-    (= data-type (:data/type node))
-      (mapcat
-        (fn read-child
-          [[child-link record-keys]]
-          (when (seq record-keys)
-            (let [child (graph/get-link! store node child-link)]
-              (read-batch store child fields (map first record-keys)))))
-        (assign-records node (map vector record-keys)))
+      :merkle-db/partition
+        (part/read-batch store node fields record-keys)
 
-    (= part/data-type (:data/type node))
-      (part/read-batch store node fields record-keys)
-
-    :else
       (throw (ex-info (str "Unsupported index-tree node type: "
                            (pr-str (:data/type node)))
-                      {:data/type (:data/type node)}))))
+                      {:data/type (:data/type node)})))))
 
 
 (defn read-range
@@ -264,37 +253,34 @@
   records whose keys lie in the given range, inclusive. A nil boundary includes
   all records in that range direction."
   [store node fields min-key max-key]
-  (cond
-    (nil? node)
-      nil
+  (when node
+    (case (:data/type node)
+      :merkle-db/index
+        (->
+          (child-boundaries node)
+          (cond->>
+            min-key
+              (drop-while #(if-let [last-key (nth % 2)]
+                             (key/before? last-key min-key)
+                             false))
+            max-key
+              (take-while #(if-let [first-key (nth % 1)]
+                             (not (key/after? first-key max-key))
+                             true)))
+          (->>
+            (map first)
+            (mapcat
+              (fn read-child
+                [child-link]
+                (let [child (graph/get-link! store node child-link)]
+                  (read-range store child fields min-key max-key))))))
 
-    (= data-type (:data/type node))
-      (->
-        (child-boundaries node)
-        (cond->>
-          min-key
-            (drop-while #(if-let [last-key (nth % 2)]
-                           (key/before? last-key min-key)
-                           false))
-          max-key
-            (take-while #(if-let [first-key (nth % 1)]
-                           (not (key/after? first-key max-key))
-                           true)))
-        (->>
-          (map first)
-          (mapcat
-            (fn read-child
-              [child-link]
-              (let [child (graph/get-link! store node child-link)]
-                (read-range store child fields min-key max-key))))))
+      :merkle-db/partition
+        (part/read-range store node fields min-key max-key)
 
-    (= part/data-type (:data/type node))
-      (part/read-range store node fields min-key max-key)
-
-    :else
       (throw (ex-info (str "Unsupported index-tree node type: "
                            (pr-str (:data/type node)))
-                      {:data/type (:data/type node)}))))
+                      {:data/type (:data/type node)})))))
 
 
 
@@ -427,8 +413,8 @@
            (build-tree store params))
 
     ; Root is an index or partition node.
-    (contains? #{data-type part/data-type} (:data/type root))
-      (let [[height nodes] (if (= part/data-type (:data/type root))
+    (contains? #{:merkle-db/index :merkle-db/partition} (:data/type root))
+      (let [[height nodes] (if (= :merkle-db/partition (:data/type root))
                              (part/update-partitions! store params nil [[root changes]])
                              (update-index-node! store params nil root changes))]
         (if (and height (neg? height))

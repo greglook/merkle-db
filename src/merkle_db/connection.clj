@@ -151,7 +151,7 @@
   (->>
     (merge {::db/tables {}}
            attrs
-           {:data/type db/data-type})
+           {:data/type :merkle-db/database})
     ; TODO: validate schema
     (hash-map ::node/data)
     (mdag/store-node! (.store conn))

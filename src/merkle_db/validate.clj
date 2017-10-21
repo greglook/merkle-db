@@ -203,7 +203,7 @@
 (defn validate-tablet
   [tablet params]
   (when (check :data/type
-          (= tablet/data-type (:data/type tablet))
+          (= :merkle-db/tablet (:data/type tablet))
           "Node has expected data type")
     (check ::spec
       (s/valid? ::tablet/node-data tablet)
@@ -237,7 +237,7 @@
 (defn validate-partition
   [part params]
   (when (check :data/type
-          (= part/data-type (:data/type part))
+          (= :merkle-db/partition (:data/type part))
           "Node has expected data type")
     (check ::spec
       (s/valid? ::part/node-data part)
@@ -280,7 +280,7 @@
 (defn validate-index
   [index params]
   (when (check :data/type
-          (= index/data-type (:data/type index))
+          (= :merkle-db/index (:data/type index))
           "Node has expected data type")
     (check ::spec
       (s/valid? ::index/node-data index)
@@ -328,7 +328,7 @@
         "Empty tree has nil root")
     (or (< (::record/count params) (::part/limit params))
         (and (= (::record/count params) (::part/limit params))
-             (= part/data-type (:data/type root))))
+             (= :merkle-db/partition (:data/type root))))
       (validate-partition root params)
     :else
       (validate-index

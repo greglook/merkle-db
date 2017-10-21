@@ -20,10 +20,6 @@
 
 ;; ## Data Specifications
 
-(def ^:const data-type
-  "Value of `:data/type` that indicates a table root node."
-  :merkle-db/table)
-
 (def ^:no-doc info-keys
   "Set of keys which may appear in the table info map."
   #{::node/id ::name ::record/size})
@@ -51,7 +47,7 @@
                   ::patch/limit
                   ::record/families
                   ::key/lexicoder])
-    #(= data-type (:data/type %))))
+    #(= :merkle-db/table (:data/type %))))
 
 (s/def ::table-info
   (s/keys :req [::node/id
@@ -318,7 +314,7 @@
     [this k v]
     (when (= k :data/type)
       (throw (IllegalArgumentException.
-               (str "Cannot change table :data/type from " data-type))))
+               (str "Cannot change table :data/type from " :merkle-db/table))))
     (when (contains? info-keys k)
       (throw (IllegalArgumentException.
                (str "Cannot change table info field " k))))
@@ -368,7 +364,7 @@
        ::part/limit part/default-limit
        ::patch/limit patch/default-limit}
       (dissoc opts ::data ::patch)
-      {:data/type data-type
+      {:data/type :merkle-db/table
        ::record/count 0})
     (sorted-map)
     true
@@ -670,7 +666,7 @@
    (if (dirty? table)
      (let [[patch-link data-link] (flush-changes table (:apply-patch? opts))
            root-data (-> (.root-data table)
-                         (assoc :data/type data-type)
+                         (assoc :data/type :merkle-db/table)
                          (dissoc ::patch ::data)
                          (cond->
                            patch-link (assoc ::patch patch-link)

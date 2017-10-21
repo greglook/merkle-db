@@ -73,7 +73,7 @@
         parts (vec (part/partition-records store params records'))
         root (index/build-tree store params parts)
         node (-> params
-                 (assoc :data/type table/data-type
+                 (assoc :data/type :merkle-db/table
                         ::table/data (mdag/link "data" root)
                         ::record/count (::record/count root))
                  (dissoc ::table/patch)

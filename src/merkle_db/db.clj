@@ -17,10 +17,6 @@
 
 ;; ## Data Specifications
 
-(def ^:const data-type
-  "Value of `:data/type` that indicates a database root node."
-  :merkle-db/database)
-
 (def ^:no-doc info-keys
   "Set of keys which may appear in the database info map."
   #{::node/id ::name ::version ::committed-at ::record/size})
@@ -45,7 +41,7 @@
   (s/and
     (s/keys :req [::tables]
             :opt [:time/updated-at])
-    #(= data-type (:data/type %))))
+    #(= :merkle-db/database (:data/type %))))
 
 ;; Information from the database version.
 (s/def ::db-info
@@ -289,7 +285,8 @@
     (cond
       (= k :data/type)
         (throw (IllegalArgumentException.
-                 (str "Cannot change database :data/type from " data-type)))
+                 (str "Cannot change database :data/type from "
+                      :merkle-db/database)))
       (= k ::tables)
         (throw (IllegalArgumentException.
                  (str "Cannot directly set database tables field " k)))
@@ -443,7 +440,7 @@
   [^Database db]
   (let [tables (flush-tables! (.tables db))
         root-data (assoc (.root-data db)
-                         :data/type data-type
+                         :data/type :merkle-db/database
                          ::tables tables)]
     (when-not (s/valid? ::node-data root-data)
       (throw (ex-info (str "Cannot write invalid database root node: "

@@ -15,11 +15,6 @@
     [merkle-db.tablet :as tablet]))
 
 
-(def ^:const data-type
-  "Value of `:data/type` that indicates a partition node."
-  :merkle-db/partition)
-
-
 ;; Maximum number of records to allow in each partition.
 (s/def ::limit pos-int?)
 
@@ -39,7 +34,7 @@
                   ::record/families
                   ::record/first-key
                   ::record/last-key])
-    #(= data-type (:data/type %))))
+    #(= :merkle-db/partition (:data/type %))))
 
 
 
@@ -112,7 +107,7 @@
     (validate-keys! (map first records))
     (when (seq records)
       (->>
-        {:data/type data-type
+        {:data/type :merkle-db/partition
          ::tablets (into {}
                          (map #(store-tablet! store (key %) (tablet/from-records (val %))))
                          (record/split-data families records))

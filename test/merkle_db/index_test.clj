@@ -109,7 +109,7 @@
   `(let [node# ~node]
      (is (~'valid? ::index/node-data node#)
          "spec is valid")
-     (is (= index/data-type (:data/type node#))
+     (is (= :merkle-db/index (:data/type node#))
          "has index data type")
      (is (= ~height (::index/height node#))
          "has expected height")
@@ -126,7 +126,7 @@
 (deftest index-reading
   (with-index-fixture
     (testing "root properties"
-      (is (= index/data-type (:data/type idxA)))
+      (is (= :merkle-db/index (:data/type idxA)))
       (is (= 2 (::index/height idxA)))
       (is (= 2 (count (::index/children idxA))))
       (is (= 19 (::record/count idxA)))
@@ -193,7 +193,7 @@
                                      (concat (tombstones 1 2 3)
                                              (records 4 5)
                                              (tombstones 6 7 8)))]
-        (is (= part/data-type (:data/type root')))
+        (is (= :merkle-db/partition (:data/type root')))
         (is (= 2 (::record/count root')))
         (is (= (nth-key 4) (::record/first-key root')))
         (is (= (nth-key 5) (::record/last-key root')))
@@ -210,7 +210,7 @@
       (is (nil? (index/update-tree store params root (tombstones 4 5 6)))))
     (testing "underflow"
       (let [root' (index/update-tree store params root (tombstones 4 6))]
-        (is (= part/data-type (:data/type root')))
+        (is (= :merkle-db/partition (:data/type root')))
         (is (= 1 (::record/count root')))
         (is (= (nth-key 5) (::record/first-key root')))
         (is (= (nth-key 5) (::record/last-key root')))
@@ -220,7 +220,7 @@
                                      [[(nth-key 3) {:x 123}]
                                       [(nth-key 5) {:y 456}]
                                       [(nth-key 7) {:z 789}]])]
-        (is (= part/data-type (:data/type root')))
+        (is (= :merkle-db/partition (:data/type root')))
         (is (= 5 (::record/count root')))
         (is (= (nth-key 3) (::record/first-key root')))
         (is (= (nth-key 7) (::record/last-key root')))
@@ -354,7 +354,7 @@
                                               12 13 14 17 18
                                               21 25
                                               30 31 32))]
-      (is (= part/data-type (:data/type root)))
+      (is (= :merkle-db/partition (:data/type root)))
       (is (= 2 (::record/count root)))
       (is (= (nth-key 23) (::record/first-key root)))
       (is (= (nth-key 24) (::record/last-key root)))

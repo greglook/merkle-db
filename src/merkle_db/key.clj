@@ -637,48 +637,49 @@
 
 
 
-;; ## Double Lexicoder
+;; ## Floating Point Lexicoder
 
-;; The double lexicoder converts floating-point values into key bytes.
-(deftype DoubleLexicoder [])
+;; The float lexicoder converts floating-point values into key bytes.
+(deftype FloatLexicoder [])
 
 
-(def double-lexicoder
+(def float-lexicoder
   "Lexicoder for double-precision floating point values."
-  (->DoubleLexicoder))
+  (->FloatLexicoder))
 
 
-(ns-unmap *ns* '->DoubleLexicoder)
+(ns-unmap *ns* '->FloatLexicoder)
 
 
-;; Returns the global double lexicoder.
-(defmethod lexicoder :double
+;; Returns the global float lexicoder.
+(defmethod lexicoder :float
   [config]
   (when (config-params config)
     (throw (ex-info
-             (str "Double lexicoder config takes no parameters: " (pr-str config))
+             (str "Float lexicoder config takes no parameters: "
+                  (pr-str config))
              {:config config})))
-  double-lexicoder)
+  float-lexicoder)
 
 
-(extend-type DoubleLexicoder
+(extend-type FloatLexicoder
 
   Lexicoder
 
   (lexicoder-config
     [_]
-    :double)
+    :float)
 
   (encode*
     [_ value]
     (when-not (float? value)
       (throw (IllegalArgumentException.
-               (format "DoubleLexicoder cannot encode non-floating-point value: %s (%s)"
+               (format "FloatLexicoder cannot encode non-floating-point value: %s (%s)"
                        (pr-str value)
                        (.getName (class value))))))
     (when (Double/isNaN value)
       (throw (IllegalArgumentException.
-               "DoubleLexicoder cannot encode NaN value as a valid key")))
+               "FloatLexicoder cannot encode NaN value as a valid key")))
     (encode*
       integer-lexicoder
       (let [bits (if (zero? value)

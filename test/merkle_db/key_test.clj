@@ -129,8 +129,8 @@
    [key/integer-lexicoder
     gen/large-integer]
 
-   :double
-   [key/double-lexicoder
+   :float
+   [key/float-lexicoder
     (gen/double* {:NaN? false})]
 
    :instant
@@ -229,29 +229,29 @@
     (gen/return (:integer lexicoder-generators)) ))
 
 
-(deftest double-lexicoder
+(deftest float-lexicoder
   (testing "construction"
-    (is (identical? key/double-lexicoder (key/lexicoder :double)))
-    (is (= :double (key/lexicoder-config key/double-lexicoder)))
+    (is (identical? key/float-lexicoder (key/lexicoder :float)))
+    (is (= :float (key/lexicoder-config key/float-lexicoder)))
     (is (thrown? Exception
-          (key/lexicoder [:double :bar]))
+          (key/lexicoder [:float :bar]))
         "should not accept any config parameters"))
   (testing "bad values"
     (is (thrown? IllegalArgumentException
-          (key/encode key/double-lexicoder 123))
+          (key/encode key/float-lexicoder 123))
         "should not encode non-floats")
     (is (thrown? IllegalArgumentException
-          (key/encode key/double-lexicoder Double/NaN))
+          (key/encode key/float-lexicoder Double/NaN))
         "should not encode NaN values"))
   (testing "basic values"
-    (is-reflexive key/double-lexicoder 0.0 "8000")
-    (is-reflexive key/double-lexicoder 1.0 "873FF0000000000000")
-    (is-reflexive key/double-lexicoder -1.0 "78C00FFFFFFFFFFFFF")))
+    (is-reflexive key/float-lexicoder 0.0 "8000")
+    (is-reflexive key/float-lexicoder 1.0 "873FF0000000000000")
+    (is-reflexive key/float-lexicoder -1.0 "78C00FFFFFFFFFFFFF")))
 
 
-(deftest ^:generative double-lexicoding
+(deftest ^:generative float-lexicoding
   (check-lexicoder
-    (gen/return (:double lexicoder-generators)) ))
+    (gen/return (:float lexicoder-generators)) ))
 
 
 (deftest instant-lexicoder

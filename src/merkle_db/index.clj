@@ -252,20 +252,20 @@
   "Read a lazy sequence of key/map tuples which contain the field data for the
   records whose keys lie in the given range, inclusive. A nil boundary includes
   all records in that range direction."
-  [store node fields min-key max-key]
+  [store node fields min-k max-k]
   (when node
     (case (:data/type node)
       :merkle-db/index
         (->
           (child-boundaries node)
           (cond->>
-            min-key
+            min-k
               (drop-while #(if-let [last-key (nth % 2)]
-                             (key/before? last-key min-key)
+                             (key/before? last-key min-k)
                              false))
-            max-key
+            max-k
               (take-while #(if-let [first-key (nth % 1)]
-                             (not (key/after? first-key max-key))
+                             (not (key/after? first-key max-k))
                              true)))
           (->>
             (map first)
@@ -273,10 +273,10 @@
               (fn read-child
                 [child-link]
                 (let [child (graph/get-link! store node child-link)]
-                  (read-range store child fields min-key max-key))))))
+                  (read-range store child fields min-k max-k))))))
 
       :merkle-db/partition
-        (part/read-range store node fields min-key max-key)
+        (part/read-range store node fields min-k max-k)
 
       (throw (ex-info (str "Unsupported index-tree node type: "
                            (pr-str (:data/type node)))

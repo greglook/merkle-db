@@ -90,3 +90,30 @@
                  (pop pending))))
       ; No more links to visit, we're done.
       visited)))
+
+
+(defn find-nodes-2
+  "Generate a sequence of values by exploring the DAG structure. Starting with
+  the targeted root node, the function `f` will be called with each node, and
+  should return a tuple containing two values: the results to emit in the
+  sequence and a collection of links to follow for more loads.
+
+  Any node ids in the visited set will be ignored."
+  [store visited roots f]
+  (when (seq roots)
+    (if-let [target (link/identify (peek roots))]
+      (if (contains? visited target)
+        ; Already visited the target.
+        (recur store visited (pop roots) f)
+        ; Determine whether to visit the link and recurse.
+        (lazy-seq
+          (let [node (mdag/get-node store target)
+                [results links] (f node)]
+            (concat results
+                    (find-nodes-2
+                      store
+                      (conj (set visited) target)
+                      (into roots links)
+                      f)))))
+      ; Not a targetable link somehow?
+      (recur store visited (pop roots) f))))

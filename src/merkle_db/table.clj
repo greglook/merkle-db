@@ -156,6 +156,10 @@
     "Remove some records from the table, identified by a collection of id keys.
     Returns an updated table.")
 
+  (dirty?
+    [table]
+    "Return true if the table has local non-persisted modifications.")
+
   (flush!
     [table]
     [table opts]
@@ -419,13 +423,6 @@
         (._meta table)))))
 
 
-; TODO: put this in protocol?
-(defn dirty?
-  "Return true if the table has local non-persisted modifications."
-  [^Table table]
-  (.dirty table))
-
-
 
 ;; ## Protocol Implementation
 
@@ -636,6 +633,12 @@
     table))
 
 
+(defn -dirty?
+  "Internal `dirty?` implementation."
+  [^Table table]
+  (.dirty table))
+
+
 (defn- flush-changes
   "Returns a vector containing a link to a patch tablet and an index tree."
   [^Table table full?]
@@ -665,7 +668,7 @@
   ([table]
    (-flush! table nil))
   ([^Table table opts]
-   (if (dirty? table)
+   (if (.dirty table)
      (let [[patch-link data-link] (flush-changes table (:apply-patch? opts))
            root-data (-> (.root-data table)
                          (assoc :data/type :merkle-db/table)
@@ -699,8 +702,12 @@
    :read -read
    :insert -insert
    :delete -delete
+   :dirty? -dirty?
    :flush! -flush!})
 
+
+
+;; ## Utility Functions
 
 (defn table-stats
   "Calculate statistics about the structure of the given table."

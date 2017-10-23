@@ -32,8 +32,12 @@
          #(not (str/includes? % "/"))
          #(<= 1 (count %) 127)))
 
+;; Configuration for the primary key fields used to identify records in the
+;; table.
+(s/def ::primary-key ::record/id-field)
+
 ;; Table data is a link to the root of the data tree.
-(s/def ::record mdag/link?)
+(s/def ::data mdag/link?)
 
 ;; Tables may have a patch tablet containing recent unmerged data.
 (s/def ::patch mdag/link?)
@@ -44,10 +48,10 @@
     (s/keys :req [::record/count
                   ::index/fan-out
                   ::part/limit]
-            :opt [::data
+            :opt [::primary-key
+                  ::data
                   ::patch
                   ::patch/limit
-                  ::record/id-field
                   ::record/families
                   ::key/lexicoder])
     #(= :merkle-db/table (:data/type %))))
@@ -509,7 +513,7 @@
        (->>
          (map (partial record/decode-entry
                        lexicoder
-                       (::record/id-field table))))))))
+                       (::primary-key table))))))))
 
 
 (defn- read-batch
@@ -551,7 +555,7 @@
          (->>
            (map (partial record/decode-entry
                          lexicoder
-                         (::record/id-field table))))))
+                         (::primary-key table))))))
      (list))))
 
 
@@ -597,7 +601,7 @@
            update-rec (record-updater opts)
            records (mapv (partial record/encode-entry
                                   lexicoder
-                                  (::record/id-field table))
+                                  (::primary-key table))
                          records)
            extant (into {} (read-batch table (map first records) nil))
            records (reduce

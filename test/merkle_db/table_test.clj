@@ -324,7 +324,7 @@
                 :merkle-db.partition/limit 5
                 :merkle-db.patch/limit 10
                 :merkle-db.record/families {:bc #{:b :c}}
-                :merkle-db.record/id-field :id
+                :merkle-db.table/primary-key :id
                 :merkle-db.key/lexicoder :integer}))
       op-generators
       :context-gen gen-context

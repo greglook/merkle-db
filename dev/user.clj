@@ -65,7 +65,7 @@
                records
                (map (partial record/encode-entry
                              lexicoder
-                             (::record/id-field params)))
+                             (::table/primary-key params)))
                (part/partition-records store params)
                (index/build-tree store params))
         node (-> params

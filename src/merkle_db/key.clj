@@ -347,7 +347,7 @@
   (if (empty? byte-arrays)
     (byte-array 0)
     (let [data (byte-array (reduce + (dec (count byte-arrays))
-                                   (map alength byte-arrays)))]
+                                   (map count byte-arrays)))]
       (loop [elements byte-arrays
              idx 0]
         (if-let [^bytes element (first elements)]

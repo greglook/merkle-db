@@ -61,12 +61,13 @@
   [table-name params records]
   (let [store (.store conn)
         lexicoder (key/lexicoder (::key/lexicoder params :bytes))
-        records' (mapv (partial record/encode-entry
-                                lexicoder
-                                (::record/id-field params))
-                       records)
-        parts (vec (part/partition-records store params records'))
-        root (index/build-tree store params parts)
+        root (->>
+               records
+               (map (partial record/encode-entry
+                             lexicoder
+                             (::record/id-field params)))
+               (part/partition-records store params)
+               (index/build-tree store params))
         node (-> params
                  (assoc :data/type :merkle-db/table
                         ::record/count (::record/count root 0))

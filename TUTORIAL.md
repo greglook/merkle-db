@@ -252,8 +252,182 @@ database versions to keep.
 
 ## Tables
 
-- creating tables
-- inserting data
-- reading data
-- removing data
-- flushing state
+Now that you understand the basics of databases, let's talk tables. Each
+database is a container for some data in its _tables_. Each table corresponds
+to a 'kind' of data you might want to use; not every record in a table needs to
+have exactly the same shape, but generally they'll have common sets of fields.
+
+```clojure
+=> (require '[merkle-db.db :as db])
+
+=> (def db (conn/open-db conn "iris"))
+#merkle-db.playground/db
+```
+
+### Creating Tables
+
+One way to make a new table is to create it directly in a database:
+
+```
+=> (db/create-table db "test" {:data/title "Example test table"})
+#merkle-db/db
+{:data/description "For working with the merkle-db API",
+ :data/title "Iris Plant Database",
+ :data/type :merkle-db/database,
+ :merkle-db.db/committed-at #inst "2017-10-24T21:03:14.293Z",
+ :merkle-db.db/name "iris",
+ :merkle-db.db/tables {"test" #merkle-db/table
+                       {:data/title "Example test table",
+                        :data/type :merkle-db/table,
+                        :merkle-db.index/fan-out 256,
+                        :merkle-db.partition/limit 1000,
+                        :merkle-db.patch/limit 100,
+                        :merkle-db.record/count 0,
+                        :merkle-db.table/name "test"}},
+ :merkle-db.db/version 2,
+ :merkle-db.record/size 173,
+ :merkledag.node/id #data/hash "QmY6LL3MArYnyjbijLnbF7JcqhLaC32qnjtN2G9JJq966w"}
+```
+
+Again, note that the database node id has not changed because the table has
+been added as a local modification. In fact, you can see as much by how the
+table is directly embedded in the `::db/tables` field. Let's save our work:
+
+```clojure
+=> (conn/commit! conn *1)
+#merkle-db/db
+{:data/description "For working with the merkle-db API",
+ :data/title "Iris Plant Database",
+ :data/type :merkle-db/database,
+ :merkle-db.db/committed-at #inst "2017-10-24T23:00:12.120Z",
+ :merkle-db.db/name "iris",
+ :merkle-db.db/tables {"test" #merkledag/link ["table:test" #data/hash "QmW5U8F2zsyuRWrEppmy8zpS3LyhYvfkRtba1nsi3Y6HNX" 204]},
+ :merkle-db.db/version 3,
+ :merkledag.node/id #data/hash "QmTWNVAGsGaN2prJMazum6pAuopSSLZBXeWpj4Q4T1TGND"}
+
+=> (def db *1)
+#merkle-db.playground/db
+```
+
+The in-line table has become a merkle link, because the table root has been
+serialized out into a separate node. This is probably a good time to introduce
+the vizualization tools (you will need `graphviz` installed):
+
+```clojure
+=> (require '[merkle-db.viz :as viz])
+
+=> (viz/view-database db)
+```
+
+We've now got a two-node immutable graph representing our database!
+
+### Working with Tables
+
+Now that we have a table, we need to do something with it. Get the table from
+the database and we can start working:
+
+```clojure
+=> (db/get-table db "test")
+#merkle-db/table
+{:data/title "Example test table",
+ :data/type :merkle-db/table,
+ :merkle-db.index/fan-out 256,
+ :merkle-db.partition/limit 1000,
+ :merkle-db.patch/limit 100,
+ :merkle-db.record/count 0,
+ :merkle-db.record/size 204,
+ :merkle-db.table/name "test",
+ :merkledag.node/id #data/hash "QmW5U8F2zsyuRWrEppmy8zpS3LyhYvfkRtba1nsi3Y6HNX"}
+
+=> (def table *1)
+#'merkle-db.playground/table
+
+=> (require '[merkle-db.table :as table])
+
+=> (table/insert table [{:id 1, :foo 123, :bar "baz"}])
+; IllegalArgumentException BytesLexicoder cannot encode non-byte-array value: nil (null)  merkle-db.key/eval17099/fn--17102 (key.clj:426)
+```
+
+Wait, what happened? When we created the table, we didn't specify any
+information about the structure of the records we're planning to store in it. As
+a result, we've gotten the default settings to identify records with the primary
+key `:merkle-db.record/id` and lexicode them into key values directly from byte
+arrays. Not only does our sample record not use that key as an identifier, the
+value is a number rather than a byte array! Let's fix this:
+
+```clojure
+=> (require '[merkle-db.key :as key])
+
+=> (alter-var-root #'table assoc ::table/primary-key :id ::key/lexicoder :integer)
+#merkle-db/table
+{:data/title "Example test table",
+ :data/type :merkle-db/table,
+ :merkle-db.index/fan-out 256,
+ :merkle-db.key/lexicoder :integer,
+ :merkle-db.partition/limit 1000,
+ :merkle-db.patch/limit 100,
+ :merkle-db.record/count 0,
+ :merkle-db.record/size 204,
+ :merkle-db.table/name "test",
+ :merkle-db.table/primary-key :id}
+
+=> (table/dirty? table)
+true
+```
+
+We've updated the table with the necessary attributes, which are reflected as
+local modifications; note the absence of the table node id in the result. We
+can use the `table/dirty?` method to test for this state. Let's try that insert
+again...
+
+```clojure
+=> (alter-var-root #'table table/insert [{:id 1, :foo 123, :bar "baz"}])
+#merkle-db/table
+{:data/title "Example test table",
+ :data/type :merkle-db/table,
+ :merkle-db.index/fan-out 256,
+ :merkle-db.key/lexicoder :integer,
+ :merkle-db.partition/limit 1000,
+ :merkle-db.patch/limit 100,
+ :merkle-db.record/count 1,
+ :merkle-db.record/size 204,
+ :merkle-db.table/name "test",
+ :merkle-db.table/primary-key :id}
+```
+
+Great! We now have a table with one record in it. This is still a local change;
+let's persist the table now so we don't lose our hard work:
+
+```clojure
+=> (alter-var-root #'table table/flush!)
+...
+```
+
+**TODO:** discuss record upsert logic
+
+**TODO:** update database table, commit db
+
+**TODO:** drop test table, commit db
+
+### Loading Data
+
+**TODO:** load iris dataset into new table, commit
+
+### Reading Data
+
+The simplest way to read data from the table is to ask for specific records:
+
+```clojure
+=> (table/read table [...])
+...
+```
+
+We can also scan the table for all records in sorted order:
+
+```clojure
+=> (table/scan table)
+...
+
+=> (table/keys table)
+...
+```

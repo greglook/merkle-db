@@ -299,6 +299,9 @@
     (is (valid? ::table/node-data result))))
 
 
+; TODO: assoc/dissoc operators
+
+
 (def ^:private op-generators
   (juxt gen->Keys
         gen->Scan

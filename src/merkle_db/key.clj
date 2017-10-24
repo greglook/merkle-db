@@ -425,7 +425,7 @@
       (throw (IllegalArgumentException.
                (format "BytesLexicoder cannot encode non-byte-array value: %s (%s)"
                        (pr-str value)
-                       (.getName (class value))))))
+                       (some-> (class value) (.getName))))))
     (when (zero? (count value))
       (throw (IllegalArgumentException.
                "BytesLexicoder cannot encode empty byte arrays")))
@@ -501,7 +501,7 @@
       (throw (IllegalArgumentException.
                (format "StringLexicoder cannot encode non-string value: %s (%s)"
                        (pr-str value)
-                       (.getName (class value))))))
+                       (some-> (class value) (.getName))))))
     (when (empty? value)
       (throw (IllegalArgumentException.
                "StringLexicoder cannot encode empty strings")))
@@ -601,7 +601,7 @@
       (throw (IllegalArgumentException.
                (format "IntegerLexicoder cannot encode non-integer value: %s (%s)"
                        (pr-str value)
-                       (.getName (class value))))))
+                       (some-> (class value) (.getName))))))
     (let [int-length (integer-byte-length value)
           data (byte-array (inc int-length))
           header (if (neg? value)
@@ -676,7 +676,7 @@
       (throw (IllegalArgumentException.
                (format "FloatLexicoder cannot encode non-floating-point value: %s (%s)"
                        (pr-str value)
-                       (.getName (class value))))))
+                       (some-> (class value) (.getName))))))
     (when (Double/isNaN value)
       (throw (IllegalArgumentException.
                "FloatLexicoder cannot encode NaN value as a valid key")))
@@ -737,7 +737,7 @@
       (throw (IllegalArgumentException.
                (format "InstantLexicoder cannot encode non-instant value: %s (%s)"
                        (pr-str value)
-                       (.getName (class value))))))
+                       (some-> (class value) (.getName))))))
     (encode* integer-lexicoder (.toEpochMilli ^Instant value)))
 
   (decode*
@@ -791,7 +791,7 @@
       (throw (IllegalArgumentException.
                (format "SequenceLexicoder cannot encode non-sequential value: %s (%s)"
                        (pr-str value)
-                       (.getName (class value))))))
+                       (some-> (class value) (.getName))))))
     (->> value
          (map #(escape-bytes (encode* (.element-coder this) %)))
          (join-bytes)))
@@ -855,7 +855,8 @@
       (throw (IllegalArgumentException.
                (format "TupleLexicoder cannot encode non-sequential value: %s (%s)"
                        (pr-str value)
-                       (.getName (class value))))))
+                       (some-> (class value) (.getName))))))
+    ; TODO: actually, let this encode shorter keys for prefix searching
     (when (not= (count (.coders this)) (count value))
       (throw (IllegalArgumentException.
                (format "TupleLexicoder cannot encode tuple which does not match lexicoder count %d: %s"

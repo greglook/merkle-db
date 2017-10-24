@@ -132,10 +132,11 @@
         save-part! (fn [rs]
                      (future
                        ; TODO: callback on partition creation?
-                       (printf "~") (flush)
+                       ;(do (printf "~") (flush))
                        (let [start (System/nanoTime)
                              part (from-records store params rs)
                              elapsed (/ (- (System/nanoTime) start) 1e6)]
+                         #_#_
                          (printf "%d records => part in %.2f ms\n"
                                  (count rs) elapsed)
                          (flush)

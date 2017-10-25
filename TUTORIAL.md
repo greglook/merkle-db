@@ -473,7 +473,7 @@ What happens when we update the record?
 Inserting a record with the same id merges the data, with new values overriding
 old ones. Deleting a record works the way you'd expect:
 
-```
+```clojure
 => (table/delete *2 [1])
 #merkle-db/table
 {:data/title "Example test table",
@@ -614,5 +614,3 @@ We can also scan the table for all records in sorted order:
 => (table/keys table {:limit 5})
 (0 1 2 3 4)
 ```
-
-You've now got the basic merkle-db interactions down!

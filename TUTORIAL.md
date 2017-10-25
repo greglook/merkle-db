@@ -240,7 +240,10 @@ database versions to keep.
 
 ```clojure
 => (conn/drop-db! conn "iris2")
-{:merkle-db.db/committed-at #inst "2017-10-24T21:15:05.572Z", :merkle-db.db/name "iris2", :merkle-db.db/version 2, :merkledag.node/id nil}
+{:merkle-db.db/committed-at #inst "2017-10-24T21:15:05.572Z",
+ :merkle-db.db/name "iris2",
+ :merkle-db.db/version 2,
+ :merkledag.node/id nil}
 
 => (conn/list-dbs conn)
 ({:merkle-db.db/committed-at #inst "2017-10-24T21:03:14.293Z",
@@ -268,7 +271,7 @@ have exactly the same shape, but generally they'll have common sets of fields.
 
 One way to make a new table is to create it directly in a database:
 
-```
+```clojure
 => (db/create-table db "test" {:data/title "Example test table"})
 #merkle-db/db
 {:data/description "For working with the merkle-db API",
@@ -327,6 +330,8 @@ Now that we have a table, we need to do something with it. Get the table from
 the database and we can start working:
 
 ```clojure
+=> (require '[merkle-db.table :as table])
+
 => (db/get-table db "test")
 #merkle-db/table
 {:data/title "Example test table",
@@ -339,13 +344,8 @@ the database and we can start working:
  :merkle-db.table/name "test",
  :merkledag.node/id #data/hash "QmW5U8F2zsyuRWrEppmy8zpS3LyhYvfkRtba1nsi3Y6HNX"}
 
-=> (def table *1)
-#'merkle-db.playground/table
-
-=> (require '[merkle-db.table :as table])
-
 => (table/insert table [{:id 1, :foo 123, :bar "baz"}])
-; IllegalArgumentException BytesLexicoder cannot encode non-byte-array value: nil (null)  merkle-db.key/eval17099/fn--17102 (key.clj:426)
+; IllegalArgumentException BytesLexicoder cannot encode non-byte-array value: nil (null)
 ```
 
 Wait, what happened? When we created the table, we didn't specify any
@@ -370,15 +370,11 @@ value is a number rather than a byte array! Let's fix this:
  :merkle-db.record/size 204,
  :merkle-db.table/name "test",
  :merkle-db.table/primary-key :id}
-
-=> (table/dirty? table)
-true
 ```
 
 We've updated the table with the necessary attributes, which are reflected as
-local modifications; note the absence of the table node id in the result. We
-can use the `table/dirty?` method to test for this state. Let's try that insert
-again...
+local modifications; note the absence of the table node id in the result. Let's
+try that insert again...
 
 ```clojure
 => (alter-var-root #'table table/insert [{:id 1, :foo 123, :bar "baz"}])
@@ -400,18 +396,66 @@ let's persist the table now so we don't lose our hard work:
 
 ```clojure
 => (alter-var-root #'table table/flush!)
-...
+#merkle-db/table
+{:data/title "Example test table",
+ :data/type :merkle-db/table,
+ :merkle-db.index/fan-out 256,
+ :merkle-db.key/lexicoder :integer,
+ :merkle-db.partition/limit 1000,
+ :merkle-db.patch/limit 100,
+ :merkle-db.record/count 1,
+ :merkle-db.record/size 536,
+ :merkle-db.table/name "test",
+ :merkle-db.table/patch #merkledag/link ["patch" #data/hash "QmXyLE3ZgHoTaHn2XxG4XDSWFq7Yh2DPmzK5iVus6KALdR" 130],
+ :merkle-db.table/primary-key :id,
+ :merkledag.node/id #data/hash "QmcJ2pSsnGCHeAkmvtuSqu2oo4xJ2cZSigGsKTMTj2vWhy"}
 ```
 
-**TODO:** discuss record upsert logic
+Hmm - the table has a node-id again, implying that we persisted it. It also now
+has a link to something called a 'patch'. We'll talk more about that in a
+second. First, you may have guessed that flushing the table here hasn't updated
+our database, and you would be correct:
 
-**TODO:** update database table, commit db
+```clojure
+=> (:merkle-db.record/count (db/get-table db "test"))
+0
+```
 
-**TODO:** drop test table, commit db
+We need to set the new table value in the database, then commit it to fully
+persist the table:
+
+```clojure
+=> (conn/commit! conn (db/set-table db "test" table))
+#merkle-db/db
+{:data/description "For working with the merkle-db API",
+ :data/title "Iris Plant Database",
+ :data/type :merkle-db/database,
+ :merkle-db.db/committed-at #inst "2017-10-25T02:18:50.933Z",
+ :merkle-db.db/name "iris",
+ :merkle-db.db/tables {"test" #merkledag/link ["table:test" #data/hash "QmcJ2pSsnGCHeAkmvtuSqu2oo4xJ2cZSigGsKTMTj2vWhy" 536]},
+ :merkle-db.db/version 4,
+ :merkledag.node/id #data/hash "QmYodPnwjhQ8Sdct8JKTQ2QemCqYJhz8WdfdJHuymTMPBF"}
+
+=> (def db *1)
+#'merkle-db.playground/db
+
+; Try visualizing the database again:
+=> (viz/view-database db)
+```
+
+**TODO:**
+- discuss record upsert logic
+- demo record deletion
+- talk table patch vs data tree
+- flush patch to data
+- visualize table
+- drop test table
 
 ### Loading Data
 
-**TODO:** load iris dataset into new table, commit
+**TODO:**
+- load iris dataset into new table
+- attach table to db
 
 ### Reading Data
 

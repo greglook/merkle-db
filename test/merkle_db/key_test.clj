@@ -153,6 +153,9 @@
         "should not accept any config parameters"))
   (testing "bad values"
     (is (thrown? IllegalArgumentException
+          (key/encode key/bytes-lexicoder nil))
+        "should not encode nil")
+    (is (thrown? IllegalArgumentException
           (key/encode key/bytes-lexicoder "foo"))
         "should not encode non-byte-arrays")
     (is (thrown? IllegalArgumentException
@@ -186,6 +189,9 @@
         "should only accept one config parameter"))
   (testing "bad values"
     (is (thrown? IllegalArgumentException
+          (key/encode key/string-lexicoder nil))
+        "should not encode nil")
+    (is (thrown? IllegalArgumentException
           (key/encode key/string-lexicoder 123))
         "should not encode non-strings")
     (is (thrown? IllegalArgumentException
@@ -213,6 +219,9 @@
         "should not accept any config parameters"))
   (testing "bad values"
     (is (thrown? IllegalArgumentException
+          (key/encode key/integer-lexicoder nil))
+        "should not encode nil")
+    (is (thrown? IllegalArgumentException
           (key/encode key/integer-lexicoder 0.0))
         "should not encode non-integers")
     (is (thrown? IllegalArgumentException
@@ -237,6 +246,9 @@
           (key/lexicoder [:float :bar]))
         "should not accept any config parameters"))
   (testing "bad values"
+    (is (thrown? IllegalArgumentException
+          (key/encode key/float-lexicoder nil))
+        "should not encode nil")
     (is (thrown? IllegalArgumentException
           (key/encode key/float-lexicoder 123))
         "should not encode non-floats")
@@ -263,6 +275,9 @@
         "should not accept any config parameters"))
   (testing "bad values"
     (is (thrown? IllegalArgumentException
+          (key/encode key/instant-lexicoder nil))
+        "should not encode nil")
+    (is (thrown? IllegalArgumentException
           (key/encode key/instant-lexicoder ""))
         "should not encode non-instant value")))
 
@@ -283,6 +298,9 @@
           (key/lexicoder [:seq :string :foo]))
         "should only accept one config parameter"))
   (testing "bad values"
+    (is (thrown? IllegalArgumentException
+          (key/encode (key/sequence-lexicoder key/integer-lexicoder) nil))
+        "should not encode nil")
     (is (thrown? IllegalArgumentException
           (key/encode (key/sequence-lexicoder key/integer-lexicoder) #{123}))
         "should not encode non-sequential values")))
@@ -308,6 +326,9 @@
           (key/lexicoder [:tuple]))
         "should require at least one config parameter"))
   (testing "bad values"
+    (is (thrown? IllegalArgumentException
+          (key/encode (key/tuple-lexicoder key/integer-lexicoder) nil))
+        "should not encode nil")
     (is (thrown? IllegalArgumentException
           (key/encode (key/tuple-lexicoder key/integer-lexicoder) #{123}))
         "should not encode non-sequential values")

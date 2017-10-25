@@ -389,6 +389,9 @@ try that insert again...
  :merkle-db.record/size 204,
  :merkle-db.table/name "test",
  :merkle-db.table/primary-key :id}
+
+=> (table/read table [1])
+({:bar "baz", :foo 123, :id 1})
 ```
 
 Great! We now have a table with one record in it. This is still a local change;
@@ -411,10 +414,9 @@ let's persist the table now so we don't lose our hard work:
  :merkledag.node/id #data/hash "QmcJ2pSsnGCHeAkmvtuSqu2oo4xJ2cZSigGsKTMTj2vWhy"}
 ```
 
-Hmm - the table has a node-id again, implying that we persisted it. It also now
-has a link to something called a 'patch'. We'll talk more about that in a
-second. First, you may have guessed that flushing the table here hasn't updated
-our database, and you would be correct:
+Hmm - the table has a node-id again, implying that we persisted it. You may
+have guessed by this point that flushing the table here hasn't updated our
+database, and you would be correct:
 
 ```clojure
 => (:merkle-db.record/count (db/get-table db "test"))
@@ -443,35 +445,174 @@ persist the table:
 => (viz/view-database db)
 ```
 
-**TODO:**
-- discuss record upsert logic
-- demo record deletion
-- talk table patch vs data tree
-- flush patch to data
-- visualize table
-- drop test table
+Now we have saved the current version of the table in the latest version of the
+database; were we to restart the REPL and reconstruct the connection, we'd be
+able to re-open the database and get our record out.
+
+What happens when we update the record?
+
+```clojure
+=> (table/insert table [{:id 1, :foo 456, :qux true} {:id 2, :abc "xyz"}])
+#merkle-db/table
+{:data/title "Example test table",
+ :data/type :merkle-db/table,
+ :merkle-db.index/fan-out 256,
+ :merkle-db.key/lexicoder :integer,
+ :merkle-db.partition/limit 1000,
+ :merkle-db.patch/limit 100,
+ :merkle-db.record/count 1,
+ :merkle-db.record/size 536,
+ :merkle-db.table/name "test",
+ :merkle-db.table/patch #merkledag/link ["patch" #data/hash "QmXyLE3ZgHoTaHn2XxG4XDSWFq7Yh2DPmzK5iVus6KALdR" 130],
+ :merkle-db.table/primary-key :id}
+
+=> (table/read *1 [1 2])
+({:bar "baz", :foo 456, :id 1, :qux true} {:id 2, :abc "xyz"})
+```
+
+Inserting a record with the same id merges the data, with new values overriding
+old ones. Deleting a record works the way you'd expect:
+
+```
+=> (table/delete *2 [1])
+#merkle-db/table
+{:data/title "Example test table",
+ :data/type :merkle-db/table,
+ :merkle-db.index/fan-out 256,
+ :merkle-db.key/lexicoder :integer,
+ :merkle-db.partition/limit 1000,
+ :merkle-db.patch/limit 100,
+ :merkle-db.record/count 1,
+ :merkle-db.record/size 536,
+ :merkle-db.table/name "test",
+ :merkle-db.table/patch #merkledag/link ["patch" #data/hash "QmXyLE3ZgHoTaHn2XxG4XDSWFq7Yh2DPmzK5iVus6KALdR" 130],
+ :merkle-db.table/primary-key :id}
+
+=> (table/read *1 [1 2])
+({:abc "xyz", :id 2})
+```
+
+Before we move on, we can clean up by dropping this test table.
+
+```clojure
+=> (alter-var-root #'db db/drop-table "test")
+#merkle-db/db
+{:data/description "For working with the merkle-db API",
+ :data/title "Iris Plant Database",
+ :data/type :merkle-db/database,
+ :merkle-db.db/committed-at #inst "2017-10-25T02:18:50.933Z",
+ :merkle-db.db/name "iris",
+ :merkle-db.db/tables {},
+ :merkle-db.db/version 4,
+ :merkledag.node/id #data/hash "QmYodPnwjhQ8Sdct8JKTQ2QemCqYJhz8WdfdJHuymTMPBF"}
+```
 
 ### Loading Data
 
-**TODO:**
-- load iris dataset into new table
-- attach table to db
+Alright, let's load some data!
+
+```clojure
+=> (alter-var-root #'db db/create-table "measurements"
+                   {:data/title "Flower Measurements",
+                    ::table/primary-key :iris/id,
+                    ::key/lexicoder :integer}))
+#merkle-db/db
+{:data/description "For working with the merkle-db API",
+ :data/title "Iris Plant Database",
+ :data/type :merkle-db/database,
+ :merkle-db.db/committed-at #inst "2017-10-25T02:18:50.933Z",
+ :merkle-db.db/name "iris",
+ :merkle-db.db/tables {"measurements" #merkle-db/table
+                       {:data/title "Flower Measurements",
+                        :data/type :merkle-db/table,
+                        :merkle-db.index/fan-out 256,
+                        :merkle-db.key/lexicoder :integer,
+                        :merkle-db.partition/limit 1000,
+                        :merkle-db.patch/limit 100,
+                        :merkle-db.record/count 0,
+                        :merkle-db.table/name "measurements",
+                        :merkle-db.table/primary-key :iris/id}},
+ :merkle-db.db/version 4,
+ :merkledag.node/id #data/hash "QmYodPnwjhQ8Sdct8JKTQ2QemCqYJhz8WdfdJHuymTMPBF"}
+
+=> (require
+     '[clojure.data.csv :as csv]
+     '[clojure.java.io :as io])
+
+=> (->> (csv/read-csv (io/reader "test/data/iris/iris.tsv") :separator \tab)
+        (rest)
+        (map-indexed (fn [i [sl sw pl pw cls]]
+                       {:iris/id i,
+                        :iris/sepal-length (Double/parseDouble sl),
+                        :iris/sepal-width (Double/parseDouble sw),
+                        :iris/petal-length (Double/parseDouble pl),
+                        :iris/class (keyword (subs cls 5))}))
+        (db/update-table db "measurements" table/insert)
+        (conn/commit! conn))
+#merkle-db/db
+{:data/description "For working with the merkle-db API",
+ :data/title "Iris Plant Database",
+ :data/type :merkle-db/database,
+ :merkle-db.db/committed-at #inst "2017-10-25T07:16:43.352Z",
+ :merkle-db.db/name "iris",
+ :merkle-db.db/tables {"measurements" #merkledag/link ["table:measurements" #data/hash "QmRKHE3XeLVA9gWv8bKmvimZpzhZrijgedAhQrDqChXjw1" 18896]},
+ :merkle-db.db/version 5,
+ :merkledag.node/id #data/hash "QmYgwQfNcauwm39C6NW5A8Q6CJygkWYwppiyNNWR2N8mW9"}
+
+=> (def table (db/get-table *1 "measurements"))
+#'merkle-db.playground/table
+```
+
+Note that a single-batch insertion like this wouldn't scale well to large
+datasets, but works fine for small (under a few thousand records) tables.
 
 ### Reading Data
 
-The simplest way to read data from the table is to ask for specific records:
+Now that we've got some real data in a table, let's read it back out. The
+simplest way to get data is to ask for specific records:
 
 ```clojure
-=> (table/read table [...])
-...
+=> (table/read table [32 8 122 75 1])
+({:iris/class :setosa, :iris/id 1, :iris/petal-length 1.4, :iris/sepal-length 4.9, :iris/sepal-width 3.0}
+ {:iris/class :setosa, :iris/id 8, :iris/petal-length 1.4, :iris/sepal-length 4.4, :iris/sepal-width 2.9}
+ {:iris/class :setosa, :iris/id 32, :iris/petal-length 1.5, :iris/sepal-length 5.2, :iris/sepal-width 4.1}
+ {:iris/class :versicolor, :iris/id 75, :iris/petal-length 4.4, :iris/sepal-length 6.6, :iris/sepal-width 3.0}
+ {:iris/class :virginica, :iris/id 122, :iris/petal-length 6.7, :iris/sepal-length 7.7, :iris/sepal-width 2.8})
+
+; We can also restrict the read to specific fields:
+=> (table/read table [4 8 16 32] {:fields #{:iris/sepal-length}})
+({:iris/id 4, :iris/sepal-length 5.0}
+ {:iris/id 8, :iris/sepal-length 4.4}
+ {:iris/id 16, :iris/sepal-length 5.4}
+ {:iris/id 32, :iris/sepal-length 5.2})
 ```
 
 We can also scan the table for all records in sorted order:
 
 ```clojure
-=> (table/scan table)
-...
+=> (take 5 (table/scan table))
+({:iris/class :setosa, :iris/id 0, :iris/petal-length 1.4, :iris/sepal-length 5.1, :iris/sepal-width 3.5}
+ {:iris/class :setosa, :iris/id 1, :iris/petal-length 1.4, :iris/sepal-length 4.9, :iris/sepal-width 3.0}
+ {:iris/class :setosa, :iris/id 2, :iris/petal-length 1.3, :iris/sepal-length 4.7, :iris/sepal-width 3.2}
+ {:iris/class :setosa, :iris/id 3, :iris/petal-length 1.5, :iris/sepal-length 4.6, :iris/sepal-width 3.1}
+ {:iris/class :setosa, :iris/id 4, :iris/petal-length 1.4, :iris/sepal-length 5.0, :iris/sepal-width 3.6})
 
-=> (table/keys table)
-...
+; Restrict the keys to scan between
+=> (table/scan table {:min-key 80, :max-key 83})
+({:iris/class :versicolor, :iris/id 80, :iris/petal-length 3.8, :iris/sepal-length 5.5, :iris/sepal-width 2.4}
+ {:iris/class :versicolor, :iris/id 81, :iris/petal-length 3.7, :iris/sepal-length 5.5, :iris/sepal-width 2.4}
+ {:iris/class :versicolor, :iris/id 82, :iris/petal-length 3.9, :iris/sepal-length 5.8, :iris/sepal-width 2.7}
+ {:iris/class :versicolor, :iris/id 83, :iris/petal-length 5.1, :iris/sepal-length 6.0, :iris/sepal-width 2.7})
+
+; A few more options:
+=> (table/scan table {:min-key 90, :offset 10, :limit 3, :fields #{:iris/class :iris/petal-length}})
+({:iris/class :virginica, :iris/id 100, :iris/petal-length 6.0}
+ {:iris/class :virginica, :iris/id 101, :iris/petal-length 5.1}
+ {:iris/class :virginica, :iris/id 102, :iris/petal-length 5.9})
+
+; Similar to scan, but returns keys instead:
+=> (table/keys table {:limit 5})
+(0 1 2 3 4)
 ```
+
+You've now got the basic merkle-db interactions down!

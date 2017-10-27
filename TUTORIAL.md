@@ -316,6 +316,7 @@ The in-line table has become a merkle link, because the table root has been
 serialized out into a separate node. This is probably a good time to introduce
 the vizualization tools (you will need `graphviz` installed):
 
+<!-- skip-test -->
 ```clojure
 => (require '[merkle-db.viz :as viz])
 
@@ -344,6 +345,9 @@ the database and we can start working:
  :merkle-db.table/name "test",
  :merkledag.node/id #data/hash "QmW5U8F2zsyuRWrEppmy8zpS3LyhYvfkRtba1nsi3Y6HNX"}
 
+=> (def table *1)
+#'merkle-db.playground/table
+
 => (table/insert table [{:id 1, :foo 123, :bar "baz"}])
 ; IllegalArgumentException BytesLexicoder cannot encode non-byte-array value: nil (null)
 ```
@@ -358,7 +362,9 @@ value is a number rather than a byte array! Let's fix this:
 ```clojure
 => (require '[merkle-db.key :as key])
 
-=> (alter-var-root #'table assoc ::table/primary-key :id ::key/lexicoder :integer)
+=> (alter-var-root #'table assoc
+                   :merkle-db.table/primary-key :id
+                   :merkle-db.key/lexicoder :integer)
 #merkle-db/table
 {:data/title "Example test table",
  :data/type :merkle-db/table,
@@ -440,7 +446,12 @@ persist the table:
 
 => (def db *1)
 #'merkle-db.playground/db
+```
 
+As before, we can view the structure:
+
+<!-- skip-test -->
+```clojure
 ; Try visualizing the database again:
 => (viz/view-database db)
 ```
@@ -514,8 +525,8 @@ Alright, let's load some data!
 ```clojure
 => (alter-var-root #'db db/create-table "measurements"
                    {:data/title "Flower Measurements",
-                    ::table/primary-key :iris/id,
-                    ::key/lexicoder :integer}))
+                    :merkle-db.table/primary-key :iris/id,
+                    :merkle-db.key/lexicoder :integer}))
 #merkle-db/db
 {:data/description "For working with the merkle-db API",
  :data/title "Iris Plant Database",

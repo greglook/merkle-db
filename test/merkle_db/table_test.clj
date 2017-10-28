@@ -111,6 +111,20 @@
   (gen/set (gen-id ctx) {:max-elements (:n ctx)}))
 
 
+(defn- gen-record
+  [ctx]
+  (gen/fmap
+    (fn [[id data]]
+      (assoc data :id id))
+    (gen/tuple
+      (gen-id ctx)
+      (gen-some-map
+        :a gen/large-integer
+        :b gen/boolean
+        :c (gen/scale #(/ % 10) gen/string)
+        :d (gen/double* {:NaN? false, :infinite? false})))))
+
+
 (defn- gen-range-query
   [ctx]
   (let [n+ (+ (:n ctx) 10)]
@@ -214,8 +228,7 @@
 
 
 (defn- model-insert
-  "Models an insertion into the database, where some records may turn into
-  deletions if all the fields are nulled out."
+  "Models an insertion into the database."
   [model records]
   (reduce
     (fn [db r]
@@ -230,17 +243,7 @@
 
   (gen-args
     [ctx]
-    [(gen/vector
-       (gen/fmap
-         (fn [[id data]]
-           (assoc data :id id))
-         (gen/tuple
-           (gen-id ctx)
-           (gen-some-map
-             :a gen/large-integer
-             :b gen/boolean
-             :c (gen/scale #(/ % 10) gen/string)
-             :d (gen/double* {:NaN? false, :infinite? false})))))])
+    [(gen/vector (gen-record ctx))])
 
   (apply-op
     [this table]
@@ -299,7 +302,39 @@
     (is (valid? ::table/node-data result))))
 
 
-; TODO: assoc/dissoc operators
+(defop Assoc
+  [k v]
+
+  (gen-args
+    [ctx]
+    [(gen/elements (:table-attrs ctx))
+     (gen/one-of [gen/boolean gen/large-integer gen/keyword])])
+
+  (apply-op
+    [this table]
+    (swap! table assoc k v))
+
+  (check
+    [this model result]
+    (is (valid? ::table/node-data result))
+    (is (= v (get result k)))))
+
+
+(defop Dissoc
+  [k]
+
+  (gen-args
+    [ctx]
+    [(gen/elements (:table-attrs ctx))])
+
+  (apply-op
+    [this table]
+    (swap! table dissoc k))
+
+  (check
+    [this model result]
+    (is (valid? ::table/node-data result))
+    (is (not (contains? result k)))))
 
 
 (def ^:private op-generators
@@ -308,30 +343,45 @@
         gen->Read
         gen->Insert
         gen->Delete
-        gen->Flush!))
+        gen->Flush!
+        gen->Assoc
+        gen->Dissoc))
 
 
 (def gen-context
   "Generator for test contexts; this gives the set of possible keys to use in
   operations."
-  (gen/hash-map
-    :n (gen/large-integer* {:min 1, :max 100})))
+  (gen/bind
+    (gen/large-integer* {:min 1, :max 100})
+    (fn [n]
+      (gen/hash-map
+        :n (gen/return n)
+        :table-attrs (gen/set gen/keyword-ns {:min-elements 1})
+        :records (gen/fmap
+                   #(into (sorted-map) (map (juxt :id identity)) %)
+                   (gen/vector (gen-record {:n n})))))))
 
 
 (deftest ^:generative table-behavior
   (let [store (mdag/init-store :types graph/codec-types)]
     (carly/check-system "table behavior" 100
-      #(atom (table/bare-table
-               store "test-data"
-               {:merkle-db.index/fan-out 5
-                :merkle-db.partition/limit 5
-                :merkle-db.patch/limit 10
-                :merkle-db.record/families {:bc #{:b :c}}
-                :merkle-db.table/primary-key :id
-                :merkle-db.key/lexicoder :integer}))
+      (fn init-system
+        [ctx]
+        (->
+          (table/bare-table
+            store "test-data"
+            {:merkle-db.index/fan-out 5
+             :merkle-db.partition/limit 5
+             :merkle-db.patch/limit 10
+             :merkle-db.record/families {:bc #{:b :c}}
+             :merkle-db.table/primary-key :id
+             :merkle-db.key/lexicoder :integer})
+          (table/insert (vals (:records ctx)))
+          (table/flush!)
+          (atom)))
       op-generators
       :context-gen gen-context
-      :init-model (constantly (sorted-map))
+      :init-model :records
       :concurrency 1
       :repetitions 1
       :report

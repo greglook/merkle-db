@@ -7,6 +7,9 @@
 
 
 (defn find-code-blocks
+  "Pattern match the text to find fenced code blocks. Returns a sequence of
+  match vectors containing `[match directive? code]`. The directive may be a
+  word appearing inside an HTML comment immediately preceding the block."
   [text]
   (re-seq #"(?:<!-- (\S+) -->\n)?```clojure\n((?:[^`]*\n)*[^`]+)```" text))
 
@@ -39,6 +42,9 @@
 
 
 (defn split-body
+  "Separate a the `:body` string in the given statement map into an input
+  `:form` and `:expected` value (if present). If the body doesn't begin with
+  the prompt string `=>`, it is returned unchanged."
   [statement]
   (let [body (:body statement)]
     (if (str/starts-with? (first body) "=> ")
@@ -57,6 +63,8 @@
 
 
 (defn read-form
+  "Read the `:form` in the given statement, if present. Otherwise returns the
+  statement unchanged."
   [statement]
   (if (:form statement)
     (update statement :form #(binding [*default-data-reader-fn* tagged-literal]
@@ -65,6 +73,9 @@
 
 
 (defn try-eval
+  "Attempt to evaluate the given form and use the expected output string and
+  any post comments to judge the result. Reports `clojure.test` assertion
+  results and returns a vector containing the result and error values, if any."
   [history form expected post]
   (let [err-class (some->> (first post)
                            (re-seq #"^; (\S*Exception) ")
@@ -122,6 +133,8 @@
                              expected
                              post)]
           ;(puget/cprint [form result err])
+          ; TODO: assertions on result vs expected
+          ; TODO: assert that % of lines different is under some threshold?
           (recur (if-not err
                    (take 3 (cons result history))
                    history)

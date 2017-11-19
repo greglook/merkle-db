@@ -78,11 +78,11 @@
   [lexicoder id-field [rkey data]]
   (let [id-field (or id-field ::id)
         id (key/decode lexicoder rkey)]
-    (->
+    (vary-meta
       (if (vector? id-field)
         (merge data (zipmap id-field id))
         (assoc data id-field id))
-      (vary-meta assoc ::id id))))
+      assoc ::id id)))
 
 
 

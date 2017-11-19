@@ -7,15 +7,15 @@
     [clojure.future :refer [nat-int? pos-int?]]
     [clojure.spec :as s]
     [clojure.string :as str]
-    [merkledag.core :as mdag]
-    [merkledag.link :as link]
-    [merkledag.node :as node]
     [merkle-db.graph :as graph]
     [merkle-db.index :as index]
     [merkle-db.key :as key]
     [merkle-db.partition :as part]
     [merkle-db.patch :as patch]
-    [merkle-db.record :as record])
+    [merkle-db.record :as record]
+    [merkledag.core :as mdag]
+    [merkledag.link :as link]
+    [merkledag.node :as node])
   (:import
     java.time.Instant))
 

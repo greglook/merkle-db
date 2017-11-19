@@ -6,15 +6,18 @@
     [clojure.set :as set]
     [clojure.spec :as s]
     [clojure.test :as test]
-    [merkledag.core :as mdag]
-    [merkledag.link :as link]
-    [merkledag.node :as node]
     [merkle-db.index :as index]
     [merkle-db.key :as key]
     [merkle-db.partition :as part]
     [merkle-db.record :as record]
     [merkle-db.tablet :as tablet]
-    [multihash.core :as multihash]))
+    [merkledag.core :as mdag]
+    [merkledag.link :as link]
+    [multihash.core :as multihash]
+    [merkledag.node :as node]))
+
+
+; TODO: move to 'tools' tld?
 
 
 ;; Path from the validation root to the node being checked.

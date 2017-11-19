@@ -25,6 +25,12 @@
   {:default (complement :generative)
    :generative :generative}
 
+  :cljfmt
+  {:remove-consecutive-blank-lines? false
+   :indents {checking [[:block 2]]
+             valid? [[:block 1]]
+             invalid? [[:block 1]]}}
+
   :hiera
   {:cluster-depth 2
    :vertical false

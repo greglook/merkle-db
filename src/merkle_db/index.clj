@@ -12,12 +12,12 @@
   (:require
     [clojure.future :refer [pos-int?]]
     [clojure.spec :as s]
-    [merkledag.core :as mdag]
-    [merkledag.node :as node]
-    [merkle-db.graph :as graph]
     [merkle-db.key :as key]
     [merkle-db.partition :as part]
-    [merkle-db.record :as record]))
+    [merkle-db.record :as record]
+    [merkledag.core :as mdag]
+    [merkledag.node :as node]
+    [merkle-db.graph :as graph]))
 
 
 ;; The fan-out determines the number of children an index node in the data tree

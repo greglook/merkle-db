@@ -27,25 +27,25 @@
     (is (false? (key/after? (key/create [1]) (key/create [1])))))
   (testing "equal prefixes"
     (is (neg? (compare (key/create [1 2 3])
-                           (key/create [1 2 3 4]))))
+                       (key/create [1 2 3 4]))))
     (is (pos? (compare (key/create [1 2 3 4])
-                           (key/create [1 2 3])))))
+                       (key/create [1 2 3])))))
   (testing "order-before"
     (is (neg? (compare (key/create [1 2 3])
-                           (key/create [1 2 4]))))
+                       (key/create [1 2 4]))))
     (is (neg? (compare (key/create [1 2 3])
-                           (key/create [1 3 2]))))
+                       (key/create [1 3 2]))))
     (is (neg? (compare (key/create [0 2 3 4])
-                           (key/create [1 3 2 1]))))
+                       (key/create [1 3 2 1]))))
     (is (true? (key/before? (key/create [0 1])
                             (key/create [0 2])))))
   (testing "order-after"
     (is (pos? (compare (key/create [1 2 4])
-                           (key/create [1 2 3]))))
+                       (key/create [1 2 3]))))
     (is (pos? (compare (key/create [1 3 2])
-                           (key/create [1 2 3]))))
+                       (key/create [1 2 3]))))
     (is (pos? (compare (key/create [1 3 2 1])
-                           (key/create [0 2 3 4]))))
+                       (key/create [0 2 3 4]))))
     (is (true? (key/after? (key/create [0 1 2])
                            (key/create [0 1 0]))))))
 
@@ -207,7 +207,7 @@
 
 (deftest ^:generative string-lexicoding
   (check-lexicoder
-    (gen/return (:string lexicoder-generators)) ))
+    (gen/return (:string lexicoder-generators))))
 
 
 (deftest integer-lexicoder
@@ -235,7 +235,7 @@
 
 (deftest ^:generative integer-lexicoding
   (check-lexicoder
-    (gen/return (:integer lexicoder-generators)) ))
+    (gen/return (:integer lexicoder-generators))))
 
 
 (deftest float-lexicoder
@@ -263,7 +263,7 @@
 
 (deftest ^:generative float-lexicoding
   (check-lexicoder
-    (gen/return (:float lexicoder-generators)) ))
+    (gen/return (:float lexicoder-generators))))
 
 
 (deftest instant-lexicoder
@@ -284,7 +284,7 @@
 
 (deftest ^:generative instant-lexicoding
   (check-lexicoder
-    (gen/return (:instant lexicoder-generators)) ))
+    (gen/return (:instant lexicoder-generators))))
 
 
 (deftest sequence-lexicoder

@@ -1,9 +1,9 @@
 (ns merkle-db.graph-test
   (:require
     [clojure.test :refer :all]
+    [merkle-db.graph :as graph]
     [merkledag.core :as mdag]
     [merkledag.node :as node]
-    [merkle-db.graph :as graph]
     [multihash.digest :as digest]))
 
 

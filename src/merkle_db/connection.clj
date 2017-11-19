@@ -4,10 +4,10 @@
   manager."
   (:require
     [clojure.string :as str]
+    [merkle-db.db :as db]
     [merkledag.core :as mdag]
     [merkledag.node :as node]
-    [merkledag.ref :as ref]
-    [merkle-db.db :as db]))
+    [merkledag.ref :as ref]))
 
 
 ;; ## Connection Protocols
@@ -107,20 +107,17 @@
   ([conn]
    (-list-dbs conn nil))
   ([^Connection conn opts]
-   (->
-     opts
-     (->>
-       (ref/list-refs (.tracker conn))
-       (map ref-version-info))
-     (cond->>
-       (:named opts)
-         (filter #(if (string? (:named opts))
-                    (str/starts-with? (::db/name %) (:named opts))
-                    (re-seq (:named opts) (::db/name %))))
-       (:offset opts)
-         (drop (:offset opts))
-       (:limit opts)
-         (take (:limit opts))))))
+   (cond->> (ref/list-refs (.tracker conn) opts)
+     true
+       (map ref-version-info)
+     (:named opts)
+       (filter #(if (string? (:named opts))
+                  (str/starts-with? (::db/name %) (:named opts))
+                  (re-seq (:named opts) (::db/name %))))
+     (:offset opts)
+       (drop (:offset opts))
+     (:limit opts)
+       (take (:limit opts)))))
 
 
 (defn- -get-db-history
@@ -128,15 +125,13 @@
   ([conn db-name]
    (-get-db-history conn db-name nil))
   ([^Connection conn db-name opts]
-   (->
-     (->>
-       (ref/get-history (.tracker conn) db-name)
-       (map ref-version-info))
-     (cond->>
-       (:offset opts)
-         (drop (:offset opts))
-       (:limit opts)
-         (take (:limit opts))))))
+   (cond->> (ref/get-history (.tracker conn) db-name)
+     true
+       (map ref-version-info)
+     (:offset opts)
+       (drop (:offset opts))
+     (:limit opts)
+       (take (:limit opts)))))
 
 
 (defn- -create-db!

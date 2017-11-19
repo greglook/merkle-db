@@ -1,11 +1,11 @@
 (ns merkle-db.graph
   "Common code and utilities for working with MerkleDAG graphs."
   (:require
+    [merkle-db.bloom :as bloom]
+    [merkle-db.key :as key]
     [merkledag.core :as mdag]
     [merkledag.link :as link]
-    [merkledag.node :as node]
-    [merkle-db.bloom :as bloom]
-    [merkle-db.key :as key])
+    [merkledag.node :as node])
   (:import
     java.time.Instant
     java.time.format.DateTimeFormatter

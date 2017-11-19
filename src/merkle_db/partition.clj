@@ -5,14 +5,14 @@
   (:require
     [clojure.future :refer [pos-int?]]
     [clojure.spec :as s]
-    [merkledag.core :as mdag]
-    [merkledag.node :as node]
     [merkle-db.bloom :as bloom]
     [merkle-db.graph :as graph]
     [merkle-db.key :as key]
     [merkle-db.patch :as patch]
     [merkle-db.record :as record]
-    [merkle-db.tablet :as tablet]))
+    [merkle-db.tablet :as tablet]
+    [merkledag.core :as mdag]
+    [merkledag.node :as node]))
 
 
 ;; Maximum number of records to allow in each partition.

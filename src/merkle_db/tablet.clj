@@ -33,7 +33,7 @@
 (defn first-key
   "Return the first record key present in the tablet."
   [tablet]
-  (first (first (::records tablet))))
+  (ffirst (::records tablet)))
 
 
 (defn last-key

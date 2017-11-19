@@ -7,9 +7,6 @@
     [clojure.test.check.generators :as gen]
     [com.gfredericks.test.chuck.clojure-test :refer [checking]]
     [com.gfredericks.test.chuck.generators :as tcgen]
-    [merkledag.core :as mdag]
-    [merkledag.link :as link]
-    [merkledag.node :as node]
     [merkle-db.generators :as mdgen]
     [merkle-db.graph :as graph]
     [merkle-db.index :as index]
@@ -17,8 +14,11 @@
     [merkle-db.partition :as part]
     [merkle-db.patch :as patch]
     [merkle-db.record :as record]
+    [merkle-db.test-utils :as tu]
     [merkle-db.validate :as validate]
-    [merkle-db.test-utils :as tu]))
+    [merkledag.core :as mdag]
+    [merkledag.link :as link]
+    [merkledag.node :as node]))
 
 
 #_

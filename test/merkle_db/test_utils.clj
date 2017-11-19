@@ -1,11 +1,11 @@
 (ns merkle-db.test-utils
   (:require
-    [clojure.string :as str]
     [clojure.spec :as s]
+    [clojure.string :as str]
     [clojure.test :as test]
-    [puget.printer :as puget]
     [merkledag.link :as link]
-    [multihash.core :as multihash]))
+    [multihash.core :as multihash]
+    [puget.printer :as puget]))
 
 
 (defn print-handler

@@ -335,7 +335,7 @@
             data
             (let [b (byte (aget edata i))]
               (if (== 0x01 b)
-                (do (aset-byte data o (- (aget edata (inc i)) 1))
+                (do (aset-byte data o (dec (aget edata (inc i))))
                     (recur (inc (inc i)) (inc o)))
                 (do (aset-byte data o b)
                     (recur (inc i) (inc o)))))))))))
@@ -798,9 +798,9 @@
 
   (decode*
     [this data offset len]
-    (->> (split-bytes data offset len)
-         (mapv #(let [udata (unescape-bytes %)]
-                  (decode* (.element-coder this) udata 0 (alength udata)))))))
+    (mapv #(let [udata (unescape-bytes %)]
+             (decode* (.element-coder this) udata 0 (alength udata)))
+          (split-bytes data offset len))))
 
 
 

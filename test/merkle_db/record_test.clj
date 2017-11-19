@@ -68,8 +68,8 @@
            (record/decode-entry
              key/integer-lexicoder
              nil
-            [(key/parse "807B")
-             {:a "abc", :b true}])))
+             [(key/parse "807B")
+              {:a "abc", :b true}])))
     (is (= {:x 123
             :y 456
             :z :foo}

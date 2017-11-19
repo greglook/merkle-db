@@ -4,13 +4,13 @@
     [clojure.test :refer :all]
     [clojure.test.check.generators :as gen]
     [com.gfredericks.test.chuck.generators :as tcgen]
-    [merkledag.core :as mdag]
     [merkle-db.graph :as graph]
     [merkle-db.key :as key]
     [merkle-db.patch :as patch]
     [merkle-db.record :as record]
     [merkle-db.table :as table]
     [merkle-db.test-utils :as tu]
+    [merkledag.core :as mdag]
     [test.carly.core :as carly :refer [defop]]))
 
 

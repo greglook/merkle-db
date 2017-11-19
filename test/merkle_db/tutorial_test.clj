@@ -27,8 +27,8 @@
   leading and trailing comment lines."
   [statement]
   (let [[f s t :as sections]
-          (->> (str/split statement #"\n")
-               (partition-by #(str/starts-with? % ";")))]
+        (->> (str/split statement #"\n")
+             (partition-by #(str/starts-with? % ";")))]
     ; TODO: check block comment case?
     (case (count sections)
       1 {:body f}
@@ -117,14 +117,14 @@
   (io/delete-file "var/playground/refs.tsv" true)
   (loop [history []
          statements (into []
-                      (comp
-                        (remove #(= "skip-test" (second %)))
-                        (map #(nth % 2))
-                        (mapcat split-statements)
-                        (map parse-sections)
-                        (map split-body)
-                        (map read-form))
-                      (find-code-blocks (slurp "TUTORIAL.md")))]
+                          (comp
+                            (remove #(= "skip-test" (second %)))
+                            (map #(nth % 2))
+                            (mapcat split-statements)
+                            (map parse-sections)
+                            (map split-body)
+                            (map read-form))
+                          (find-code-blocks (slurp "TUTORIAL.md")))]
     (when-let [{:keys [pre body form expected post]} (first statements)]
       (if form
         (let [[result err] (try-eval

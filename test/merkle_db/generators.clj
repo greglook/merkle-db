@@ -4,8 +4,8 @@
     [clojure.test :as test]
     [clojure.test.check.generators :as gen]
     [com.gfredericks.test.chuck.generators :as tcgen]
-    [merkle-db.record :as record]
-    [merkle-db.key :as key]))
+    [merkle-db.key :as key]
+    [merkle-db.record :as record]))
 
 
 (def record-key

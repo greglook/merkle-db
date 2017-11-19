@@ -5,7 +5,6 @@
     [clojure.test :refer :all]
     [clojure.test.check.generators :as gen]
     [com.gfredericks.test.chuck.clojure-test :refer [checking]]
-    [merkledag.core :as mdag]
     [merkle-db.generators :as mdgen]
     [merkle-db.graph :as graph]
     [merkle-db.key :as key]
@@ -13,7 +12,8 @@
     [merkle-db.patch :as patch]
     [merkle-db.record :as record]
     [merkle-db.tablet :as tablet]
-    [merkle-db.test-utils]))
+    [merkle-db.test-utils]
+    [merkledag.core :as mdag]))
 
 
 (deftest partition-spec
@@ -31,8 +31,8 @@
          ::part/tablets {:base "foo"}}))
   (let [store (mdag/init-store :types graph/codec-types)]
     (is (valid? ::part/node-data (part/from-records store {} [[(key/create [0]) {:a 5}]])))
-    ,,,)
-  ,,,)
+    ; TODO: more tests?
+    ,,,))
 
 
 (deftest partition-limits
@@ -126,7 +126,7 @@
                store
                {::record/families {:ab #{:a :b}, :cd #{:c :d}}}
                {k0 {:x 0, :y 0, :a 0, :c 0}
-                k1 {:x 1, :c 1, :d 1, }
+                k1 {:x 1, :c 1, :d 1}
                 k2 {:b 2, :c 2}
                 k3 {:x 3, :y 3, :a 3, :b 3}
                 k4 {:z 4, :d 4}})]
@@ -136,7 +136,7 @@
               store
               {::part/limit 3}
               {k0 {:x 0, :y 0, :a 0, :c 0}
-               k1 {:x 1, :c 1, :d 1, }
+               k1 {:x 1, :c 1, :d 1}
                k2 {:b 2, :c 2}
                k3 {:x 3, :y 3, :a 3, :b 3}}))))
     (testing "properties"
@@ -242,15 +242,14 @@
                store params nil
                [[p0 [[k1 ::patch/tombstone]]]]))))
     (testing "pending overflow"
-      (let [[height [a b :as parts]]
-              (part/update-partitions!
-                store params nil
-                [[p0
-                  [[k1 {:a 1}]
-                   [k3 {:b 3}]
-                   [k5 {:c 5}]
-                   [k6 {:d 6}]
-                   [k7 {:e 7}]]]])]
+      (let [[height [a b :as parts]] (part/update-partitions!
+                                       store params nil
+                                       [[p0
+                                         [[k1 {:a 1}]
+                                          [k3 {:b 3}]
+                                          [k5 {:c 5}]
+                                          [k6 {:d 6}]
+                                          [k7 {:e 7}]]]])]
         (is (zero? height))
         (is (= 2 (count parts)))
         (is (= [[k0 {:c 0, :a 0, :x 0, :y 0}]
@@ -264,11 +263,10 @@
                 [k7 {:e 7}]]
                (part/read-all store b nil)))))
     (testing "final underflow"
-      (let [[height [a :as parts]]
-              (part/update-partitions!
-                store params nil
-                [[p0 []]
-                 [p1 [[k5 ::patch/tombstone]]]])]
+      (let [[height [a :as parts]] (part/update-partitions!
+                                     store params nil
+                                     [[p0 []]
+                                      [p1 [[k5 ::patch/tombstone]]]])]
         (is (zero? height))
         (is (= 1 (count parts)))
         (is (= [[k0 {:c 0, :a 0, :x 0, :y 0}]
@@ -280,11 +278,10 @@
       (is (thrown? IllegalArgumentException
             (part/update-partitions! store params [1 [:x]] [[p0 []]]))))
     (testing "partition carry"
-      (let [[height [a b :as parts]]
-              (part/update-partitions!
-                store params
-                [0 [p0]]
-                [[p1 [[k7 {:e 7}]]]])]
+      (let [[height [a b :as parts]] (part/update-partitions!
+                                       store params
+                                       [0 [p0]]
+                                       [[p1 [[k7 {:e 7}]]]])]
         (is (zero? height))
         (is (= 2 (count parts)))
         (is (= [[k0 {:c 0, :a 0, :x 0, :y 0}]
@@ -296,11 +293,10 @@
                 [k7 {:e 7}]]
                (part/read-all store b nil)))))
     (testing "tablet carry"
-      (let [[height [a b :as parts]]
-              (part/update-partitions!
-                store params
-                [-1 [[k0 {:a 0}] [k1 {:b 1}]]]
-                [[p1 [[k7 {:e 7}]]]])]
+      (let [[height [a b :as parts]] (part/update-partitions!
+                                       store params
+                                       [-1 [[k0 {:a 0}] [k1 {:b 1}]]]
+                                       [[p1 [[k7 {:e 7}]]]])]
         (is (zero? height))
         (is (= 2 (count parts)))
         (is (= [[k0 {:a 0}]

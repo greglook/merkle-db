@@ -300,14 +300,14 @@
             (let [b (byte (aget data i))]
               (condp == b
                 0x00
-                (do (aset-byte edata o 0x01)
-                    (aset-byte edata (inc o) 0x01)
-                    (recur (inc i) (inc (inc o))))
+                  (do (aset-byte edata o 0x01)
+                      (aset-byte edata (inc o) 0x01)
+                      (recur (inc i) (inc (inc o))))
 
                 0x01
-                (do (aset-byte edata o 0x01)
-                    (aset-byte edata (inc o) 0x02)
-                    (recur (inc i) (inc (inc o))))
+                  (do (aset-byte edata o 0x01)
+                      (aset-byte edata (inc o) 0x02)
+                      (recur (inc i) (inc (inc o))))
 
                 (do (aset-byte edata o b)
                     (recur (inc i) (inc o)))))))))))
@@ -911,10 +911,10 @@
 (defn- flip-byte
   "Returns the inverse of a byte value, accounting for the sign bit."
   [b]
-  (as-> b b
-    (if (neg? b) (+ b 256) b)
-    (- 255 b)
-    (if (< 127 b) (- b 256) b)))
+  (let [x (- 255 (if (neg? b) (+ b 256) b))]
+    (if (< 127 x)
+      (- x 256)
+      x)))
 
 
 (extend-type ReverseLexicoder

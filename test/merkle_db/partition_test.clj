@@ -30,9 +30,7 @@
         {:data/type :merkle-db/partition
          ::part/tablets {:base "foo"}}))
   (let [store (mdag/init-store :types graph/codec-types)]
-    (is (valid? ::part/node-data (part/from-records store {} [[(key/create [0]) {:a 5}]])))
-    ; TODO: more tests?
-    ,,,))
+    (is (valid? ::part/node-data (part/from-records store {} [[(key/create [0]) {:a 5}]])))))
 
 
 (deftest partition-limits

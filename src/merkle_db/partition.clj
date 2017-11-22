@@ -66,7 +66,7 @@
   [store family-key tablet]
   (let [tablet (cond-> tablet
                  (not= family-key :base)
-                 (tablet/prune))]
+                   (tablet/prune))]
     (when (seq (tablet/read-all tablet))
       [family-key
        (mdag/link (name family-key) (mdag/store-node! store nil tablet))])))

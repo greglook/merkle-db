@@ -12,10 +12,10 @@
   [t]
   (condp = t
     multihash.core.Multihash
-    (puget/tagged-handler 'data/hash multihash/base58)
+      (puget/tagged-handler 'data/hash multihash/base58)
 
     merkledag.link.MerkleLink
-    (puget/tagged-handler 'merkledag/link link/link->form)
+      (puget/tagged-handler 'merkledag/link link/link->form)
 
     (puget/common-handlers t)))
 

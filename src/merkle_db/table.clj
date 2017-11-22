@@ -727,25 +727,25 @@
                                  (update :sum (fnil + 0) v)))))]
         (case (:type data)
           :patch
-          (assoc stats :patch (select-keys data [:size :changes]))
+            (assoc stats :patch (select-keys data [:size :changes]))
 
           :index
-          (-> stats
-              (update (:type data) count-node)
-              (update (:type data) track :size data)
-              (update (:type data) track :children data)
-              (update-in [(:type data) :heights (:height data)] (fnil inc 0)))
+            (-> stats
+                (update (:type data) count-node)
+                (update (:type data) track :size data)
+                (update (:type data) track :children data)
+                (update-in [(:type data) :heights (:height data)] (fnil inc 0)))
 
           :partition
-          (-> stats
-              (update (:type data) count-node)
-              (update (:type data) track :size data)
-              (update (:type data) track :records data))
+            (-> stats
+                (update (:type data) count-node)
+                (update (:type data) track :size data)
+                (update (:type data) track :records data))
 
           :tablet
-          (-> stats
-              (update-in [(:type data) (:family data)] count-node)
-              (update-in [(:type data) (:family data)] track :size data))
+            (-> stats
+                (update-in [(:type data) (:family data)] count-node)
+                (update-in [(:type data) (:family data)] track :size data))
 
           ; Unknown node type.
           (-> stats
@@ -763,10 +763,10 @@
         (let [data (::node/data node)]
           (case (:data/type data)
             :merkle-db/patch
-            [[{:type :patch
-               :size (::node/size node)
-               :changes (count (::patch/changes data))}]
-             nil]
+              [[{:type :patch
+                 :size (::node/size node)
+                 :changes (count (::patch/changes data))}]
+               nil]
 
             :merkle-db/index
               [[{:type :index

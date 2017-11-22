@@ -28,6 +28,7 @@
   :cljfmt
   {:remove-consecutive-blank-lines? false
    :indents {checking [[:block 2]]
+             check-system [[:block 2]]
              valid? [[:block 1]]
              invalid? [[:block 1]]}}
 

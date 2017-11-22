@@ -12,12 +12,12 @@
   (:require
     [clojure.future :refer [pos-int?]]
     [clojure.spec :as s]
+    [merkle-db.graph :as graph]
     [merkle-db.key :as key]
     [merkle-db.partition :as part]
     [merkle-db.record :as record]
     [merkledag.core :as mdag]
-    [merkledag.node :as node]
-    [merkle-db.graph :as graph]))
+    [merkledag.node :as node]))
 
 
 ;; The fan-out determines the number of children an index node in the data tree
@@ -328,8 +328,8 @@
     (if (seq inputs)
       ; Process next input node
       (let [[child changes] (first inputs)
-            [rheight elements :as result]
-              (update-index-node! store params carry child changes)]
+            [rheight elements :as result] (update-index-node!
+                                            store params carry child changes)]
         (cond
           ; Result is empty.
           (nil? result)

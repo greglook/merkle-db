@@ -13,8 +13,8 @@
     [merkle-db.tablet :as tablet]
     [merkledag.core :as mdag]
     [merkledag.link :as link]
-    [multihash.core :as multihash]
-    [merkledag.node :as node]))
+    [merkledag.node :as node]
+    [multihash.core :as multihash]))
 
 
 ; TODO: move to 'tools' tld?

@@ -3,7 +3,7 @@
   while re-using old indexed data."
   (:require
     [clojure.future :refer [pos-int?]]
-    [clojure.spec :as s]
+    [clojure.spec.alpha :as s]
     [merkle-db.key :as key]
     [merkle-db.record :as record]))
 

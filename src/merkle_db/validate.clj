@@ -4,7 +4,7 @@
   (:require
     [clojure.future :refer [any? qualified-keyword?]]
     [clojure.set :as set]
-    [clojure.spec :as s]
+    [clojure.spec.alpha :as s]
     [clojure.test :as test]
     [merkle-db.index :as index]
     [merkle-db.key :as key]

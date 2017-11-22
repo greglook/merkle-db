@@ -14,11 +14,11 @@
   :dependencies
   [[org.clojure/clojure "1.8.0"]
    [org.clojure/tools.logging "0.4.0"]
-   [clojure-future-spec "1.9.0-alpha14"]
+   [clojure-future-spec "1.9.0-beta4"]
    [bigml/sketchy "0.4.1"]
-   [mvxcvi/merkledag-core "0.3.1"]
-   [mvxcvi/merkledag-ref "0.1.0"]
-   [mvxcvi/blocks "0.9.1"]
+   [mvxcvi/merkledag-core "0.3.2"]
+   [mvxcvi/merkledag-ref "0.1.1"]
+   [mvxcvi/blocks "1.0.0"]
    #_[mvxcvi/baton "0.1.0-SNAPSHOT"]]
 
   :test-selectors
@@ -58,9 +58,9 @@
    {:dependencies
     [[org.clojure/data.csv "0.1.4"]
      [org.clojure/test.check "0.9.0"]
-     [com.gfredericks/test.chuck "0.2.7"]
+     [com.gfredericks/test.chuck "0.2.8"]
      [commons-logging "1.2"]
-     [mvxcvi/test.carly "0.4.0"]
+     [mvxcvi/test.carly "0.4.1"]
      [riddley "0.1.14"]]}
 
    :repl
@@ -68,10 +68,10 @@
     :dependencies
     [[clj-stacktrace "0.2.8"]
      [org.clojure/tools.namespace "0.2.11"]
-     [rhizome "0.2.7"]]}
+     [rhizome "0.2.9"]]}
 
    :coverage
-   {:plugins [[lein-cloverage "1.0.9"]]
+   {:plugins [[lein-cloverage "1.0.10"]]
     :dependencies [[commons-logging "1.2"]]
     :jvm-opts ["-Dorg.apache.commons.logging.Log=org.apache.commons.logging.impl.SimpleLog"
                "-Dorg.apache.commons.logging.simplelog.defaultlog=trace"]}})

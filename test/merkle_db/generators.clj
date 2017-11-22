@@ -1,6 +1,6 @@
 (ns merkle-db.generators
   (:require
-    [clojure.spec :as s]
+    [clojure.spec.alpha :as s]
     [clojure.test :as test]
     [clojure.test.check.generators :as gen]
     [com.gfredericks.test.chuck.generators :as tcgen]

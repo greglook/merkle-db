@@ -1,7 +1,7 @@
 (ns merkle-db.index-test
   (:require
     [clojure.set :as set]
-    [clojure.spec :as s]
+    [clojure.spec.alpha :as s]
     [clojure.string :as str]
     [clojure.test :refer :all]
     [clojure.test.check.generators :as gen]

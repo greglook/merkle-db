@@ -2,7 +2,7 @@
   "Functions for working with tablet data."
   (:refer-clojure :exclude [keys])
   (:require
-    [clojure.spec :as s]
+    [clojure.spec.alpha :as s]
     [clojure.string :as str]
     [merkle-db.key :as key]
     [merkle-db.record :as record]))

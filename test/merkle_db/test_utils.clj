@@ -1,6 +1,6 @@
 (ns merkle-db.test-utils
   (:require
-    [clojure.spec :as s]
+    [clojure.spec.alpha :as s]
     [clojure.string :as str]
     [clojure.test :as test]
     [merkledag.link :as link]

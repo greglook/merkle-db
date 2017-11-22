@@ -5,7 +5,7 @@
   (:refer-clojure :exclude [keys read])
   (:require
     [clojure.future :refer [nat-int? pos-int?]]
-    [clojure.spec :as s]
+    [clojure.spec.alpha :as s]
     [clojure.string :as str]
     [merkle-db.graph :as graph]
     [merkle-db.index :as index]

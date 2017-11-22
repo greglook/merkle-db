@@ -2,7 +2,7 @@
   "Core database functions."
   (:require
     [clojure.future :refer [inst? nat-int?]]
-    [clojure.spec :as s]
+    [clojure.spec.alpha :as s]
     [clojure.string :as str]
     [merkle-db.record :as record]
     [merkle-db.table :as table]

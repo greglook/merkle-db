@@ -1,6 +1,6 @@
 (ns merkle-db.tablet-test
   (:require
-    [clojure.spec :as s]
+    [clojure.spec.alpha :as s]
     [clojure.test :refer :all]
     [merkle-db.key :as key]
     [merkle-db.tablet :as tablet]

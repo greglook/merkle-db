@@ -4,7 +4,7 @@
   tablets where the data for each field family is stored."
   (:require
     [clojure.future :refer [pos-int?]]
-    [clojure.spec :as s]
+    [clojure.spec.alpha :as s]
     [merkle-db.bloom :as bloom]
     [merkle-db.graph :as graph]
     [merkle-db.key :as key]

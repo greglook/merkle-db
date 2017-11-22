@@ -11,7 +11,7 @@
   single partition node."
   (:require
     [clojure.future :refer [pos-int?]]
-    [clojure.spec :as s]
+    [clojure.spec.alpha :as s]
     [merkle-db.graph :as graph]
     [merkle-db.key :as key]
     [merkle-db.partition :as part]

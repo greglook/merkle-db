@@ -1,7 +1,7 @@
 (ns merkle-db.partition-test
   (:require
     [clojure.set :as set]
-    [clojure.spec :as s]
+    [clojure.spec.alpha :as s]
     [clojure.test :refer :all]
     [clojure.test.check.generators :as gen]
     [com.gfredericks.test.chuck.clojure-test :refer [checking]]

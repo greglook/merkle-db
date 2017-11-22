@@ -9,7 +9,7 @@
   (:refer-clojure :exclude [min max])
   (:require
     [clojure.future :refer [any? bytes?]]
-    [clojure.spec :as s])
+    [clojure.spec.alpha :as s])
   (:import
     clojure.lang.Murmur3
     (java.nio.charset

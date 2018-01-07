@@ -12,7 +12,7 @@ manager. It can be used to open databases for reading and writing.
 ```clojure
 ; Create a new connection to a backing block store and reference manager.
 ; Options may include serialization, caching, and other configuration.
-(conn/connect node-store ref-manager & opts) => conn
+(conn/connect node-store ref-manager opts) => conn
 
 ; List information about the current version of each database present.
 (conn/list-dbs conn opts) =>
@@ -32,17 +32,12 @@ manager. It can be used to open databases for reading and writing.
 ; may be shared.
 (conn/drop-db! conn db-name)
 
-; Open a database for use. An optional argument may be provided, which will
-; return the last committed database version occurring before that time.
+; Open a database for use.
 (conn/open-db conn db-name opts) => db
 
 ; Ensure all data has been written to the backing block store and update the
 ; database's root in the ref manager.
 (conn/commit! conn db) => db'
-
-; You can optionally commit the database under a new name, creating a virtual
-; copy of the database.
-(conn/commit! conn db-name db) => db'
 ```
 
 
@@ -151,10 +146,12 @@ will be returned.
 ; Remove a set of records from the table, identified by a collection of record
 ; keys.
 (table/delete table record-keys) => table'
+
+; Flush local changes to the backing store.
+(table/flush! table) => table'
 ```
 
-
-## Partition Operations
+### Partition Operations
 
 Partitions divide up the record keys into ranges and are the basic unit of
 parallelism. These operations are lower-level and intended for use by

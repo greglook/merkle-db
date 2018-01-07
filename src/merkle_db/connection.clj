@@ -47,7 +47,8 @@
   (create-db!
     [conn db-name attrs]
     "Initialize a new database. Optional attributes may be provided to merge
-    into the root node data.")
+    into the root node data. If the attributes include a `:merkledag.node/id`,
+    the database will use it as the root node.")
 
   (drop-db!
     [conn db-name]
@@ -64,8 +65,7 @@
 
   (commit!
     [conn db]
-    [conn db-name db]
-    [conn db-name db opts]
+    [conn db opts]
     "Ensure all data has been written to the backing block store and update the
     database's root value in the ref manager.
 

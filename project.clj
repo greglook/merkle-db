@@ -15,10 +15,9 @@
   [[org.clojure/clojure "1.9.0"]
    [org.clojure/tools.logging "0.4.0"]
    [bigml/sketchy "0.4.1"]
-   [mvxcvi/merkledag-core "0.3.2"]
-   [mvxcvi/merkledag-ref "0.1.1"]
-   [mvxcvi/blocks "1.0.0"]
-   #_[mvxcvi/baton "0.1.0-SNAPSHOT"]]
+   [mvxcvi/merkledag-core "0.4.0-SNAPSHOT"]
+   [mvxcvi/merkledag-ref "0.2.0"]
+   [mvxcvi/blocks "1.1.0"]]
 
   :test-selectors
   {:default (complement :generative)

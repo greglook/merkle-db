@@ -8,7 +8,6 @@
   matches all the bytes in the shorter key, the shorter key ranks first."
   (:refer-clojure :exclude [min max])
   (:require
-    [clojure.future :refer [any? bytes?]]
     [clojure.spec.alpha :as s])
   (:import
     clojure.lang.Murmur3

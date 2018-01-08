@@ -12,9 +12,8 @@
   :pedantic? :abort
 
   :dependencies
-  [[org.clojure/clojure "1.8.0"]
+  [[org.clojure/clojure "1.9.0"]
    [org.clojure/tools.logging "0.4.0"]
-   [clojure-future-spec "1.9.0-beta4"]
    [bigml/sketchy "0.4.1"]
    [mvxcvi/merkledag-core "0.3.2"]
    [mvxcvi/merkledag-ref "0.1.1"]

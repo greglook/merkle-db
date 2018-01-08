@@ -1,7 +1,6 @@
 (ns merkle-db.record
   "Core record specs and functions."
   (:require
-    [clojure.future :refer [any? nat-int? simple-keyword?]]
     [clojure.spec.alpha :as s]
     [merkle-db.key :as key]))
 

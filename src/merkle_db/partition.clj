@@ -3,7 +3,6 @@
   Partition nodes contain metadata about the contained records and links to the
   tablets where the data for each field family is stored."
   (:require
-    [clojure.future :refer [pos-int?]]
     [clojure.spec.alpha :as s]
     [merkle-db.bloom :as bloom]
     [merkle-db.graph :as graph]

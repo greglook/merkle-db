@@ -10,7 +10,6 @@
   tree with fewer records than the partition limit is represented directly by a
   single partition node."
   (:require
-    [clojure.future :refer [pos-int?]]
     [clojure.spec.alpha :as s]
     [merkle-db.graph :as graph]
     [merkle-db.key :as key]

@@ -2,7 +2,6 @@
   "Validation framework for testing database MerkleDAG structures."
   (:refer-clojure :exclude [run!])
   (:require
-    [clojure.future :refer [any? qualified-keyword?]]
     [clojure.set :as set]
     [clojure.spec.alpha :as s]
     [clojure.test :as test]

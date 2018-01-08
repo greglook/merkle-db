@@ -4,7 +4,6 @@
   determining how keys are encoded and records are stored."
   (:refer-clojure :exclude [keys read])
   (:require
-    [clojure.future :refer [nat-int? pos-int?]]
     [clojure.spec.alpha :as s]
     [clojure.string :as str]
     [merkle-db.graph :as graph]

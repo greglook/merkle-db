@@ -1,0 +1,21 @@
+<configuration scan="true">
+  <appender name="nop" class="ch.qos.logback.core.helpers.NOPAppender"/>
+
+  <appender name="stdout" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+        <pattern>%d{ISO8601} %-20([%thread]) %-5level %-30logger{30}  %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <appender name="color" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} %-32([%green(%thread)]) %highlight(%-5level) %cyan(%-30logger{30})  %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <root level="${LOG_LEVEL_ROOT:-WARN}">
+    <appender-ref ref="${LOG_APPENDER:-color}"/>
+  </root>
+
+  <logger name="org.apache.spark" level="INFO"/>
+</configuration>

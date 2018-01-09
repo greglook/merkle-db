@@ -9,11 +9,25 @@ data store.
 
 Running this project requires a copy of the [MovieLens
 Dataset](http://movielens.org/), which can be downloaded
-[here](http://files.grouplens.org/datasets/movielens/ml-latest.zip).
+[here](http://files.grouplens.org/datasets/movielens/). To get started, fetch
+and extract a copy of the dataset locally:
 
-- make local directories
-- download the movielens dataset
-- lein run -m movie-lens.main check
+```shell
+$ mkdir data && cd data
+$ wget http://files.grouplens.org/datasets/movielens/ml-latest.zip
+$ unzip ml-latest.zip
+$ cd ..
+```
+
+
+## Loading Data
+
+Now that we have the raw data available, the next step is to load it into a set
+of MerkleDB tables and combine them into a database.
+
+```shell
+$ lein run data/ml-latest
+```
 
 
 ## Parameter Discovery

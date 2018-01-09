@@ -3,6 +3,7 @@
   (:require
     [blocks.core :as block]
     [blocks.store.file :as bsf]
+    [clojure.data.csv :as csv]
     [clojure.string :as str]
     [clojure.tools.logging :as log]
     [merkle-db.index :as index]
@@ -12,7 +13,6 @@
     [merkle-db.table :as table]
     [merkledag.core :as mdag]
     [merkledag.node :as node]
-    [movie-lens.dataset :as dataset]
     [sparkling.core :as spark]
     [sparkling.destructuring :as sde]))
 
@@ -44,14 +44,13 @@
     x))
 
 
-(defn- encode-record-pair
-  "Encode the given data map into a Spark key/value pair."
-  [table-params data]
-  (let [[k r] (record/encode-entry
-                (key/lexicoder (::key/lexicoder table-params))
-                (::table/primary-key table-params)
-                data)]
-    (spark/tuple k r)))
+(defn csv-rdd
+  "Create an RDD from the given CSV file."
+  [spark-ctx csv-file header parser]
+  (->> (spark/text-file spark-ctx (str csv-file) #_4)
+       (spark/filter (fn remove-header [line] (not= line header)))
+       (spark/flat-map csv/read-csv)
+       (spark/map parser)))
 
 
 (defn- write-partitions
@@ -68,6 +67,7 @@
               (reduce + 0 (map ::record/count parts))
               "records into" (count parts) "table partitions:"
               (pr-str (map ::record/count parts)))
+    ; TODO: strip out info not needed to build the index
     parts))
 
 
@@ -78,7 +78,13 @@
   (->>
     data
     (spark/map-to-pair
-      #(encode-record-pair table-params %))
+      (fn encode-record
+        [data]
+        (let [[k r] (record/encode-entry
+                      (key/lexicoder (::key/lexicoder table-params))
+                      (::table/primary-key table-params)
+                      data)]
+          (spark/tuple k r))))
     (spark/sort-by-key)
     (spark/map-partition-with-index
       (fn write-table-parts
@@ -90,7 +96,7 @@
     (map extract-meta)))
 
 
-(defn build-dataset-table!
+(defn build-table!
   "Load the dataset into tables in a merkle-db database."
   [store store-cfg table-params record-rdd]
   (let [parts (build-table-parts! store-cfg table-params record-rdd)

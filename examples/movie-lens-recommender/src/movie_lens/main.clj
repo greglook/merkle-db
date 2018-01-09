@@ -57,7 +57,9 @@
   ; - block url
   ; - ref tracker
   ; - spark master
-  (let [dataset-path (first args)
+  (let [dataset-path (if (str/ends-with? (first args) "/")
+                       (first args)
+                       (str (first args) "/"))
         store-cfg {:block-url "data/db/blocks"}
         store (load/init-store store-cfg)
         #_#_
@@ -69,15 +71,10 @@
                                       (conf/app-name "movie-lens-recommender")
                                       (conf/master "local"))
       (try
-        (let [movies (load/build-dataset-table!
-                       store store-cfg
-                       {::table/name "movies"
-                        ::table/primary-key :movie/id
-                        ::key/lexicoder :integer
-                        ::index/fan-out 256
-                        ::part/limit 5000}
-                       (dataset/load-movies spark-ctx dataset-path))]
-          (pprint movies)
+        (log/info "Loading dataset tables from" dataset-path)
+        (let [tables (dataset/load-dataset! spark-ctx store store-cfg dataset-path)
+              ,,,]
+          (pprint tables)
           ,,,)
         (catch Throwable err
           (log/error err "Spark task failed!")))

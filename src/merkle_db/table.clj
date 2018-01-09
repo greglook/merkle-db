@@ -57,9 +57,7 @@
 
 (s/def ::table-info
   (s/keys :req [::node/id
-                ::name
-                ::version
-                ::committed-at]))
+                ::name]))
 
 
 

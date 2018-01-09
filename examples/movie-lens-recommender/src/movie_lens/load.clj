@@ -55,17 +55,17 @@
 (defn- write-partitions
   "Make a sequence of partitions from the given records."
   [store-cfg table-params part-idx records]
-  (log/info "Processing spark partition" part-idx)
+  (log/debug "Processing spark partition" part-idx)
   (let [store (init-store store-cfg)
         parts (->> records
                    (map (sde/fn [(k r)] [k r]))
                    (part/partition-records store table-params)
                    (map inject-meta)
                    (vec))]
-    (log/info "Encoded spark partition" part-idx "with"
-              (reduce + 0 (map ::record/count parts))
-              "records into" (count parts) "table partitions:"
-              (pr-str (map ::record/count parts)))
+    (log/debugf "Encoded spark partition %d with %d records into %d table partitions"
+                part-idx
+                (reduce + 0 (map ::record/count parts))
+                (count parts))
     ; TODO: strip out info not needed to build the index
     parts))
 

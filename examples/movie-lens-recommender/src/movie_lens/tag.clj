@@ -24,7 +24,7 @@
   {:merkle-db.table/primary-key [::user/id ::movie/id ::value]
    :merkle-db.key/lexicoder [:tuple :integer :integer :string]
    :merkle-db.index/fan-out 256
-   :merkle-db.part/limit 10000})
+   :merkle-db.partition/limit 10000})
 
 
 (def csv-header

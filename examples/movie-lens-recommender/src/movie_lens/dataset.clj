@@ -22,18 +22,17 @@
     :params link/table-parameters
     :header link/csv-header
     :parser link/parse-row}
+   {:table "tags"
+    :filename "tags.csv"
+    :params tag/table-parameters
+    :header tag/csv-header
+    :parser tag/parse-row}
    #_
    {:table "ratings"
     :filename "ratings.csv"
     :params rating/table-parameters
     :header rating/csv-header
-    :parser rating/parse-row}
-   #_
-   {:table "tags"
-    :filename "tags.csv"
-    :params tag/table-parameters
-    :header tag/csv-header
-    :parser tag/parse-row}])
+    :parser rating/parse-row}])
 
 
 (defn- load-table!

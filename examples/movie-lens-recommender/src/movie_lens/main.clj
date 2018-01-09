@@ -53,7 +53,10 @@
 (defn -main
   "Main entry point for example."
   [& args]
-  ; TODO: parameterize block and ref locations?
+  ; TODO: parameterize:
+  ; - block url
+  ; - ref tracker
+  ; - spark master
   (let [dataset-path (first args)
         store-cfg {:block-url "data/db/blocks"}
         store (load/init-store store-cfg)
@@ -64,7 +67,6 @@
         conn (conn/connect graph tracker)]
     (spark/with-context spark-ctx (-> (conf/spark-conf)
                                       (conf/app-name "movie-lens-recommender")
-                                      ; TODO: parameterize master
                                       (conf/master "local"))
       (try
         (let [movies (load/build-dataset-table!

@@ -209,3 +209,25 @@
                     :records records
                     :changes changes}]
     (viz-update update-map)))
+
+
+; TODO: load testing framework
+; - prepare fresh ref tracker and block store
+; - inputs are dataset name and table params
+;   - ! start time
+;   - ! repository HEAD commit
+;   - ! record dataset/table and table params
+; - load table as fast as possible
+;   - data must already be sorted?
+;     - or: take part-limit records, sort them, write out somewhere temporary
+;     - merge-combine k sorted parts together, writing out to new temp files
+;     - when there are fewer than k parts left, load the merged stream from all of them
+;   - ! input data size
+;   - ! input data rows
+;   - ! load elapsed
+;   - ! table stats
+;   - during load(?) sample n records for later querying
+;   - ! sampled record ids
+;   - table/read the sampled records, check results
+;   - table/read some nonexistent records, check results
+;   - ! elapsed read times

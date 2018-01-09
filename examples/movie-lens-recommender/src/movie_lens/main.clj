@@ -2,38 +2,52 @@
   (:gen-class)
   (:require
     [blocks.core :as block]
-    [blocks.store.file :as bsf]
     [clojure.java.io :as io]
     [clojure.string :as str]
     ;[clojure.tools.cli :as cli]
     [clojure.tools.logging :as log]
-    ;[com.stuartsierra.component :as component]
     [merkle-db.connection :as conn]
     [merkle-db.db :as db]
+    [merkle-db.index :as index]
+    [merkle-db.key :as key]
+    [merkle-db.partition :as part]
+    [merkle-db.record :as record]
     [merkle-db.table :as table]
     [merkledag.core :as mdag]
-    ;[merkledag.link :as link]
-    ;[merkledag.node :as node]
+    [merkledag.node :as node]
     [merkledag.ref.file :as mrf]
     [movie-lens.dataset :as dataset]
+    [movie-lens.load :as load]
+    [puget.printer :as puget]
     [sparkling.conf :as conf]
-    [sparkling.core :as spark]))
+    [sparkling.core :as spark]
+    [sparkling.destructuring :as sde]))
 
 
-(defn load-dataset
-  "Load the dataset into tables in a merkle-db database."
-  [spark-ctx graph csv-dir]
-  ; take input CSV
-  ; convert to RDD of rows
-  (let [movies (dataset/load-movies spark-ctx csv-dir)]
-    (prn (spark/take 5 movies)))
+(defmethod print-method multihash.core.Multihash
+  [x w]
+  (print-method (tagged-literal 'data/hash (multihash.core/base58 x)) w))
 
-  ; map to pairRDD of [key record]
-  ; sort by key
-  ; split pairRDD into partition-sized chunks
-  ; convert each chunk into a merkle-db partition node
-  ; build index tree over partition-node metadata
-  )
+
+(def pprinter
+  (-> (puget/pretty-printer
+        {:print-color true
+         :width 200})
+      (update :print-handlers
+              puget.dispatch/chained-lookup
+              {multihash.core.Multihash
+               (puget/tagged-handler 'data/hash
+                                     multihash.core/base58)
+
+               merkledag.link.MerkleLink
+               (puget/tagged-handler 'merkledag/link
+                                     merkledag.link/link->form)})))
+
+
+(defn- pprint
+  "Pretty print something."
+  [x]
+  (puget/render-out pprinter x))
 
 
 (defn -main
@@ -41,19 +55,31 @@
   [& args]
   ; TODO: parameterize block and ref locations?
   (let [dataset-path (first args)
-        graph (mdag/init-store
-                :store (bsf/file-block-store "var/db/blocks")
-                :cache {:total-size-limit (* 32 1024)}
-                :types merkle-db.graph/codec-types)
-        tracker (doto (mrf/file-ref-tracker "var/db/refs.tsv")
+        store-cfg {:block-url "data/db/blocks"}
+        store (load/init-store store-cfg)
+        #_#_
+        tracker (doto (mrf/file-ref-tracker "data/db/refs.tsv")
                   (mrf/load-history!))
+        #_#_
         conn (conn/connect graph tracker)]
     (spark/with-context spark-ctx (-> (conf/spark-conf)
                                       (conf/app-name "movie-lens-recommender")
                                       ; TODO: parameterize master
                                       (conf/master "local"))
-      (load-dataset spark-ctx graph dataset-path)
+      (try
+        (let [movies (load/build-dataset-table!
+                       store store-cfg
+                       {::table/name "movies"
+                        ::table/primary-key :movie/id
+                        ::key/lexicoder :integer
+                        ::index/fan-out 256
+                        ::part/limit 5000}
+                       (dataset/load-movies spark-ctx dataset-path))]
+          (pprint movies)
+          ,,,)
+        (catch Throwable err
+          (log/error err "Spark task failed!")))
       ; Pause until user hits enter.
-      (println "Main sequence complete - press RETURN to terminate")
+      (println "\nMain sequence complete - press RETURN to terminate")
       (flush)
       (read-line))))

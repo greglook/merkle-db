@@ -17,5 +17,7 @@
     <appender-ref ref="${LOG_APPENDER:-color}"/>
   </root>
 
-  <logger name="org.apache.spark" level="INFO"/>
+  <logger name="movie-lens" level="DEBUG"/>
+  <logger name="org.apache.spark" level="WARN"/>
+  <logger name="org.spark_project" level="WARN"/>
 </configuration>

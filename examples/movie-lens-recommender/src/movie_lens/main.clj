@@ -1,10 +1,10 @@
 (ns movie-lens.main
   (:gen-class)
   (:require
-    [blocks.core :as block]
+    [blocks.store.file]
     [clojure.java.io :as io]
     [clojure.string :as str]
-    ;[clojure.tools.cli :as cli]
+    [clojure.tools.cli :as cli]
     [clojure.tools.logging :as log]
     [merkle-db.connection :as conn]
     [merkle-db.db :as db]
@@ -17,11 +17,24 @@
     [merkledag.node :as node]
     [merkledag.ref.file :as mrf]
     [movie-lens.dataset :as dataset]
-    [movie-lens.load :as load]
     [puget.printer :as puget]
     [sparkling.conf :as conf]
     [sparkling.core :as spark]
     [sparkling.destructuring :as sde]))
+
+
+(def cli-options
+  [["-b" "--blocks URL" "Location of backing block storage"
+    :default "file://data/db/blocks"]
+   ["-r" "--refs URL" "Location of backing ref tracker"
+    :default "file://data/db/refs.tsv"]
+   ["-m" "--master URL" "Spark master connection URL"
+    :default "local"]
+   ["-h" "--help"]])
+
+
+(def commands
+  ["load-db"])
 
 
 (defmethod print-method multihash.core.Multihash
@@ -50,35 +63,72 @@
   (puget/render-out pprinter x))
 
 
-(defn -main
-  "Main entry point for example."
-  [& args]
-  ; TODO: parameterize:
-  ; - block url
-  ; - ref tracker
-  ; - spark master
+(defn duration-str
+  "Convert a duration in seconds into a human-readable duration string."
+  [elapsed]
+  (if (< elapsed 60)
+    (format "%.2f sec" (double elapsed))
+    (let [hours (int (/ elapsed 60 60))
+          minutes (mod (int (/ elapsed 60)) 60)
+          seconds (mod (int elapsed) 60)]
+      (str (if (pos? hours)
+             (format "%d:%02d" hours minutes)
+             minutes)
+           (format ":%02d" seconds)))))
+
+
+(defn- load-db
+  [opts args]
+  (when-not (= 1 (count args))
+    (binding [*out* *err*]
+      (println "load-db takes exactly one argument, the path to the dataset directory")
+      (System/exit 3)))
   (let [dataset-path (if (str/ends-with? (first args) "/")
                        (first args)
                        (str (first args) "/"))
-        store-cfg {:block-url "data/db/blocks"}
-        store (load/init-store store-cfg)
-        #_#_
-        tracker (doto (mrf/file-ref-tracker "data/db/refs.tsv")
-                  (mrf/load-history!))
-        #_#_
-        conn (conn/connect graph tracker)]
+        store-cfg {:blocks-url (:blocks opts)}
+        start (System/currentTimeMillis)]
     (spark/with-context spark-ctx (-> (conf/spark-conf)
                                       (conf/app-name "movie-lens-recommender")
-                                      (conf/master "local"))
+                                      (conf/master (:master opts)))
       (try
         (log/info "Loading dataset tables from" dataset-path)
-        (let [tables (dataset/load-dataset! spark-ctx store store-cfg dataset-path)
-              ,,,]
+        (let [tables (dataset/load-dataset! spark-ctx store-cfg dataset-path)]
           (pprint tables)
+          ; TODO: construct database root
           ,,,)
         (catch Throwable err
           (log/error err "Spark task failed!")))
-      ; Pause until user hits enter.
-      (println "\nMain sequence complete - press RETURN to terminate")
+      (let [elapsed (/ (- (System/currentTimeMillis) start) 1e3)]
+        ; Pause until user hits enter.
+        (printf "\nDatabase load complete in %s - press RETURN to exit\n"
+                (duration-str elapsed))
+        (flush)
+        (read-line)))))
+
+
+(defn -main
+  "Main entry point for example."
+  [& raw-args]
+  (let [{:keys [options arguments summary errors]} (cli/parse-opts raw-args cli-options)
+        command (first arguments)]
+    (when errors
+      (binding [*out* *err*]
+        (doseq [err errors]
+          (println errors))
+        (System/exit 1)))
+    (when (or (:help options) (nil? command) (= "help" command))
+      (println "Usage: lein run [opts] <command> [args...]")
+      (println "Commands:" (str/join ", " commands))
+      (newline)
+      (println summary)
       (flush)
-      (read-line))))
+      (System/exit 0))
+    (case command
+      "load-db"
+        (load-db options (rest arguments))
+
+      ; Unknown command
+      (binding [*out* *err*]
+        (println "The argument" (pr-str command) "is not a supported command")
+        (System/exit 2)))))

@@ -48,9 +48,13 @@
 
 
 (defn load-dataset!
-  [spark-ctx store store-cfg dataset-dir]
-  (into []
-        (map (fn load-dataset-table
-               [table-cfg]
-               (load-table! spark-ctx store store-cfg dataset-dir table-cfg)))
-        tables))
+  [spark-ctx store-cfg dataset-dir]
+  (let [store (load/init-store store-cfg)]
+    ; TODO: possible to do this in parallel?
+    (into []
+          (map (fn load-dataset-table
+                 [table-cfg]
+                 (load-table!
+                   spark-ctx store store-cfg
+                   dataset-dir table-cfg)))
+          tables)))

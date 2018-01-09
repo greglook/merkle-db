@@ -26,7 +26,7 @@ Now that we have the raw data available, the next step is to load it into a set
 of MerkleDB tables and combine them into a database.
 
 ```shell
-$ lein run data/ml-latest
+$ lein run load-db data/ml-latest
 ```
 
 

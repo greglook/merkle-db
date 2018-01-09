@@ -7,6 +7,7 @@
   :dependencies
   [[org.clojure/clojure "1.9.0"]
    [org.clojure/data.csv "0.1.4"]
+   [org.clojure/tools.cli "0.3.5"]
    [gorillalabs/sparkling "2.1.2"]
    [mvxcvi/merkle-db "0.1.0-SNAPSHOT"]
    [ch.qos.logback/logback-classic "1.1.7"]

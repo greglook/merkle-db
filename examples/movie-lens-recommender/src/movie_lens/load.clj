@@ -2,7 +2,6 @@
   "Tooling for loading data to construct a new MerkleDB table."
   (:require
     [blocks.core :as block]
-    [blocks.store.file :as bsf]
     [clojure.data.csv :as csv]
     [clojure.string :as str]
     [clojure.tools.logging :as log]
@@ -22,7 +21,7 @@
   [cfg]
   ; TODO: make this more configurable...
   (mdag/init-store
-    :store (bsf/file-block-store (:block-url cfg))
+    :store (block/->store (:blocks-url cfg))
     :cache {:total-size-limit (:cache-size cfg (* 1024 1024))}
     :types merkle-db.graph/codec-types))
 

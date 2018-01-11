@@ -7,7 +7,7 @@
     [clojure.tools.cli :as cli]
     [clojure.tools.logging :as log]
     [merkle-db.connection :as conn]
-    [merkle-db.db :as db]
+    [merkle-db.database :as db]
     [merkle-db.index :as index]
     [merkle-db.key :as key]
     [merkle-db.partition :as part]

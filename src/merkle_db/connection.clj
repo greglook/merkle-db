@@ -4,7 +4,7 @@
   manager."
   (:require
     [clojure.string :as str]
-    [merkle-db.db :as db]
+    [merkle-db.database :as db]
     [merkledag.core :as mdag]
     [merkledag.node :as node]
     [merkledag.ref :as ref]))

@@ -18,7 +18,7 @@
     [merkledag.ref.file :as mrf]
     [merkle-db.bloom :as bloom]
     [merkle-db.connection :as conn]
-    [merkle-db.db :as db]
+    [merkle-db.database :as db]
     [merkle-db.generators :as mdgen]
     [merkle-db.graph :as graph]
     [merkle-db.index :as index]

@@ -17,9 +17,9 @@ manager. It can be used to open databases for reading and writing.
 ; List information about the current version of each database present.
 (conn/list-dbs conn opts) =>
 ({:merkledag.node/id Multihash
-  :merkle-db.db/name String
-  :merkle-db.db/version Long
-  :merkle-db.db/committed-at Instant}
+  :merkle-db.database/name String
+  :merkle-db.database/version Long
+  :merkle-db.database/committed-at Instant}
  ...)
 
 ; List information about the version history of a specific database.
@@ -49,19 +49,19 @@ operations will return a locally-updated copy but not actually change the
 backing storage until `commit!` is called.
 
 Database values are map-like, and present both the database version attributes
-(`:merkledag.node/id`, `:merkle-db.db/name`, `:merkle-db.db/version`,
-`:merkle-db.db/committed-at`) as well as the attributes stored in the database
-root node.
+(`:merkledag.node/id`, `:merkle-db.database/name`,
+`:merkle-db.database/version`, `:merkle-db.database/committed-at`) as well as
+the attributes stored in the database root node.
 
 ```clojure
 ; Databases provide direct keyword access to their properties:
 (into {} db) =>
 {:merkledag.node/id Multihash
+ :merkle-db.database/committed-at Instant
+ :merkle-db.database/name String
+ :merkle-db.database/version Long
+ :merkle-db.database/tables {table-name MerkleLink}
  :merkle-db.record/size Long
- :merkle-db.db/committed-at Instant
- :merkle-db.db/name String
- :merkle-db.db/version Long
- :merkle-db.db/tables {table-name MerkleLink}
  :time/updated-at Instant
  ,,,}
 

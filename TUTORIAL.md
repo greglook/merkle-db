@@ -96,10 +96,10 @@ which you can use to test things out.
 #merkle-db/db
 {:data/title "Iris Plant Database",
  :data/type :merkle-db/database,
- :merkle-db.db/committed-at #inst "2017-10-24T20:45:53.698Z",
- :merkle-db.db/name "iris",
- :merkle-db.db/tables {},
- :merkle-db.db/version 1,
+ :merkle-db.database/committed-at #inst "2017-10-24T20:45:53.698Z",
+ :merkle-db.database/name "iris",
+ :merkle-db.database/tables {},
+ :merkle-db.database/version 1,
  :merkle-db.record/size 118,
  :merkledag.node/id #data/hash "QmUATY6XG4wHA6AWCoed5QpEVAJJncCzEn6TssLMjMHLR4"}
 ```
@@ -110,9 +110,9 @@ now:
 
 ```clojure
 => (conn/list-dbs conn)
-({:merkle-db.db/committed-at #inst "2017-10-24T20:45:53.698Z",
-  :merkle-db.db/name "iris",
-  :merkle-db.db/version 1,
+({:merkle-db.database/committed-at #inst "2017-10-24T20:45:53.698Z",
+  :merkle-db.database/name "iris",
+  :merkle-db.database/version 1,
   :merkledag.node/id #data/hash "QmUATY6XG4wHA6AWCoed5QpEVAJJncCzEn6TssLMjMHLR4"})
 ```
 
@@ -144,10 +144,10 @@ it. `conn/open-db` lets us retrieve the current version of a database by name:
 {:data/description "For working with the merkle-db API",
  :data/title "Iris Plant Database",
  :data/type :merkle-db/database,
- :merkle-db.db/committed-at #inst "2017-10-24T20:45:53.698Z",
- :merkle-db.db/name "iris",
- :merkle-db.db/tables {},
- :merkle-db.db/version 1,
+ :merkle-db.database/committed-at #inst "2017-10-24T20:45:53.698Z",
+ :merkle-db.database/name "iris",
+ :merkle-db.database/tables {},
+ :merkle-db.database/version 1,
  :merkle-db.record/size 118,
  :merkledag.node/id #data/hash "QmUATY6XG4wHA6AWCoed5QpEVAJJncCzEn6TssLMjMHLR4"}
 
@@ -172,10 +172,10 @@ you commit it!
 {:data/description "For working with the merkle-db API",
  :data/title "Iris Plant Database",
  :data/type :merkle-db/database,
- :merkle-db.db/committed-at #inst "2017-10-24T21:03:14.293Z",
- :merkle-db.db/name "iris",
- :merkle-db.db/tables {},
- :merkle-db.db/version 2,
+ :merkle-db.database/committed-at #inst "2017-10-24T21:03:14.293Z",
+ :merkle-db.database/name "iris",
+ :merkle-db.database/tables {},
+ :merkle-db.database/version 2,
  :merkledag.node/id #data/hash "QmY6LL3MArYnyjbijLnbF7JcqhLaC32qnjtN2G9JJq966w"}
 ```
 
@@ -186,13 +186,13 @@ database history:
 
 ```clojure
 => (conn/get-db-history conn "iris")
-({:merkle-db.db/committed-at #inst "2017-10-24T21:03:14.293Z",
-  :merkle-db.db/name "iris",
-  :merkle-db.db/version 2,
+({:merkle-db.database/committed-at #inst "2017-10-24T21:03:14.293Z",
+  :merkle-db.database/name "iris",
+  :merkle-db.database/version 2,
   :merkledag.node/id #data/hash "QmY6LL3MArYnyjbijLnbF7JcqhLaC32qnjtN2G9JJq966w"}
- {:merkle-db.db/committed-at #inst "2017-10-24T20:45:53.698Z",
-  :merkle-db.db/name "iris",
-  :merkle-db.db/version 1,
+ {:merkle-db.database/committed-at #inst "2017-10-24T20:45:53.698Z",
+  :merkle-db.database/name "iris",
+  :merkle-db.database/version 1,
   :merkledag.node/id #data/hash "QmUATY6XG4wHA6AWCoed5QpEVAJJncCzEn6TssLMjMHLR4"})
 ```
 
@@ -208,20 +208,20 @@ data to a new name:
 {:data/description "For working with the merkle-db API",
  :data/title "Iris Plant Database",
  :data/type :merkle-db/database,
- :merkle-db.db/committed-at #inst "2017-10-24T21:11:43.846Z",
- :merkle-db.db/name "iris2",
- :merkle-db.db/tables {},
- :merkle-db.db/version 1,
+ :merkle-db.database/committed-at #inst "2017-10-24T21:11:43.846Z",
+ :merkle-db.database/name "iris2",
+ :merkle-db.database/tables {},
+ :merkle-db.database/version 1,
  :merkledag.node/id #data/hash "QmY6LL3MArYnyjbijLnbF7JcqhLaC32qnjtN2G9JJq966w"}
 
 => (conn/list-dbs conn)
-({:merkle-db.db/committed-at #inst "2017-10-24T21:03:14.293Z",
-  :merkle-db.db/name "iris",
-  :merkle-db.db/version 2,
+({:merkle-db.database/committed-at #inst "2017-10-24T21:03:14.293Z",
+  :merkle-db.database/name "iris",
+  :merkle-db.database/version 2,
   :merkledag.node/id #data/hash "QmY6LL3MArYnyjbijLnbF7JcqhLaC32qnjtN2G9JJq966w"}
- {:merkle-db.db/committed-at #inst "2017-10-24T21:11:43.846Z",
-  :merkle-db.db/name "iris2",
-  :merkle-db.db/version 1,
+ {:merkle-db.database/committed-at #inst "2017-10-24T21:11:43.846Z",
+  :merkle-db.database/name "iris2",
+  :merkle-db.database/version 1,
   :merkledag.node/id #data/hash "QmY6LL3MArYnyjbijLnbF7JcqhLaC32qnjtN2G9JJq966w"})
 ```
 
@@ -240,15 +240,15 @@ database versions to keep.
 
 ```clojure
 => (conn/drop-db! conn "iris2")
-{:merkle-db.db/committed-at #inst "2017-10-24T21:15:05.572Z",
- :merkle-db.db/name "iris2",
- :merkle-db.db/version 2,
+{:merkle-db.database/committed-at #inst "2017-10-24T21:15:05.572Z",
+ :merkle-db.database/name "iris2",
+ :merkle-db.database/version 2,
  :merkledag.node/id nil}
 
 => (conn/list-dbs conn)
-({:merkle-db.db/committed-at #inst "2017-10-24T21:03:14.293Z",
-  :merkle-db.db/name "iris",
-  :merkle-db.db/version 2,
+({:merkle-db.database/committed-at #inst "2017-10-24T21:03:14.293Z",
+  :merkle-db.database/name "iris",
+  :merkle-db.database/version 2,
   :merkledag.node/id #data/hash "QmY6LL3MArYnyjbijLnbF7JcqhLaC32qnjtN2G9JJq966w"})
 ```
 
@@ -261,7 +261,7 @@ to a 'kind' of data you might want to use; not every record in a table needs to
 have exactly the same shape, but generally they'll have common sets of fields.
 
 ```clojure
-=> (require '[merkle-db.db :as db])
+=> (require '[merkle-db.database :as db])
 
 => (def db (conn/open-db conn "iris"))
 #merkle-db.playground/db
@@ -277,17 +277,17 @@ One way to make a new table is to create it directly in a database:
 {:data/description "For working with the merkle-db API",
  :data/title "Iris Plant Database",
  :data/type :merkle-db/database,
- :merkle-db.db/committed-at #inst "2017-10-24T21:03:14.293Z",
- :merkle-db.db/name "iris",
- :merkle-db.db/tables {"test" #merkle-db/table
-                       {:data/title "Example test table",
-                        :data/type :merkle-db/table,
-                        :merkle-db.index/fan-out 256,
-                        :merkle-db.partition/limit 1000,
-                        :merkle-db.patch/limit 100,
-                        :merkle-db.record/count 0,
-                        :merkle-db.table/name "test"}},
- :merkle-db.db/version 2,
+ :merkle-db.database/committed-at #inst "2017-10-24T21:03:14.293Z",
+ :merkle-db.database/name "iris",
+ :merkle-db.database/tables {"test" #merkle-db/table
+                             {:data/title "Example test table",
+                              :data/type :merkle-db/table,
+                              :merkle-db.index/fan-out 256,
+                              :merkle-db.partition/limit 1000,
+                              :merkle-db.patch/limit 100,
+                              :merkle-db.record/count 0,
+                              :merkle-db.table/name "test"}},
+ :merkle-db.database/version 2,
  :merkle-db.record/size 173,
  :merkledag.node/id #data/hash "QmY6LL3MArYnyjbijLnbF7JcqhLaC32qnjtN2G9JJq966w"}
 ```
@@ -302,10 +302,10 @@ table is directly embedded in the `::db/tables` field. Let's save our work:
 {:data/description "For working with the merkle-db API",
  :data/title "Iris Plant Database",
  :data/type :merkle-db/database,
- :merkle-db.db/committed-at #inst "2017-10-24T23:00:12.120Z",
- :merkle-db.db/name "iris",
- :merkle-db.db/tables {"test" #merkledag/link ["table:test" #data/hash "QmW5U8F2zsyuRWrEppmy8zpS3LyhYvfkRtba1nsi3Y6HNX" 204]},
- :merkle-db.db/version 3,
+ :merkle-db.database/committed-at #inst "2017-10-24T23:00:12.120Z",
+ :merkle-db.database/name "iris",
+ :merkle-db.database/tables {"test" #merkledag/link ["table:test" #data/hash "QmW5U8F2zsyuRWrEppmy8zpS3LyhYvfkRtba1nsi3Y6HNX" 204]},
+ :merkle-db.database/version 3,
  :merkledag.node/id #data/hash "QmTWNVAGsGaN2prJMazum6pAuopSSLZBXeWpj4Q4T1TGND"}
 
 => (def db *1)
@@ -438,10 +438,10 @@ persist the table:
 {:data/description "For working with the merkle-db API",
  :data/title "Iris Plant Database",
  :data/type :merkle-db/database,
- :merkle-db.db/committed-at #inst "2017-10-25T02:18:50.933Z",
- :merkle-db.db/name "iris",
- :merkle-db.db/tables {"test" #merkledag/link ["table:test" #data/hash "QmcJ2pSsnGCHeAkmvtuSqu2oo4xJ2cZSigGsKTMTj2vWhy" 536]},
- :merkle-db.db/version 4,
+ :merkle-db.database/committed-at #inst "2017-10-25T02:18:50.933Z",
+ :merkle-db.database/name "iris",
+ :merkle-db.database/tables {"test" #merkledag/link ["table:test" #data/hash "QmcJ2pSsnGCHeAkmvtuSqu2oo4xJ2cZSigGsKTMTj2vWhy" 536]},
+ :merkle-db.database/version 4,
  :merkledag.node/id #data/hash "QmYodPnwjhQ8Sdct8JKTQ2QemCqYJhz8WdfdJHuymTMPBF"}
 
 => (def db *1)
@@ -511,10 +511,10 @@ Before we move on, we can clean up by dropping this test table.
 {:data/description "For working with the merkle-db API",
  :data/title "Iris Plant Database",
  :data/type :merkle-db/database,
- :merkle-db.db/committed-at #inst "2017-10-25T02:18:50.933Z",
- :merkle-db.db/name "iris",
- :merkle-db.db/tables {},
- :merkle-db.db/version 4,
+ :merkle-db.database/committed-at #inst "2017-10-25T02:18:50.933Z",
+ :merkle-db.database/name "iris",
+ :merkle-db.database/tables {},
+ :merkle-db.database/version 4,
  :merkledag.node/id #data/hash "QmYodPnwjhQ8Sdct8JKTQ2QemCqYJhz8WdfdJHuymTMPBF"}
 ```
 
@@ -531,19 +531,19 @@ Alright, let's load some data!
 {:data/description "For working with the merkle-db API",
  :data/title "Iris Plant Database",
  :data/type :merkle-db/database,
- :merkle-db.db/committed-at #inst "2017-10-25T02:18:50.933Z",
- :merkle-db.db/name "iris",
- :merkle-db.db/tables {"measurements" #merkle-db/table
-                       {:data/title "Flower Measurements",
-                        :data/type :merkle-db/table,
-                        :merkle-db.index/fan-out 256,
-                        :merkle-db.key/lexicoder :integer,
-                        :merkle-db.partition/limit 1000,
-                        :merkle-db.patch/limit 100,
-                        :merkle-db.record/count 0,
-                        :merkle-db.table/name "measurements",
-                        :merkle-db.table/primary-key :iris/id}},
- :merkle-db.db/version 4,
+ :merkle-db.database/committed-at #inst "2017-10-25T02:18:50.933Z",
+ :merkle-db.database/name "iris",
+ :merkle-db.database/tables {"measurements" #merkle-db/table
+                             {:data/title "Flower Measurements",
+                              :data/type :merkle-db/table,
+                              :merkle-db.index/fan-out 256,
+                              :merkle-db.key/lexicoder :integer,
+                              :merkle-db.partition/limit 1000,
+                              :merkle-db.patch/limit 100,
+                              :merkle-db.record/count 0,
+                              :merkle-db.table/name "measurements",
+                              :merkle-db.table/primary-key :iris/id}},
+ :merkle-db.database/version 4,
  :merkledag.node/id #data/hash "QmYodPnwjhQ8Sdct8JKTQ2QemCqYJhz8WdfdJHuymTMPBF"}
 
 => (require
@@ -564,10 +564,10 @@ Alright, let's load some data!
 {:data/description "For working with the merkle-db API",
  :data/title "Iris Plant Database",
  :data/type :merkle-db/database,
- :merkle-db.db/committed-at #inst "2017-10-25T07:16:43.352Z",
- :merkle-db.db/name "iris",
- :merkle-db.db/tables {"measurements" #merkledag/link ["table:measurements" #data/hash "QmRKHE3XeLVA9gWv8bKmvimZpzhZrijgedAhQrDqChXjw1" 18896]},
- :merkle-db.db/version 5,
+ :merkle-db.database/committed-at #inst "2017-10-25T07:16:43.352Z",
+ :merkle-db.database/name "iris",
+ :merkle-db.database/tables {"measurements" #merkledag/link ["table:measurements" #data/hash "QmRKHE3XeLVA9gWv8bKmvimZpzhZrijgedAhQrDqChXjw1" 18896]},
+ :merkle-db.database/version 5,
  :merkledag.node/id #data/hash "QmYgwQfNcauwm39C6NW5A8Q6CJygkWYwppiyNNWR2N8mW9"}
 
 => (def table (db/get-table *1 "measurements"))

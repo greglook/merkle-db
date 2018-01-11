@@ -28,7 +28,7 @@ maps table names to _table root nodes_.
 
 ```clojure
 {:data/type :merkle-db/database
- :merkle-db.db/tables {String MerkleLink}
+ :merkle-db.database/tables {String MerkleLink}
  ,,,}
 ```
 

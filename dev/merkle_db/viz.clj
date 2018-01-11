@@ -5,7 +5,7 @@
     [merkledag.core :as mdag]
     [merkledag.link :as link]
     [merkledag.node :as node]
-    [merkle-db.db :as db]
+    [merkle-db.database :as db]
     [merkle-db.graph :as graph]
     [multihash.core :as multihash]
     [rhizome.viz :as rhizome]))

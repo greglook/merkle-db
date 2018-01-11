@@ -1,4 +1,4 @@
-(ns merkle-db.db
+(ns merkle-db.database
   "Core database functions."
   (:require
     [clojure.spec.alpha :as s]

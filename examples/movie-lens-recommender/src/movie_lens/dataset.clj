@@ -1,14 +1,15 @@
 (ns movie-lens.dataset
   "Functions for parsing and loading the MovieLens dataset source files."
   (:require
+    [clojure.data.csv :as csv]
     [clojure.java.io :as io]
-    [clojure.string :as str]
     [clojure.tools.logging :as log]
+    [merkle-db.spark :as mdbs]
     [movie-lens.link :as link]
-    [movie-lens.load :as load]
     [movie-lens.movie :as movie]
     [movie-lens.rating :as rating]
-    [movie-lens.tag :as tag]))
+    [movie-lens.tag :as tag]
+    [sparkling.core :as spark]))
 
 
 (def tables
@@ -35,25 +36,30 @@
     :parser rating/parse-row}])
 
 
+(defn csv-rdd
+  "Create an RDD from the given CSV file."
+  [spark-ctx csv-file header parser]
+  (->> (spark/text-file spark-ctx (str csv-file) 8)
+       (spark/filter (fn remove-header [line] (not= line header)))
+       (spark/flat-map csv/read-csv)
+       (spark/map parser)))
+
+
 (defn- load-table!
-  [spark-ctx store store-cfg dataset-dir table-cfg]
+  [spark-ctx store-cfg dataset-dir table-cfg]
   (let [{:keys [table filename params header parser]} table-cfg
         csv-path (str dataset-dir filename)]
     (log/info "Loading table" table "from" csv-path)
-    (load/build-table!
-      store store-cfg
+    ; TODO: table stats?
+    (mdbs/build-table!
+      store-cfg
       (assoc params :merkle-db.table/name table)
-      (load/csv-rdd spark-ctx csv-path header parser))))
+      (csv-rdd spark-ctx csv-path header parser))))
 
 
 (defn load-dataset!
   [spark-ctx store-cfg dataset-dir]
-  (let [store (load/init-store store-cfg)]
-    ; TODO: possible to do this in parallel?
-    (into []
-          (map (fn load-dataset-table
-                 [table-cfg]
-                 (load-table!
-                   spark-ctx store store-cfg
-                   dataset-dir table-cfg)))
-          tables)))
+  ; TODO: possible to do this in parallel?
+  (into []
+        (map (partial load-table! spark-ctx store-cfg dataset-dir))
+        tables))

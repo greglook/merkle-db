@@ -1,8 +1,7 @@
-(ns movie-lens.load
-  "Tooling for loading data to construct a new MerkleDB table."
+(ns merkle-db.spark
+  "Integration code for using MerkleDB with Spark."
   (:require
     [blocks.core :as block]
-    [clojure.data.csv :as csv]
     [clojure.string :as str]
     [clojure.tools.logging :as log]
     [merkle-db.index :as index]
@@ -13,16 +12,22 @@
     [merkledag.core :as mdag]
     [merkledag.node :as node]
     [sparkling.core :as spark]
-    [sparkling.destructuring :as sde]))
+    [sparkling.destructuring :as sde])
+  (:import
+    (org.apache.spark
+      Partition
+      Partitioner)
+    org.apache.spark.rdd.RDD))
 
 
+; TODO: best way to pass around store connection parameters to the executors?
 (defn init-store
   "Initialize a MerkleDAG graph store from the given config."
   [cfg]
   ; TODO: make this more configurable...
   (mdag/init-store
     :store (block/->store (:blocks-url cfg))
-    :cache {:total-size-limit (:cache-size cfg (* 1024 1024))}
+    :cache {:total-size-limit (:cache-size cfg (* 32 1024 1024))}
     :types merkle-db.graph/codec-types))
 
 
@@ -43,14 +48,8 @@
     x))
 
 
-(defn csv-rdd
-  "Create an RDD from the given CSV file."
-  [spark-ctx csv-file header parser]
-  (->> (spark/text-file spark-ctx (str csv-file) #_4)
-       (spark/filter (fn remove-header [line] (not= line header)))
-       (spark/flat-map csv/read-csv)
-       (spark/map parser)))
 
+;; ## Table Construction
 
 (defn- write-partitions
   "Make a sequence of partitions from the given records."
@@ -58,7 +57,8 @@
   (log/debug "Processing spark partition" part-idx)
   (let [store (init-store store-cfg)
         parts (->> records
-                   (map (sde/fn [(k r)] [k r]))
+                   #_(map (sde/fn [(k r)] [k r]))
+                   (map (juxt sde/key sde/value))
                    (part/partition-records store table-params)
                    (map inject-meta)
                    (vec))]
@@ -89,6 +89,7 @@
       (fn write-table-parts
         [idx record-iter]
         (->> (iterator-seq record-iter)
+             ^java.lang.Iterable
              (write-partitions store-cfg table-params idx)
              (.iterator))))
     (spark/collect)
@@ -97,8 +98,9 @@
 
 (defn build-table!
   "Load the dataset into tables in a merkle-db database."
-  [store store-cfg table-params record-rdd]
-  (let [parts (build-table-parts! store-cfg table-params record-rdd)
+  [store-cfg table-params record-rdd]
+  (let [store (init-store store-cfg)
+        parts (build-table-parts! store-cfg table-params record-rdd)
         data-root (index/build-tree store table-params parts)]
     (-> table-params
         (assoc :data/type :merkle-db/table

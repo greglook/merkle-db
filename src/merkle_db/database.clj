@@ -320,6 +320,23 @@
 (alter-meta! #'->Database assoc :private true)
 
 
+(defn ^:no-doc store-root!
+  "Create and store a new database root node. Returns the persisted node data."
+  [store attrs]
+  (let [data (merge {::tables {}}
+                    attrs
+                    {:data/type :merkle-db/database})
+        ; TODO: validate schema
+        node (mdag/store-node! store nil data)]
+    (->Database
+      store
+      {::node/id (::node/id node)
+       ::record/size (node/reachable-size node)}
+      (dissoc data ::tables)
+      (::tables data)
+      nil)))
+
+
 (defn ^:no-doc load-database
   "Load a database from the store, using the version information given."
   [store version]

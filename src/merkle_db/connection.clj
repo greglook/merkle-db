@@ -143,17 +143,11 @@
                          " already exists")
                     {:type ::db-conflict
                      :db-name db-name})))
-  (->>
-    (merge {::db/tables {}}
-           attrs
-           {:data/type :merkle-db/database})
-    ; TODO: validate schema
-    (hash-map ::node/data)
-    (mdag/store-node! (.store conn))
-    (::node/id)
-    (ref/set-ref! (.tracker conn) db-name)
-    (ref-version-info)
-    (db/load-database (.store conn))))
+  (let [db (db/store-root! (.store conn) attrs)
+        version (->> (::node/id db)
+                     (ref/set-ref! (.tracker conn) db-name)
+                     (ref-version-info))]
+    (db/update-backing db (.store conn) version)))
 
 
 (defn- -drop-db!

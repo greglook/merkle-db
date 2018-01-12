@@ -320,6 +320,21 @@
 (alter-meta! #'->Database assoc :private true)
 
 
+(defn ^:no-doc empty-db
+  "Create a new unpersisted database."
+  [store attrs]
+  (let [data (merge {::tables {}}
+                    attrs
+                    {:data/type :merkle-db/database})]
+    ; TODO: validate schema
+    (->Database
+      store
+      {}
+      (dissoc data ::tables)
+      (::tables data)
+      nil)))
+
+
 (defn ^:no-doc store-root!
   "Create and store a new database root node. Returns the persisted node data."
   [store attrs]

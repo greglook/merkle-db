@@ -133,7 +133,7 @@
 (defn view-database
   ([db]
    (view-database db (constantly true)))
-  ([^merkle_db.db.Database db follow?]
+  ([^merkle_db.database.Database db follow?]
    (when-not (::node/id db)
      (throw (IllegalArgumentException.
               (str "Cannot vizualize database with no node id: "

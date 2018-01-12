@@ -4,33 +4,38 @@
     [clojure.data.csv :as csv]
     [clojure.java.io :as io]
     [clojure.tools.logging :as log]
+    [merkle-db.database :as db]
     [merkle-db.spark :as mdbs]
+    [merkle-db.table :as table]
+    [merkledag.node :as node]
     [movie-lens.link :as link]
     [movie-lens.movie :as movie]
     [movie-lens.rating :as rating]
     [movie-lens.tag :as tag]
+    [movie-lens.util :as u]
+    [multihash.core :as multihash]
     [sparkling.core :as spark]))
 
 
 (def tables
-  [{:table "movies"
-    :filename "movies.csv"
+  [{:name "movies"
+    :file "movies.csv"
     :params movie/table-parameters
     :header movie/csv-header
     :parser movie/parse-row}
-   {:table "links"
-    :filename "links.csv"
+   {:name "links"
+    :file "links.csv"
     :params link/table-parameters
     :header link/csv-header
     :parser link/parse-row}
-   {:table "tags"
-    :filename "tags.csv"
+   {:name "tags"
+    :file "tags.csv"
     :params tag/table-parameters
     :header tag/csv-header
     :parser tag/parse-row}
    #_
-   {:table "ratings"
-    :filename "ratings.csv"
+   {:name "ratings"
+    :file "ratings.csv"
     :params rating/table-parameters
     :header rating/csv-header
     :parser rating/parse-row}])
@@ -47,19 +52,34 @@
 
 (defn- load-table!
   [spark-ctx store-cfg dataset-dir table-cfg]
-  (let [{:keys [table filename params header parser]} table-cfg
-        csv-path (str dataset-dir filename)]
-    (log/info "Loading table" table "from" csv-path)
-    ; TODO: table stats?
-    (mdbs/build-table!
-      store-cfg
-      (assoc params :merkle-db.table/name table)
-      (csv-rdd spark-ctx csv-path header parser))))
+  (let [{:keys [name file params header parser]} table-cfg
+        csv-path (str dataset-dir file)
+        start (System/currentTimeMillis)]
+    (log/info "Loading table" name "from" csv-path)
+    (let [table (mdbs/build-table!
+                  store-cfg
+                  (assoc params ::table/name name)
+                  (csv-rdd spark-ctx csv-path header parser))
+          stats (table/collect-stats table)
+          elapsed (/ (- (System/currentTimeMillis) start) 1e3)]
+      (log/infof "Loaded table %s (%s) in %s"
+                 name (multihash/base58 (::node/id table))
+                 (u/duration-str elapsed))
+      ;(u/pprint table)
+      (table/print-stats stats)
+      (newline)
+      table)))
 
 
 (defn load-dataset!
   [spark-ctx store-cfg dataset-dir]
-  ; TODO: possible to do this in parallel?
-  (into []
-        (map (partial load-table! spark-ctx store-cfg dataset-dir))
-        tables))
+  (let [store (mdbs/init-store store-cfg)]
+    (->>
+      tables
+      (reduce
+        (fn load-table-data
+          [db table-cfg]
+          (let [table (load-table! spark-ctx store-cfg dataset-dir table-cfg)]
+            (db/set-table db (:name table-cfg) table)))
+        (db/empty-db store {:data/title "MovieLens Dataset"}))
+      (db/flush!))))

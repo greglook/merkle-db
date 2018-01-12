@@ -2,25 +2,17 @@
   (:gen-class)
   (:require
     [blocks.store.file]
-    [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.tools.cli :as cli]
     [clojure.tools.logging :as log]
-    [merkle-db.connection :as conn]
-    [merkle-db.database :as db]
-    [merkle-db.index :as index]
-    [merkle-db.key :as key]
-    [merkle-db.partition :as part]
-    [merkle-db.record :as record]
-    [merkle-db.table :as table]
-    [merkledag.core :as mdag]
-    [merkledag.node :as node]
-    [merkledag.ref.file :as mrf]
+    ;[merkle-db.connection :as conn]
+    ;[merkle-db.database :as db]
+    ;[merkledag.ref.file :as mrf]
     [movie-lens.dataset :as dataset]
-    [puget.printer :as puget]
+    [movie-lens.util :as u]
+    [multihash.core :as multihash]
     [sparkling.conf :as conf]
-    [sparkling.core :as spark]
-    [sparkling.destructuring :as sde]))
+    [sparkling.core :as spark]))
 
 
 (def cli-options
@@ -35,46 +27,6 @@
 
 (def commands
   ["load-db"])
-
-
-(defmethod print-method multihash.core.Multihash
-  [x w]
-  (print-method (tagged-literal 'data/hash (multihash.core/base58 x)) w))
-
-
-(def pprinter
-  (-> (puget/pretty-printer
-        {:print-color true
-         :width 200})
-      (update :print-handlers
-              puget.dispatch/chained-lookup
-              {multihash.core.Multihash
-               (puget/tagged-handler 'data/hash
-                                     multihash.core/base58)
-
-               merkledag.link.MerkleLink
-               (puget/tagged-handler 'merkledag/link
-                                     merkledag.link/link->form)})))
-
-
-(defn- pprint
-  "Pretty print something."
-  [x]
-  (puget/render-out pprinter x))
-
-
-(defn duration-str
-  "Convert a duration in seconds into a human-readable duration string."
-  [elapsed]
-  (if (< elapsed 60)
-    (format "%.2f sec" (double elapsed))
-    (let [hours (int (/ elapsed 60 60))
-          minutes (mod (int (/ elapsed 60)) 60)
-          seconds (mod (int elapsed) 60)]
-      (str (if (pos? hours)
-             (format "%d:%02d" hours minutes)
-             minutes)
-           (format ":%02d" seconds)))))
 
 
 (defn- load-db
@@ -93,18 +45,20 @@
                                       (conf/master (:master opts)))
       (try
         (log/info "Loading dataset tables from" dataset-path)
-        (let [tables (dataset/load-dataset! spark-ctx store-cfg dataset-path)]
-          (pprint tables)
-          ; TODO: construct database root
+        (let [db (dataset/load-dataset! spark-ctx store-cfg dataset-path)
+              elapsed (/ (- (System/currentTimeMillis) start) 1e3)]
+          (log/infof "Built database root %s in %s"
+                     (multihash/base58 (:merkledag.node/id db))
+                     (u/duration-str elapsed))
+          (u/pprint db)
+          ; TODO: register in ref-tracker...
           ,,,)
         (catch Throwable err
           (log/error err "Spark task failed!")))
-      (let [elapsed (/ (- (System/currentTimeMillis) start) 1e3)]
-        ; Pause until user hits enter.
-        (printf "\nDatabase load complete in %s - press RETURN to exit\n"
-                (duration-str elapsed))
-        (flush)
-        (read-line)))))
+      ; Pause until user hits enter.
+      (printf "\nPress RETURN to exit\n")
+      (flush)
+      (read-line))))
 
 
 (defn -main

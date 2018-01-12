@@ -706,7 +706,7 @@
 
 ;; ## Utility Functions
 
-(defn table-stats
+(defn collect-stats
   "Calculate statistics about the structure of the given table."
   [^Table table]
   ; TODO: pending/dirty info?
@@ -814,8 +814,8 @@
                             (first))
                        (as-> [n u]
                          (if (integer? n)
-                           (format "%d%s" n u)
-                           (format "%.2f%s" (double n) u)))))
+                           (format "%d%s" n (or u ""))
+                           (format "%.2f%s" (double n) (or u ""))))))
         byte-str (partial unit-str 1024 [" B" " KB" " MB" " GB" " TB" " PB"])
         count-str (partial unit-str 1000 [nil " K" " M" " B" " T"])
         stats-str (fn [data k f]

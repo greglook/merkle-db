@@ -1,12 +1,12 @@
 (ns movie-lens.main
   (:gen-class)
   (:require
+    [blocks.core :as block]
     [blocks.store.file]
     [clojure.string :as str]
     [clojure.tools.cli :as cli]
     [clojure.tools.logging :as log]
-    ;[merkle-db.connection :as conn]
-    ;[merkle-db.database :as db]
+    [merkledag.core :as mdag]
     ;[merkledag.ref.file :as mrf]
     [movie-lens.dataset :as dataset]
     [movie-lens.util :as u]
@@ -29,6 +29,18 @@
   ["load-db"])
 
 
+; TODO: best way to pass around store connection parameters to the executors?
+(defn- store-constructor
+  "Initialize a MerkleDAG graph store from the given config."
+  [cfg]
+  (fn init
+    []
+    (mdag/init-store
+      :store (block/->store (:blocks-url cfg))
+      :cache {:total-size-limit (:cache-size cfg (* 32 1024 1024))}
+      :types merkle-db.graph/codec-types)))
+
+
 (defn- load-db
   [opts args]
   (when-not (= 1 (count args))
@@ -45,9 +57,12 @@
                                       (conf/master (:master opts)))
       (try
         (log/info "Loading dataset tables from" dataset-path)
-        (let [db (dataset/load-dataset! spark-ctx store-cfg dataset-path)
+        (let [db (dataset/load-dataset!
+                   spark-ctx
+                   (store-constructor store-cfg)
+                   dataset-path)
               elapsed (/ (- (System/currentTimeMillis) start) 1e3)]
-          (log/infof "Built database root %s in %s"
+          (log/infof "Completed database build %s in total time %s"
                      (multihash/base58 (:merkledag.node/id db))
                      (u/duration-str elapsed))
           (u/pprint db)

@@ -51,13 +51,13 @@
 
 
 (defn- load-table!
-  [spark-ctx store-cfg dataset-dir table-cfg]
+  [spark-ctx init-store dataset-dir table-cfg]
   (let [{:keys [name file params header parser]} table-cfg
         csv-path (str dataset-dir file)
         start (System/currentTimeMillis)]
     (log/info "Loading table" name "from" csv-path)
     (let [table (mdbs/build-table!
-                  store-cfg
+                  init-store
                   (assoc params ::table/name name)
                   (csv-rdd spark-ctx csv-path header parser))
           stats (table/collect-stats table)
@@ -72,14 +72,14 @@
 
 
 (defn load-dataset!
-  [spark-ctx store-cfg dataset-dir]
-  (let [store (mdbs/init-store store-cfg)]
+  [spark-ctx init-store dataset-dir]
+  (let [store (init-store)]
     (->>
       tables
       (reduce
         (fn load-table-data
           [db table-cfg]
-          (let [table (load-table! spark-ctx store-cfg dataset-dir table-cfg)]
+          (let [table (load-table! spark-ctx init-store dataset-dir table-cfg)]
             (db/set-table db (:name table-cfg) table)))
         (db/empty-db store {:data/title "MovieLens Dataset"}))
       (db/flush!))))

@@ -20,17 +20,6 @@
     org.apache.spark.rdd.RDD))
 
 
-; TODO: best way to pass around store connection parameters to the executors?
-(defn init-store
-  "Initialize a MerkleDAG graph store from the given config."
-  [cfg]
-  ; TODO: make this more configurable...
-  (mdag/init-store
-    :store (block/->store (:blocks-url cfg))
-    :cache {:total-size-limit (:cache-size cfg (* 32 1024 1024))}
-    :types merkle-db.graph/codec-types))
-
-
 (defn- inject-meta
   "Attach the metadata on `x` by associating it with a special key."
   [x]
@@ -53,15 +42,13 @@
 
 (defn- write-partitions
   "Make a sequence of partitions from the given records."
-  [store-cfg table-params part-idx records]
+  [init-store table-params part-idx records]
   (log/debug "Processing spark partition" part-idx)
-  (let [store (init-store store-cfg)
+  (let [store (init-store)
         parts (->> records
-                   #_(map (sde/fn [(k r)] [k r]))
                    (map (juxt sde/key sde/value))
                    (part/partition-records store table-params)
-                   (map inject-meta)
-                   (vec))]
+                   (mapv inject-meta))]
     (log/debugf "Encoded spark partition %d with %d records into %d table partitions"
                 part-idx
                 (reduce + 0 (map ::record/count parts))
@@ -73,7 +60,7 @@
 (defn- build-table-parts!
   "Constructs a sequence of partitions from the RDD of data maps. This causes
   Spark execution."
-  [store-cfg table-params data]
+  [init-store table-params data]
   (->>
     data
     (spark/map-to-pair
@@ -90,17 +77,17 @@
         [idx record-iter]
         (->> (iterator-seq record-iter)
              ^java.lang.Iterable
-             (write-partitions store-cfg table-params idx)
+             (write-partitions init-store table-params idx)
              (.iterator))))
     (spark/collect)
-    (map extract-meta)))
+    (mapv extract-meta)))
 
 
 (defn build-table!
   "Load the dataset into tables in a merkle-db database."
-  [store-cfg table-params record-rdd]
-  (let [store (init-store store-cfg)
-        parts (build-table-parts! store-cfg table-params record-rdd)
+  [init-store table-params record-rdd]
+  (let [store (init-store)
+        parts (build-table-parts! init-store table-params record-rdd)
         data-root (index/build-tree store table-params parts)]
     (-> table-params
         (assoc :data/type :merkle-db/table

@@ -28,7 +28,13 @@
     (get-in node [::node/data :data/type] "???") \newline
     (some-> node ::node/id multihash/base58 (subs 0 8))
     (when-let [size (::node/size node)]
-      (format " (%d B)" size))))
+      (loop [size size
+             units ["B" "KB" "MB" "GB"]]
+        (if (or (< size 1024) (= 1 (count units)))
+          (if (integer? size)
+            (format " (%d %s)" size (first units))
+            (format " (%.1f %s)" size (first units)))
+          (recur (/ size 1024.0) (next units)))))))
 
 
 (defn node->descriptor

@@ -17,6 +17,8 @@
 
   :aot
   [clojure.tools.logging.impl
+   merkle-db.spark.table-partitioner
+   merkle-db.spark.table-rdd
    movie-lens.main
    sparkling.destructuring
    sparkling.serialization]

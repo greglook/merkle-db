@@ -1,8 +1,7 @@
-(ns merkle-db.spark
-  "Integration code for using MerkleDB with Spark."
+(ns merkle-db.spark.load
+  "Code for loading MerkleDB tables with Spark."
   (:require
     [blocks.core :as block]
-    [clojure.string :as str]
     [clojure.tools.logging :as log]
     [merkle-db.index :as index]
     [merkle-db.key :as key]
@@ -12,12 +11,7 @@
     [merkledag.core :as mdag]
     [merkledag.node :as node]
     [sparkling.core :as spark]
-    [sparkling.destructuring :as sde])
-  (:import
-    (org.apache.spark
-      Partition
-      Partitioner)
-    org.apache.spark.rdd.RDD))
+    [sparkling.destructuring :as sde]))
 
 
 (defn- inject-meta
@@ -37,20 +31,17 @@
     x))
 
 
-
-;; ## Table Construction
-
 (defn- write-partitions
   "Make a sequence of partitions from the given records."
-  [init-store table-params part-idx records]
-  (log/debug "Processing spark partition" part-idx)
+  [init-store table-params #_part-idx records]
+  (log/debug "Processing spark partition" #_part-idx)
   (let [store (init-store)
         parts (->> records
                    (map (juxt sde/key sde/value))
                    (part/partition-records store table-params)
                    (mapv inject-meta))]
     (log/debugf "Encoded spark partition %d with %d records into %d table partitions"
-                part-idx
+                -1 #_part-idx
                 (reduce + 0 (map ::record/count parts))
                 (count parts))
     ; TODO: strip out info not needed to build the index
@@ -72,13 +63,10 @@
                       data)]
           (spark/tuple k r))))
     (spark/sort-by-key)
-    (spark/map-partition-with-index
+    (spark/map-partition
       (fn write-table-parts
-        [idx record-iter]
-        (->> (iterator-seq record-iter)
-             ^java.lang.Iterable
-             (write-partitions init-store table-params idx)
-             (.iterator))))
+        [record-iter]
+        (write-partitions init-store table-params (iterator-seq record-iter))))
     (spark/collect)
     (mapv extract-meta)))
 

@@ -5,7 +5,7 @@
     [clojure.java.io :as io]
     [clojure.tools.logging :as log]
     [merkle-db.database :as db]
-    [merkle-db.spark :as mdbs]
+    [merkle-db.spark.load :as msl]
     [merkle-db.table :as table]
     [merkledag.node :as node]
     [movie-lens.link :as link]
@@ -56,7 +56,7 @@
         csv-path (str dataset-dir file)
         start (System/currentTimeMillis)]
     (log/info "Loading table" name "from" csv-path)
-    (let [table (mdbs/build-table!
+    (let [table (msl/build-table!
                   init-store
                   (assoc params ::table/name name)
                   (csv-rdd spark-ctx csv-path header parser))

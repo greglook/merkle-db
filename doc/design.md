@@ -1,24 +1,23 @@
 # Structural Design
 
 A database is stored as a _merkle tree_, which is a type of
-[merkle DAG](https://github.com/greglook/merkledag-core) structure.
-Each node in the tree is an immutable [content-addressed
-block](https://github.com/greglook/blocks) identified by a
-[cryptographic hash](https://github.com/multiformats/clj-multihash) of its byte
-content. The data in each block is serialized with a _codec_ and wrapped in
-[multicodec headers](https://github.com/multiformats/clj-multicodec) to support
-format versioning and feature evolution.  Initial versions will use the
-[CBOR](https://github.com/greglook/clj-cbor) format for node data and Snappy for
-compression.
+[merkle DAG](https://github.com/greglook/merkledag-core) structure. Each node in
+the tree is an immutable [content-addressed block](https://github.com/greglook/blocks)
+identified by a [cryptographic hash](https://github.com/multiformats/clj-multihash)
+of its byte content. The data in each block is serialized with a _codec_ and
+wrapped in [multistream headers](https://github.com/multiformats/clj-multistream)
+to support format versioning and feature evolution. Initial versions will use
+the [CBOR](https://github.com/greglook/clj-cbor) format for node data and Snappy
+for compression.
 
 ![MerkleDB data structure](images/db-data-structure.jpg)
 
 Within a node, references to other nodes are represented with _merkle links_,
-which combine a multihash target with an optional name and the recursive size
-of the referenced block. These links are themselves part of the hashed
-content of the node, so a change to any part of the tree must propagate up to
-the root node. The entire immutable tree of data at a specific version can
-therefore be identified by the hash of the database root node.
+which combine a multihash target with an optional name and the recursive size of
+the referenced block. These links are themselves part of the hashed content of
+the node, so a change to any part of the tree must propagate up to the root
+node. The entire immutable tree of data at a specific version can therefore be
+identified by the hash of the database root node.
 
 
 ## Database Roots

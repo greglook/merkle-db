@@ -124,7 +124,7 @@
                             (map parse-sections)
                             (map split-body)
                             (map read-form))
-                          (find-code-blocks (slurp "TUTORIAL.md")))]
+                          (find-code-blocks (slurp "doc/tutorial.md")))]
     (when-let [{:keys [pre body form expected post]} (first statements)]
       (if form
         (let [[result err] (try-eval

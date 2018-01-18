@@ -9,8 +9,7 @@
     :extends org.apache.spark.Partitioner
     :constructors {[Object Object] []})
   (:require
-    [merkle-db.key :as key]
-    [merkle-db.record :as record])
+    [merkle-db.key :as key])
   (:import
     merkle_db.spark.KeyPartitioner
     org.apache.spark.Partitioner))
@@ -40,8 +39,6 @@
 
 (defn key-partitioner
   "Construct a new table partitioner from the given key lexicoder and
-  partitions."
-  [lexicoder parts]
-  (KeyPartitioner.
-    lexicoder
-    (mapv ::record/last-key (butlast parts))))
+  partition splits."
+  [lexicoder splits]
+  (KeyPartitioner. lexicoder splits))

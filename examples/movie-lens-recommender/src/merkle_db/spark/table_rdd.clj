@@ -1,5 +1,6 @@
 (ns merkle-db.spark.table-rdd
-  "Integration code for using MerkleDB with Spark."
+  "A merkle-db table is represented in Spark by a pair RDD with deserialized
+  keys and the full record as the value."
   (:gen-class
     :name merkle_db.spark.TableRDD
     :state state
@@ -8,7 +9,8 @@
     :extends org.apache.spark.rdd.RDD
     :constructors {[org.apache.spark.SparkContext
                     clojure.lang.Fn
-                    multihash.core.Multihash]
+                    java.lang.Object
+                    java.lang.Object]
                    [org.apache.spark.SparkContext
                     scala.collection.Seq
                     scala.reflect.ClassTag]})
@@ -18,6 +20,7 @@
     [merkle-db.index :as index]
     [merkle-db.key :as key]
     [merkle-db.partition :as part]
+    [merkle-db.patch :as patch]
     [merkle-db.record :as record]
     [merkle-db.spark.key-partitioner :as partitioner]
     [merkle-db.table :as table]
@@ -37,7 +40,7 @@
 ;; ## Table Partition
 
 (deftype TablePartition
-  [idx node-id read-fn]
+  [idx node-id first-key last-key read-fn]
 
   Partition
 
@@ -50,8 +53,8 @@
 
   (toString
     [this]
-    (format "TablePartition[%d: %s %s]"
-            idx node-id read-fn))
+    (format "TablePartition[%d: %s (%s - %s)]"
+            idx node-id first-key last-key))
 
 
   (equals
@@ -78,31 +81,36 @@
 (defn -init
   [spark-ctx init-store lexicoder primary-key parts]
   (let [rdd-deps (ArrayBuffer.)
-        class-tag (.fromClass ClassManifestFactory$/MODULE$ Object)]
+        class-tag (.fromClass ClassManifestFactory$/MODULE$ scala.Tuple2)]
     [[spark-ctx rdd-deps class-tag]
      {:init-store init-store
       :lexicoder lexicoder
       :primary-key primary-key
-      :parts parts}]))
+      :parts (into []
+                   (map-indexed
+                     (fn [idx part]
+                       (->TablePartition
+                         idx
+                         (::node/id part)
+                         (::record/first-key part)
+                         (::record/last-key part)
+                         (::read-fn part))))
+                   parts)}]))
 
 
 (defn -partitioner
   [this]
   (let [{:keys [lexicoder parts]} (.state this)]
-    (scala.Option/apply (KeyPartitioner. lexicoder parts))))
+    (scala.Option/apply
+      (KeyPartitioner.
+        lexicoder
+        (mapv #(.last-key ^TablePartition %)
+              (butlast parts))))))
 
 
 (defn -partitions
   [this]
-  (let [{:keys [init-store parts]} (.state this)]
-    (->> parts
-         (map-indexed
-           (fn [idx part]
-             (->TablePartition
-               idx
-               (::node/id part)
-               (::read-fn part))))
-         (into-array TablePartition))))
+  (into-array TablePartition (:parts (.state this))))
 
 
 (defn -compute

@@ -62,7 +62,6 @@ the attributes stored in the database root node.
  :merkle-db.database/version Long
  :merkle-db.database/tables {table-name MerkleLink}
  :merkle-db.record/size Long
- :time/updated-at Instant
  ,,,}
 
 ; Additional attributes can be associated:

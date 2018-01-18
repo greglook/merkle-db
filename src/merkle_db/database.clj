@@ -38,8 +38,7 @@
 ;; Database root node.
 (s/def ::node-data
   (s/and
-    (s/keys :req [::tables]
-            :opt [:time/updated-at])
+    (s/keys :req [::tables])
     #(= :merkle-db/database (:data/type %))))
 
 ;; Information from the database version.
@@ -120,7 +119,7 @@
                {:type ::no-table
                 :table-name table-name})))
     ; TODO: validate table spec?
-    ; TODO: set :time/updated-at
+    ; TODO: set updated-at time?
     (set-table db table-name (apply f table args))))
 
 

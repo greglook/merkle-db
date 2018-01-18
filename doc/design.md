@@ -54,7 +54,6 @@ keys.
  :merkle-db.patch/limit Long         ; 100 changes
  :merkle-db.table/data MerkleLink
  :merkle-db.table/patch MerkleLink
- :merkle-db.table/modified-at Instant
  ,,,}
 ```
 

@@ -8,40 +8,16 @@
     [merkle-db.spark.load :as msl]
     [merkle-db.table :as table]
     [merkledag.node :as node]
-    [movie-lens.link :as link]
     [movie-lens.movie :as movie]
     [movie-lens.rating :as rating]
     [movie-lens.tag :as tag]
     [movie-lens.util :as u]
     [multihash.core :as multihash]
-    [sparkling.core :as spark]))
+    [sparkling.core :as spark]
+    [sparkling.destructuring :as sde]))
 
 
-(def tables
-  [{:name "movies"
-    :file "movies.csv"
-    :params movie/table-parameters
-    :header movie/csv-header
-    :parser movie/parse-row}
-   {:name "links"
-    :file "links.csv"
-    :params link/table-parameters
-    :header link/csv-header
-    :parser link/parse-row}
-   {:name "tags"
-    :file "tags.csv"
-    :params tag/table-parameters
-    :header tag/csv-header
-    :parser tag/parse-row}
-   #_
-   {:name "ratings"
-    :file "ratings.csv"
-    :params rating/table-parameters
-    :header rating/csv-header
-    :parser rating/parse-row}])
-
-
-(defn csv-rdd
+(defn- csv-rdd
   "Create an RDD from the given CSV file."
   [spark-ctx csv-file header parser]
   (->> (spark/text-file spark-ctx (str csv-file) 8)
@@ -50,36 +26,86 @@
        (spark/map parser)))
 
 
-(defn- load-table!
-  [spark-ctx init-store dataset-dir table-cfg]
-  (let [{:keys [name file params header parser]} table-cfg
-        csv-path (str dataset-dir file)
-        start (System/currentTimeMillis)]
-    (log/info "Loading table" name "from" csv-path)
-    (let [table (msl/build-table!
+(defn- load-movies-table!
+  [spark-ctx init-store dataset-dir]
+  (let [start (System/currentTimeMillis)
+        movies-path (str dataset-dir "movies.csv")
+        links-path (str dataset-dir "links.csv")]
+    (log/info "Loading movies data from" movies-path "and" links-path)
+    (let [movies-csv (csv-rdd spark-ctx
+                              movies-path
+                              movie/movies-csv-header
+                              movie/parse-movies-row)
+          links-csv (csv-rdd spark-ctx
+                             links-path
+                             movie/links-csv-header
+                             movie/parse-links-row)
+          record-rdd (->> (spark/left-outer-join
+                            (spark/key-by ::movie/id movies-csv)
+                            (spark/key-by ::movie/id links-csv))
+                          (spark/values)
+                          (spark/map
+                            (sde/fn [(movie ?links)]
+                              (merge movie links))))
+          table (msl/build-table!
                   init-store
-                  (assoc params ::table/name name)
-                  (csv-rdd spark-ctx csv-path header parser))
+                  movie/table-parameters
+                  record-rdd)
           stats (table/collect-stats table)
           elapsed (/ (- (System/currentTimeMillis) start) 1e3)]
-      (log/infof "Loaded table %s (%s) in %s"
-                 name (multihash/base58 (::node/id table))
-                 (u/duration-str elapsed))
       ;(u/pprint table)
       (table/print-stats stats)
-      (newline)
+      (log/infof "Loaded movies table data (%s) in %s"
+                 (multihash/base58 (::node/id table))
+                 (u/duration-str elapsed))
+      table)))
+
+
+(defn- load-tags-table!
+  [spark-ctx init-store dataset-dir]
+  (let [start (System/currentTimeMillis)
+        csv-path (str dataset-dir "tags.csv")]
+    (log/info "Loading tags data from" csv-path)
+    (let [table (msl/build-table!
+                  init-store
+                  tag/table-parameters
+                  (csv-rdd spark-ctx csv-path tag/csv-header tag/parse-row))
+          stats (table/collect-stats table)
+          elapsed (/ (- (System/currentTimeMillis) start) 1e3)]
+      (table/print-stats stats)
+      (log/infof "Loaded tags table (%s) in %s"
+                 (multihash/base58 (::node/id table))
+                 (u/duration-str elapsed))
+      table)))
+
+
+(defn- load-ratings-table!
+  [spark-ctx init-store dataset-dir]
+  (let [start (System/currentTimeMillis)
+        csv-path (str dataset-dir "ratings.csv")]
+    (log/info "Loading ratings data from" csv-path)
+    (let [table (msl/build-table!
+                  init-store
+                  tag/table-parameters
+                  (csv-rdd spark-ctx csv-path rating/csv-header rating/parse-row))
+          stats (table/collect-stats table)
+          elapsed (/ (- (System/currentTimeMillis) start) 1e3)]
+      (table/print-stats stats)
+      (log/infof "Loaded ratings table (%s) in %s"
+                 (multihash/base58 (::node/id table))
+                 (u/duration-str elapsed))
       table)))
 
 
 (defn load-dataset!
   [spark-ctx init-store dataset-dir]
-  (let [store (init-store)]
-    (->>
-      tables
-      (reduce
-        (fn load-table-data
-          [db table-cfg]
-          (let [table (load-table! spark-ctx init-store dataset-dir table-cfg)]
-            (db/set-table db (:name table-cfg) table)))
-        (db/empty-db store {:data/title "MovieLens Dataset"}))
+  (let [store (init-store)
+        movies (load-movies-table! spark-ctx init-store dataset-dir)
+        ;ratings (load-ratings-table! spark-ctx init-store dataset-dir)
+        tags (load-tags-table! spark-ctx init-store dataset-dir)]
+    (->
+      (db/empty-db store {:data/title "MovieLens Dataset"})
+      (db/set-table "movies" movies)
+      ;(db/set-table "ratings" ratings)
+      (db/set-table "tags" tags)
       (db/flush!))))

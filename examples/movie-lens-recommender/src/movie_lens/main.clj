@@ -6,6 +6,8 @@
     [clojure.string :as str]
     [clojure.tools.cli :as cli]
     [clojure.tools.logging :as log]
+    [merkle-db.database :as db]
+    [merkle-db.spark.table-rdd :as table-rdd]
     [merkledag.core :as mdag]
     ;[merkledag.ref.file :as mrf]
     [movie-lens.dataset :as dataset]
@@ -26,7 +28,7 @@
 
 
 (def commands
-  ["load-db"])
+  ["load-db" "scan-table"])
 
 
 ; TODO: best way to pass around store connection parameters to the executors?
@@ -76,6 +78,26 @@
       (read-line))))
 
 
+(defn- scan-table
+  [opts args]
+  (let [init-store (store-constructor {:blocks-url "file://data/db/blocks"})
+        db (db/load-database (init-store) {:merkledag.node/id (multihash/decode "QmUE5cFsRSJUKbuz7Csomi27bg1VkPLnzAtGgKCGMJcDbM")})]
+    (spark/with-context spark-ctx (-> (conf/spark-conf)
+                                      (conf/app-name "movie-lens-recommender")
+                                      (conf/master (:master opts)))
+      (try
+        (let [movies-rdd (table-rdd/scan (.sc spark-ctx) init-store (db/get-table db "movies"))]
+          (u/pprint movies-rdd)
+          (u/pprint (vec (.getPartitions movies-rdd)))
+          (prn (spark/count movies-rdd)))
+        (catch Throwable err
+          (log/error err "Spark task failed!")))
+      ; Pause until user hits enter.
+      (printf "\nPress RETURN to exit\n")
+      (flush)
+      (read-line))))
+
+
 (defn -main
   "Main entry point for example."
   [& raw-args]
@@ -96,6 +118,9 @@
     (case command
       "load-db"
         (load-db options (rest arguments))
+
+      "scan-table"
+        (scan-table options (rest arguments))
 
       ; Unknown command
       (binding [*out* *err*]

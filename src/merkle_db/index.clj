@@ -217,7 +217,7 @@
       (mapv first)))
 
 
-(defn find-partitions
+(defn- find-partitions
   "Find all of the partitions in the index subtree by recursively traversing
   the tree nodes, calling `f` on each index node and context to return a list
   of child links to traverse, plus some child context. Returns a lazy sequence
@@ -244,6 +244,28 @@
                        :cxt ctx})))))
 
 
+(defn- find-partitions*
+  "Simplified version of `find-partitions` for searches without context."
+  [store f node]
+  (find-partitions
+    store
+    (fn search
+      [index _]
+      (map vector (f index)))
+    node nil))
+
+
+(defn find-partition-range
+  "Find partitions which cover the range `min-k` to `max-k`."
+  [store node min-k max-k]
+  (find-partitions*
+    store
+    (fn search
+      [index]
+      (children-in-range index min-k max-k))
+    node))
+
+
 (defn read-all
   "Read a lazy sequence of key/map tuples which contain the requested field data
   for every record in the subtree. This function works on both index nodes and
@@ -254,12 +276,7 @@
       (fn read-part
         [[part _]]
         (part/read-all store part fields))
-      (find-partitions
-        store
-        (fn search-children
-          [index _]
-          (map vector (::children index)))
-        node nil))))
+      (find-partitions* store ::children node))))
 
 
 (defn read-batch
@@ -292,12 +309,7 @@
       (fn read-part
         [[part _]]
         (part/read-range store part fields min-k max-k))
-      (find-partitions
-        store
-        (fn search-children
-          [index _]
-          (map vector (children-in-range index min-k max-k)))
-        node nil))))
+      (find-partition-range store node min-k max-k))))
 
 
 

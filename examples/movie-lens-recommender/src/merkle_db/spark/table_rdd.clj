@@ -1,6 +1,12 @@
 (ns merkle-db.spark.table-rdd
-  "A merkle-db table is represented in Spark by a pair RDD with _serialized_
-  keys and the full record as the value."
+  "A `TableRDD` represents the lazy application of a scan over the records in a
+  table. The scan may be bounded by a minimum and maximum key to load just a
+  subset of the records in the table, as well as specifying a subset of the
+  fields to load for each record.
+
+  The RDD effectively has the type `PairRDD[(Key, Map)]`, where the keys are
+  the _serialized_ table keys and the values are fully-decoded records. A
+  table scan RDD does not depend on any parent RDDs, since it is a direct data source."
   (:gen-class
     :name merkle_db.spark.TableRDD
     :state state
@@ -46,73 +52,9 @@
     scala.reflect.ClassManifestFactory$))
 
 
-;; A `TableRDD` represents the lazy application of one of the table read
-;; functions to a particular table. The RDD itself should contain just the
-;; shared state necessary to produce its partitions on demand and - when
-;; combined with one of those partitions - compute the records to load. The
-;; implication here is that the RDD shouldn't cache its partitions, or else
-;; every worker has to pay the cost of serializing them.
-;;
-;; A `TableRDD` effectively has the type `PairRDD[(Key, Map)]`, where the keys
-;; are the _serialized_ keys and the values are fully-decoded records.
-;;
-;; There are three kinds of RDDs we can read:
-;;
-;; ### Keys RDD
-;;
-;; A keys-only RDD can efficiently return just the keys present in a table. The
-;; RDD pair values will be maps containing only the primary key field(s).
-;; Optionally, the data may be restricted by key range:
-;;
-;; - `:min-key`
-;;   Return records with keys equal to or greater than the marker.
-;; - `:max-key`
-;;   Return records with keys equal to or less than the marker.
-;;
-;; ### Scan RDD
-;;
-;; This RDD represents a scan over some or all of the records in the table.
-;;
-;; - `:fields`
-;;   Only return data for the selected set of fields. If provided, only
-;;   records with data for one or more of the fields are returned, otherwise
-;;   all fields and records (including empty ones) are returned.
-;; - `:min-key`
-;;   Return records with keys equal to or greater than the marker.
-;; - `:max-key`
-;;   Return records with keys equal to or less than the marker.
-;;
-;; A table scan RDD does not depend on any parent RDDs; the RDD itself must
-;; contain any pending (unflushed) changes and a link to the table's patch
-;; tablet, if any. The RDD also holds the graph store constructor and a link to
-;; the table's data tree root.
-;;
-;; When the partitions for the table are requested, the RDD should load the
-;; data tree to discern which partitions fall within the min/max key bounds.
-;; Same for the partitioner; it might be worthwhile to cache the partition
-;; splits if the partitioner is called repeatedly.
-;;
-;; Computing the records in a partition requires the node-id of the partition;
-;; the key boundaries and fields should be available from the RDD.
-;;
-;; ### Read RDD
-;;
-;; Finally, a read RDD looks for specific records in the table. The keys in
-;; each pair are shuffled using the partitioner from the table, then a worker
-;; can compute the result by:
-;; - loading the partition node by id
-;; - iterate over keys from parent rdd partition, filter using membership bloom filter
-;; - sort remaining keys and do a bulk-binary-search in the needed tablets
-;; - return sorted iterator of found records
-;;
-;; - `:fields`
-;;   Only return data for the selected set of fields. If provided, only
-;;   records with data for one or more of the fields are returned, otherwise
-;;   all fields and records are returned.
-
-
 ;; ## Table Partition
 
+; TODO: should this be Serializable?
 (deftype TablePartition
   [idx node-id]
 
@@ -266,7 +208,6 @@
           (if (or min-k max-k)
             (part/read-range store part fields min-k max-k)
             (part/read-all store part fields))))
-      ;^Iterable
       (map (fn decode-record-tuple
              [entry]
              (spark/tuple
@@ -286,14 +227,15 @@
    (let [lexicoder (@#'table/table-lexicoder table)
          min-k (some->> (:min-key scan-opts) (key/encode lexicoder))
          max-k (some->> (:max-key scan-opts) (key/encode lexicoder))]
-     (JavaPairRDD/fromRDD
-       (TableRDD.
-         (.sc ^JavaSparkContext spark-ctx)
-         init-store
-         table
-         (assoc scan-opts :min-key min-k, :max-key max-k))
-       (class-tag Key)
-       (class-tag Object)))))
+     (-> (TableRDD.
+           (.sc ^JavaSparkContext spark-ctx)
+           init-store
+           table
+           (assoc scan-opts :min-key min-k, :max-key max-k))
+         (JavaPairRDD/fromRDD
+           (class-tag Key)
+           (class-tag Object))
+         (.setName (str "TableRDD: " (::table/name table "??")))))))
 
 
 ; XXX: for assigning keys to records in a batch read or batch update, we need

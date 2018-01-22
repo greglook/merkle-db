@@ -109,14 +109,17 @@
                                  (map (juxt ::movie/id identity))
                                  (table/read movies (map first top-10)))]
           (println "Most-tagged movies in dataset:")
+          (newline)
+          (println "Rank  Tags  Movie (Year)")
+          (println "----  ----  ---------------------")
           (dotimes [i 10]
             (let [[movie-id tag-count] (nth top-10 i)
                   movie (get movie-lookup movie-id)]
-              (printf "%2d: %4d  %s (%s)\n"
+              (printf "%3d   %4d  %s (%s)\n"
                       (inc i)
                       tag-count
                       (::movie/title movie)
-                      (::movie/year movie "?")))))
+                      (::movie/year movie "unknown")))))
         (catch Throwable err
           (log/error err "Spark task failed!")))
       ; Pause until user hits enter.

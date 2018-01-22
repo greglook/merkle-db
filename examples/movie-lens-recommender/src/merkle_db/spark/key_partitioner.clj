@@ -27,6 +27,7 @@
 
 (defn -getPartition
   [this key-value]
+  ; TODO: should this deal with lexicoder?
   (let [{:keys [lexicoder splits]} (.state this)
         record-key (key/encode lexicoder key-value)]
     (loop [idx 0]

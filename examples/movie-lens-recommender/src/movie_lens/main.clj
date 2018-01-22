@@ -8,13 +8,17 @@
     [clojure.tools.logging :as log]
     [merkle-db.database :as db]
     [merkle-db.spark.table-rdd :as table-rdd]
+    [merkle-db.table :as table]
     [merkledag.core :as mdag]
     ;[merkledag.ref.file :as mrf]
     [movie-lens.dataset :as dataset]
+    [movie-lens.movie :as movie]
+    [movie-lens.tag :as tag]
     [movie-lens.util :as u]
     [multihash.core :as multihash]
     [sparkling.conf :as conf]
-    [sparkling.core :as spark]))
+    [sparkling.core :as spark]
+    [sparkling.destructuring :as sde]))
 
 
 (def cli-options
@@ -28,7 +32,7 @@
 
 
 (def commands
-  ["load-db" "scan-table"])
+  ["load-db" "most-tagged"])
 
 
 ; TODO: best way to pass around store connection parameters to the executors?
@@ -78,18 +82,41 @@
       (read-line))))
 
 
-(defn- scan-table
+(defn- most-tagged
+  "Calculate the most-tagged movies."
   [opts args]
-  (let [init-store (store-constructor {:blocks-url "file://data/db/blocks"})
-        db (db/load-database (init-store) {:merkledag.node/id (multihash/decode "QmUE5cFsRSJUKbuz7Csomi27bg1VkPLnzAtGgKCGMJcDbM")})]
+  (let [start (System/currentTimeMillis)
+        store-cfg {:blocks-url (:blocks opts)}
+        init-store (store-constructor store-cfg)
+        db-root-id (multihash/decode (first args))
+        db (db/load-database (init-store) {:merkledag.node/id db-root-id})]
+    (log/info "Loaded database root node")
+    (u/pprint db)
     (spark/with-context spark-ctx (-> (conf/spark-conf)
                                       (conf/app-name "movie-lens-recommender")
                                       (conf/master (:master opts)))
       (try
-        (let [movies-rdd (table-rdd/scan (.sc spark-ctx) init-store (db/get-table db "movies"))]
-          (u/pprint movies-rdd)
-          (u/pprint (vec (.getPartitions movies-rdd)))
-          (prn (spark/count movies-rdd)))
+        (let [movies (db/get-table db "movies")
+              tags (db/get-table db "tags")
+              top-10 (->> (table-rdd/scan spark-ctx init-store tags)
+                          (spark/values)
+                          (spark/key-by ::movie/id)
+                          (spark/count-by-key)
+                          (sort-by val (comp - compare))
+                          (take 10)
+                          (vec))
+              movie-lookup (into {}
+                                 (map (juxt ::movie/id identity))
+                                 (table/read movies (map first top-10)))]
+          (println "Most-tagged movies in dataset:")
+          (dotimes [i 10]
+            (let [[movie-id tag-count] (nth top-10 i)
+                  movie (get movie-lookup movie-id)]
+              (printf "%2d: %4d  %s (%s)\n"
+                      (inc i)
+                      tag-count
+                      (::movie/title movie)
+                      (::movie/year movie "?")))))
         (catch Throwable err
           (log/error err "Spark task failed!")))
       ; Pause until user hits enter.
@@ -119,8 +146,8 @@
       "load-db"
         (load-db options (rest arguments))
 
-      "scan-table"
-        (scan-table options (rest arguments))
+      "most-tagged"
+        (most-tagged options (rest arguments))
 
       ; Unknown command
       (binding [*out* *err*]

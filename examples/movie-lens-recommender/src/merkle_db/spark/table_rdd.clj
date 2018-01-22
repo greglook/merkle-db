@@ -9,7 +9,7 @@
     :extends org.apache.spark.rdd.RDD
     :constructors {[org.apache.spark.SparkContext
                     clojure.lang.Fn
-                    java.lang.Object
+                    java.lang.Object  ; merkle_db.table.Table ?
                     java.lang.Object]
                    [org.apache.spark.SparkContext
                     scala.collection.Seq
@@ -31,12 +31,17 @@
     [sparkling.destructuring :as sde])
   (:import
     clojure.lang.ILookup
+    merkle_db.key.Key
     (merkle_db.spark
       KeyPartitioner
       TableRDD)
     (org.apache.spark
       Partition
       TaskContext)
+    (org.apache.spark.api.java
+      JavaPairRDD
+      JavaSparkContext)
+    scala.collection.JavaConversions
     scala.collection.mutable.ArrayBuffer
     scala.reflect.ClassManifestFactory$))
 
@@ -169,6 +174,12 @@
 
 ;; ## Partition Scan
 
+(defn- class-tag
+  "Generates a Scala `ClassTag` for the given class."
+  [^Class cls]
+  (.fromClass ClassManifestFactory$/MODULE$ cls))
+
+
 (defn- load-partitions
   [this]
   (let [{:keys [init-store data-link scan-opts]} (.state this)
@@ -205,16 +216,14 @@
 
 (defn -init
   [spark-ctx init-store table scan-opts]
-  (let [rdd-deps (ArrayBuffer.)
-        class-tag (.fromClass ClassManifestFactory$/MODULE$ scala.Tuple2)]
-    [[spark-ctx rdd-deps class-tag]
-     {:init-store init-store
-      :lexicoder (::key/lexicoder table :bytes)
-      :primary-key (::table/primary-key table)
-      :data-link (::table/data table)
-      :patch-link (::table/patch table)
-      :pending (.pending table)
-      :scan-opts scan-opts}]))
+  [[spark-ctx (ArrayBuffer.) (class-tag scala.Tuple2)]
+   {:init-store init-store
+    :lexicoder (::key/lexicoder table :bytes)
+    :primary-key (::table/primary-key table)
+    :data-link (::table/data table)
+    :patch-link (::table/patch table)
+    :pending (.pending table)
+    :scan-opts scan-opts}])
 
 
 (defn -partitioner
@@ -228,6 +237,11 @@
 
 (defn -getPartitions
   [this]
+  ; - if table has no pending changes, no patch tablet, and no data link,
+  ;   return an empty rdd
+  ; - if table has only pending changes and/or a patch link, emit an RDD with one
+  ;   partition to represent the merged patch data
+  ; - otherwise, determine which partitions must be loaded to satisfy the scan
   (->>
     (load-partitions this)
     (map-indexed #(->TablePartition %1 (::node/id (meta %2))))
@@ -259,43 +273,11 @@
                (first entry)
                (record/decode-entry lexicoder primary-key entry))))
       (.iterator)
-      (scala.collection.JavaConversions/asScalaIterator))))
+      (JavaConversions/asScalaIterator))))
 
 
 
 ;; ## RDD Construction
-
-; TODO: implement constructors
-
-; table/scan
-; - if table has no pending changes, no patch tablet, and no data link,
-;   return an empty rdd
-; - if table has only pending changes and/or a patch link, emit an RDD with one
-;   partition to represent the merged patch data
-; - otherwise, determine which partitions must be loaded to satisfy the scan
-; - on load, each compute must:
-;   - load-part-changes
-;     - contain the pending table changes
-;     - load the patch tablet
-;     - merge and filter changes to just the relevant partition range
-;   - read data from the partition tablets
-;   - merge changes and partition data and return record sequence
-
-
-; table/read
-; - if table has no pending changes, no patch tablet, and no data link,
-;   return an empty rdd
-; - if table has only pending changes and/or a patch link, emit an RDD with one
-;   partition to represent the filtered patch data
-; - otherwise, determine which partitions must be loaded to satisfy the read
-; - on load, each partition must:
-;   - load-part-changes
-;     - contain the pending table changes
-;     - load the patch tablet
-;     - merge and filter changes to just the relevant partition range
-;   - read data from the partition tablets (filtering out keys with bloom filter)
-;   - merge changes and partition data and return record sequence
-
 
 (defn scan
   ([spark-ctx init-store table]
@@ -304,11 +286,14 @@
    (let [lexicoder (@#'table/table-lexicoder table)
          min-k (some->> (:min-key scan-opts) (key/encode lexicoder))
          max-k (some->> (:max-key scan-opts) (key/encode lexicoder))]
-     (TableRDD.
-       spark-ctx
-       init-store
-       table
-       (assoc scan-opts :min-key min-k, :max-key max-k)))))
+     (JavaPairRDD/fromRDD
+       (TableRDD.
+         (.sc ^JavaSparkContext spark-ctx)
+         init-store
+         table
+         (assoc scan-opts :min-key min-k, :max-key max-k))
+       (class-tag Key)
+       (class-tag Object)))))
 
 
 ; XXX: for assigning keys to records in a batch read or batch update, we need

@@ -16,7 +16,7 @@
 (s/def ::record
   (s/keys :req [::user/id
                 ::movie/id
-                ::score]
+                ::value]
           :opt [::time]))
 
 

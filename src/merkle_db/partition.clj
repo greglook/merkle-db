@@ -121,53 +121,44 @@
         (::node/data)))))
 
 
-; TODO: copy of this method that uses futures moved to 'load' ns?
 (defn partition-records
   "Divides the given (possibly lazy) sequence of records into one or more
   partitions. Returns a sequence of node data for the persisted partitions."
   [store params records]
   (let [part-size (max-limit params)
         threshold (+ part-size (min-limit params))
-        save-part! (fn [rs]
-                     (future
-                       ; TODO: callback on partition creation?
-                       ;(do (printf "~") (flush))
-                       (let [start (System/nanoTime)
-                             part (from-records store params rs)
-                             elapsed (/ (- (System/nanoTime) start) 1e6)]
-                         #_#_
-                         (printf "%d records => part in %.2f ms\n"
-                                 (count rs) elapsed)
-                         (flush)
-                         part)))]
+        save-part! (fn save-part!
+                     [rs]
+                     ; TODO: callback on partition creation?
+                     (let [start (System/nanoTime)
+                           part (from-records store params rs)
+                           elapsed (/ (- (System/nanoTime) start) 1e6)]
+                       #_#_
+                       (printf "%d records => part in %.2f ms\n"
+                               (count rs) elapsed)
+                       (flush)
+                       part))]
     (loop [partitions []
-           futures []
            pending []
            records (patch/remove-tombstones records)]
       (cond
-        ; Futures are full, so block.
-        (< 6 (count futures))
-          (recur (conj partitions @(first futures))
-                 (vec (rest futures))
-                 pending
-                 records)
         ; Enough pending records to serialize a full partition.
         (<= threshold (count pending))
           (let [[output remnant] (split-at part-size pending)
-                pending-part (save-part! output)]
-            (recur partitions (conj futures pending-part) (vec remnant) records))
+                part (save-part! output)]
+            (recur (conj partitions part) (vec remnant) records))
         ; Pull next record into pending.
         (seq records)
-          (recur partitions futures (conj pending (first records)) (next records))
+          (recur partitions (conj pending (first records)) (next records))
         ; No more records, but too many pending to fit in one partition.
         (< part-size (count pending))
           (let [[output remnant] (split-at (int (Math/ceil (/ (count pending) 2))) pending)
-                pending-part (save-part! output)]
-            (recur partitions (conj futures pending-part) (vec remnant) nil))
+                part (save-part! output)]
+            (recur (conj partitions part) (vec remnant) nil))
         ; Emit one final partition.
         :else
           (let [part (save-part! pending)]
-            (concat partitions (map deref (conj futures part))))))))
+            (conj partitions part))))))
 
 
 

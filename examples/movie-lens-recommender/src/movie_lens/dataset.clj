@@ -90,7 +90,7 @@
     (let [table (msl/build-table!
                   init-store
                   rating/table-parameters
-                  (csv-rdd spark-ctx 32
+                  (csv-rdd spark-ctx 64
                            csv-path
                            rating/csv-header
                            rating/parse-row))

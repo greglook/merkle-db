@@ -135,10 +135,15 @@
                    (fn merge-fn
                      [[rcount1 rsum1] [rcount2 rsum2]]
                      [(+ rcount1 rcount2) (+ rsum1 rsum2)]))
+                 (spark/filter
+                   (sde/fn [(movie-id [rcount rsum])]
+                     (<= 100 rcount)))
                  (spark/map-values
-                   (sde/fn [(rcount rsum)] (/ rsum rcount)))
-                 ; OPTIMIZE: could do partition-level sorting and top-n here
+                   (fn avg
+                     [[rcount rsum]]
+                     (/ rsum rcount)))
                  (spark/collect)
+                 (map (juxt sde/key sde/value))
                  (sort-by second (comp - compare))
                  (take n)
                  (vec))

@@ -54,7 +54,6 @@
 
 ;; ## Table Partition
 
-; TODO: should this be Serializable?
 (deftype TablePartition
   [idx node-id]
 
@@ -220,22 +219,32 @@
 
 ;; ## RDD Construction
 
+(defmacro with-op-scope
+  [spark-ctx scope-name & body]
+  `(.withScope org.apache.spark.rdd.RDDOperationScope$/MODULE$
+     ~spark-ctx ~scope-name true false
+     (proxy [scala.Function0] []
+       (apply [] ~@body))))
+
+
 (defn scan
   ([spark-ctx init-store table]
    (scan spark-ctx init-store table nil))
   ([spark-ctx init-store table scan-opts]
    (let [lexicoder (@#'table/table-lexicoder table)
          min-k (some->> (:min-key scan-opts) (key/encode lexicoder))
-         max-k (some->> (:max-key scan-opts) (key/encode lexicoder))]
-     (-> (TableRDD.
-           (.sc ^JavaSparkContext spark-ctx)
-           init-store
-           table
-           (assoc scan-opts :min-key min-k, :max-key max-k))
-         (JavaPairRDD/fromRDD
-           (class-tag Key)
-           (class-tag Object))
-         (.setName (str "TableRDD: " (::table/name table "??")))))))
+         max-k (some->> (:max-key scan-opts) (key/encode lexicoder))
+         sc (.sc ^JavaSparkContext spark-ctx)]
+     (with-op-scope sc "merkle-db.table/scan"
+       (-> (TableRDD.
+             (.sc ^JavaSparkContext spark-ctx)
+             init-store
+             table
+             (assoc scan-opts :min-key min-k, :max-key max-k))
+           (JavaPairRDD/fromRDD
+             (class-tag Key)
+             (class-tag Object))
+           (.setName (str "TableRDD: " (::table/name table "??"))))))))
 
 
 ; XXX: for assigning keys to records in a batch read or batch update, we need

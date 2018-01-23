@@ -10,9 +10,9 @@
     [merkle-db.spark.table-rdd :as table-rdd]
     [merkle-db.table :as table]
     [merkledag.core :as mdag]
-    ;[merkledag.ref.file :as mrf]
     [movie-lens.dataset :as dataset]
     [movie-lens.movie :as movie]
+    [movie-lens.rating :as rating]
     [movie-lens.tag :as tag]
     [movie-lens.util :as u]
     [multihash.core :as multihash]
@@ -32,7 +32,7 @@
 
 
 (def commands
-  ["load-db" "most-tagged"])
+  ["load-db" "most-tagged" "best-rated"])
 
 
 ; TODO: best way to pass around store connection parameters to the executors?
@@ -42,90 +42,121 @@
   (fn init
     []
     (mdag/init-store
+      :encoding [:mdag :gzip :edn]
       :store (block/->store (:blocks-url cfg))
       :cache {:total-size-limit (:cache-size cfg (* 32 1024 1024))}
       :types merkle-db.graph/codec-types)))
 
 
 (defn- load-db
-  [opts args]
+  [spark-ctx opts args]
   (when-not (= 1 (count args))
     (binding [*out* *err*]
-      (println "load-db takes exactly one argument, the path to the dataset directory")
+      (println "Usage: load-db <dataset-dir>")
       (System/exit 3)))
   (let [dataset-path (if (str/ends-with? (first args) "/")
                        (first args)
-                       (str (first args) "/"))
-        store-cfg {:blocks-url (:blocks opts)}
-        start (System/currentTimeMillis)]
-    (spark/with-context spark-ctx (-> (conf/spark-conf)
-                                      (conf/app-name "movie-lens-recommender")
-                                      (conf/master (:master opts)))
-      (try
-        (log/info "Loading dataset tables from" dataset-path)
-        (let [db (dataset/load-dataset!
-                   spark-ctx
-                   (store-constructor store-cfg)
-                   dataset-path)
-              elapsed (/ (- (System/currentTimeMillis) start) 1e3)]
-          (log/infof "Completed database build %s in total time %s"
-                     (multihash/base58 (:merkledag.node/id db))
-                     (u/duration-str elapsed))
-          (u/pprint db)
-          ; TODO: register in ref-tracker...
-          ,,,)
-        (catch Throwable err
-          (log/error err "Spark task failed!")))
-      ; Pause until user hits enter.
-      (printf "\nPress RETURN to exit\n")
-      (flush)
-      (read-line))))
+                       (str (first args) "/"))]
+    (log/info "Loading dataset tables from" dataset-path)
+    (let [db (dataset/load-dataset! spark-ctx (:init-store opts) dataset-path)]
+      (log/info "Loaded database tables into root node"
+                (multihash/base58 (:merkledag.node/id db)))
+      (u/pprint db))))
 
 
 (defn- most-tagged
   "Calculate the most-tagged movies."
-  [opts args]
+  [spark-ctx opts args]
+  (when (or (empty? args) (< 2 (count args)))
+    (binding [*out* *err*]
+      (println "Usage: most-tagged <db-root-id> [n]")
+      (System/exit 3)))
   (let [start (System/currentTimeMillis)
-        store-cfg {:blocks-url (:blocks opts)}
-        init-store (store-constructor store-cfg)
+        init-store (:init-store opts)
         db-root-id (multihash/decode (first args))
-        db (db/load-database (init-store) {:merkledag.node/id db-root-id})]
-    (log/info "Loaded database root node")
-    (u/pprint db)
-    (spark/with-context spark-ctx (-> (conf/spark-conf)
-                                      (conf/app-name "movie-lens-recommender")
-                                      (conf/master (:master opts)))
-      (try
-        (let [movies (db/get-table db "movies")
-              tags (db/get-table db "tags")
-              top-10 (->> (table-rdd/scan spark-ctx init-store tags)
-                          (spark/values)
-                          (spark/key-by ::movie/id)
-                          (spark/count-by-key)
-                          (sort-by val (comp - compare))
-                          (take 10)
-                          (vec))
-              movie-lookup (into {}
-                                 (map (juxt ::movie/id identity))
-                                 (table/read movies (map first top-10)))]
-          (println "Most-tagged movies in dataset:")
-          (newline)
-          (println "Rank  Tags  Movie (Year)")
-          (println "----  ----  ---------------------")
-          (dotimes [i 10]
-            (let [[movie-id tag-count] (nth top-10 i)
-                  movie (get movie-lookup movie-id)]
-              (printf "%3d   %4d  %s (%s)\n"
-                      (inc i)
-                      tag-count
-                      (::movie/title movie)
-                      (::movie/year movie "unknown")))))
-        (catch Throwable err
-          (log/error err "Spark task failed!")))
-      ; Pause until user hits enter.
-      (printf "\nPress RETURN to exit\n")
-      (flush)
-      (read-line))))
+        n (Integer/parseInt (or (second args) "10"))
+        db (db/load-database (init-store) {:merkledag.node/id db-root-id})
+        ;_ (log/info "Loaded database root node")
+        ;_ (u/pprint db)
+        movies (db/get-table db "movies")
+        tags (db/get-table db "tags")
+        top (->> (table-rdd/scan spark-ctx init-store tags)
+                 (spark/values)
+                 (spark/key-by ::movie/id)
+                 (spark/count-by-key)
+                 (sort-by val (comp - compare))
+                 (take n)
+                 (vec))
+        movie-lookup (into {}
+                           (map (juxt ::movie/id identity))
+                           (table/read movies (map first top)))]
+    (println "Most-tagged movies in dataset:")
+    (newline)
+    (println "Rank  Tags  Movie (Year)")
+    (println "----  ----  ---------------------")
+    (dotimes [i (min n (count top))]
+      (let [[movie-id tag-count] (nth top i)
+            movie (get movie-lookup movie-id)]
+        (printf "%3d   %4d  %s (%s)\n"
+                (inc i)
+                tag-count
+                (::movie/title movie)
+                (::movie/year movie "unknown"))))))
+
+
+(defn- best-rated
+  "Calculate the best-rated movies."
+  [spark-ctx opts args]
+  (when (or (empty? args) (< 2 (count args)))
+    (binding [*out* *err*]
+      (println "Usage: best-rated <db-root-id> [n]")
+      (System/exit 3)))
+  (let [start (System/currentTimeMillis)
+        init-store (:init-store opts)
+        db-root-id (multihash/decode (first args))
+        n (Integer/parseInt (or (second args) "10"))
+        db (db/load-database (init-store) {:merkledag.node/id db-root-id})
+        movies (db/get-table db "movies")
+        ratings (db/get-table db "ratings")
+        top (->> (table-rdd/scan spark-ctx init-store ratings)
+                 (spark/values)
+                 (spark/key-by ::movie/id)
+                 (spark/combine-by-key
+                   (fn seq-fn
+                     [rating-record]
+                     (if-let [score (::rating/score rating-record)]
+                       [1 score]
+                       [0 0.0]))
+                   (fn conj-fn
+                     [[rcount rsum] rating-record]
+                     (if-let [score (::rating/score rating-record)]
+                       [(inc rcount) (+ rsum score)]
+                       [rcount rsum]))
+                   (fn merge-fn
+                     [[rcount1 rsum1] [rcount2 rsum2]]
+                     [(+ rcount1 rcount2) (+ rsum1 rsum2)]))
+                 (spark/map-values
+                   (sde/fn [(rcount rsum)] (/ rsum rcount)))
+                 ; OPTIMIZE: could do partition-level sorting and top-n here
+                 (spark/collect)
+                 (sort-by second (comp - compare))
+                 (take n)
+                 (vec))
+        movie-lookup (into {}
+                           (map (juxt ::movie/id identity))
+                           (table/read movies (map first top)))]
+    (println "Best-rated movies in dataset:")
+    (newline)
+    (println "Rank  Rating  Movie (Year)")
+    (println "----  ------  ---------------------")
+    (dotimes [i n]
+      (let [[movie-id avg-rating] (nth top i)
+            movie (get movie-lookup movie-id)]
+        (printf "%3d   %6.3f  %s (%s)\n"
+                (inc i)
+                (double avg-rating)
+                (::movie/title movie)
+                (::movie/year movie "unknown"))))))
 
 
 (defn -main
@@ -145,14 +176,25 @@
       (println summary)
       (flush)
       (System/exit 0))
-    (case command
-      "load-db"
-        (load-db options (rest arguments))
-
-      "most-tagged"
-        (most-tagged options (rest arguments))
-
-      ; Unknown command
-      (binding [*out* *err*]
-        (println "The argument" (pr-str command) "is not a supported command")
-        (System/exit 2)))))
+    (let [command-fn (case command
+                       "load-db" load-db
+                       "most-tagged" most-tagged
+                       "best-rated" best-rated
+                       (binding [*out* *err*]
+                         (println "The argument" (pr-str command)
+                                  "is not a supported command")
+                         (System/exit 2)))
+          options (assoc options :init-store (store-constructor {:blocks-url (:blocks options)}))
+          start (System/currentTimeMillis)
+          elapsed (delay (/ (- (System/currentTimeMillis) start) 1e3))]
+      (spark/with-context spark-ctx (-> (conf/spark-conf)
+                                        (conf/app-name "movie-lens-recommender")
+                                        (conf/master (:master options)))
+        (try
+          (command-fn spark-ctx options (rest arguments))
+          (catch Throwable err
+            (log/error err "Command failed!")))
+        (println "\nCommand finished in" (u/duration-str @elapsed))
+        (println "Press RETURN to exit")
+        (flush)
+        (read-line)))))

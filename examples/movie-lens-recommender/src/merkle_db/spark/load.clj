@@ -33,15 +33,13 @@
 
 (defn- write-partitions
   "Make a sequence of partitions from the given records."
-  [init-store table-params #_part-idx records]
-  (log/debug "Processing spark partition" #_part-idx)
+  [init-store table-params records]
   (let [store (init-store)
         parts (->> records
                    (map (juxt sde/key sde/value))
                    (part/partition-records store table-params)
                    (mapv inject-meta))]
-    (log/debugf "Encoded spark partition %d with %d records into %d table partitions"
-                -1 #_part-idx
+    (log/debugf "Encoded spark partition with %d records into %d table partitions"
                 (reduce + 0 (map ::record/count parts))
                 (count parts))
     ; TODO: strip out info not needed to build the index

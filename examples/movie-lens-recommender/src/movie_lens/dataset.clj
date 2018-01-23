@@ -19,8 +19,8 @@
 
 (defn- csv-rdd
   "Create an RDD from the given CSV file."
-  [spark-ctx csv-file header parser]
-  (->> (spark/text-file spark-ctx (str csv-file) 8)
+  [spark-ctx parts csv-file header parser]
+  (->> (spark/text-file spark-ctx (str csv-file) parts)
        (spark/filter (fn remove-header [line] (not= line header)))
        (spark/flat-map csv/read-csv)
        (spark/map parser)))
@@ -32,11 +32,11 @@
         movies-path (str dataset-dir "movies.csv")
         links-path (str dataset-dir "links.csv")]
     (log/info "Loading movies data from" movies-path "and" links-path)
-    (let [movies-csv (csv-rdd spark-ctx
+    (let [movies-csv (csv-rdd spark-ctx 4
                               movies-path
                               movie/movies-csv-header
                               movie/parse-movies-row)
-          links-csv (csv-rdd spark-ctx
+          links-csv (csv-rdd spark-ctx 4
                              links-path
                              movie/links-csv-header
                              movie/parse-links-row)
@@ -69,7 +69,10 @@
     (let [table (msl/build-table!
                   init-store
                   tag/table-parameters
-                  (csv-rdd spark-ctx csv-path tag/csv-header tag/parse-row))
+                  (csv-rdd spark-ctx 8
+                           csv-path
+                           tag/csv-header
+                           tag/parse-row))
           stats (table/collect-stats table)
           elapsed (/ (- (System/currentTimeMillis) start) 1e3)]
       (table/print-stats stats)
@@ -86,8 +89,11 @@
     (log/info "Loading ratings data from" csv-path)
     (let [table (msl/build-table!
                   init-store
-                  tag/table-parameters
-                  (csv-rdd spark-ctx csv-path rating/csv-header rating/parse-row))
+                  rating/table-parameters
+                  (csv-rdd spark-ctx 32
+                           csv-path
+                           rating/csv-header
+                           rating/parse-row))
           stats (table/collect-stats table)
           elapsed (/ (- (System/currentTimeMillis) start) 1e3)]
       (table/print-stats stats)
@@ -101,11 +107,11 @@
   [spark-ctx init-store dataset-dir]
   (let [store (init-store)
         movies (load-movies-table! spark-ctx init-store dataset-dir)
-        ;ratings (load-ratings-table! spark-ctx init-store dataset-dir)
-        tags (load-tags-table! spark-ctx init-store dataset-dir)]
+        tags (load-tags-table! spark-ctx init-store dataset-dir)
+        ratings (load-ratings-table! spark-ctx init-store dataset-dir)]
     (->
       (db/empty-db store {:data/title "MovieLens Dataset"})
       (db/set-table "movies" movies)
-      ;(db/set-table "ratings" ratings)
+      (db/set-table "ratings" ratings)
       (db/set-table "tags" tags)
       (db/flush!))))

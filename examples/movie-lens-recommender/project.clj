@@ -15,6 +15,7 @@
    [ch.qos.logback/logback-classic "1.2.3"]]
 
   :main movie-lens.main
+  :jvm-opts ["-Xms1g" "-Xmx8g" "-Dspark.driver.memory=6g"]
 
   :aot
   [clojure.tools.logging.impl

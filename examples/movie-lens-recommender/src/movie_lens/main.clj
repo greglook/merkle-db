@@ -198,7 +198,9 @@
         (try
           (command-fn spark-ctx options (rest arguments))
           (catch Throwable err
-            (log/error err "Command failed!")))
+            (log/error err "Command failed!")
+            (when-let [err (ex-data err)]
+              (u/pprint err))))
         (println "\nCommand finished in" (u/duration-str @elapsed))
         (println "Press RETURN to exit")
         (flush)

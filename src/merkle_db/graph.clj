@@ -19,18 +19,22 @@
   "Map of codec type information that can be used with MerkleDAG stores."
   {'inst
    {:description "An instant in time."
-    :reader #(Instant/parse ^String %)
-    :writers {Instant #(.format DateTimeFormatter/ISO_INSTANT ^Instant %)}}
+    :edn/reader #(Instant/parse ^String %)
+    :edn/writers {Instant #(.format DateTimeFormatter/ISO_INSTANT ^Instant %)}}
 
    'merkle-db/key
    {:description "Record key byte data."
     :reader key/parse
-    :writers {Key key/hex}}
+    :writers {Key key/hex}
+    :cbor/tag 567
+    :cbor/reader key/create
+    :cbor/writers {Key key/get-bytes}}
 
    'merkle-db/bloom-filter
    {:description "Probablistic Bloom filter."
     :reader bloom/form->filter
-    :writers {BloomFilter bloom/filter->form}}})
+    :writers {BloomFilter bloom/filter->form}
+    :cbor/tag 568}})
 
 
 

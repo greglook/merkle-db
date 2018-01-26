@@ -630,7 +630,7 @@
     table))
 
 
-(defn -dirty?
+(defn- -dirty?
   "Internal `dirty?` implementation."
   [^Table table]
   (.dirty table))

@@ -1,7 +1,11 @@
 (ns merkle-db.connection
-  "Connections are stateful components which manage database locking and
-  updating. A connection is backed by a node store, a ref tracker, and a lock
-  manager."
+  "Connections are stateful components which manage database identity and
+  versioning. A connection is generally backed by a merkledag node store and a
+  ref tracker.
+
+  More advanced connection implementations may optionally implement additional
+  logic controlling updates, such as locking, conflict resolution, and
+  authorization rules."
   (:require
     [clojure.string :as str]
     [merkle-db.database :as db]
@@ -60,8 +64,7 @@
     [conn db-name opts]
     "Open a database for use.
 
-    - `:version` open a specific version of the database
-    - `:lock` acquire a lock for updating the database")
+    - `:version` open a specific version of the database")
 
   (commit!
     [conn db]
@@ -69,8 +72,7 @@
     "Ensure all data has been written to the backing block store and update the
     database's root value in the ref manager.
 
-    - `:force` commit even if the versions don't match
-    - `:unlock` release the database lock, if held"))
+    - `:force` commit even if the versions don't match"))
 
 
 
@@ -137,7 +139,6 @@
 (defn- -create-db!
   "Internal `create-db!` implementation."
   [^Connection conn db-name attrs]
-  ; TODO: lock db
   (when (::ref/value (ref/get-ref (.tracker conn) db-name))
     (throw (ex-info (str "Cannot create new database: " db-name
                          " already exists")
@@ -153,7 +154,6 @@
 (defn- -drop-db!
   "Internal `drop-db!` implementation."
   [^Connection conn db-name]
-  ; TODO: lock db
   (->>
     nil
     (ref/set-ref! (.tracker conn) db-name)
@@ -194,7 +194,6 @@
    (when-not db
      (throw (IllegalArgumentException. "Cannot commit nil database.")))
    ; TODO: validate spec
-   ; TODO: lock db
    ; TODO: check if current version is the same as the version opened at?
    (let [db (db/flush! db)
          root-id (::node/id db)

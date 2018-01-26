@@ -303,7 +303,7 @@
         [-1 pending]))))
 
 
-(defn update-partitions!
+(defn ^:no-doc update-partitions!
   "Apply patch changes to a sequence of partitions and redistribute the results
   to create a new sequence of valid, updated partitions. Each input tuple
   should have the form `[partition changes]`, where changes **must be sorted**
@@ -348,7 +348,7 @@
         (merge-into store params outputs pending)))))
 
 
-(defn carry-back
+(defn ^:no-doc carry-back
   "Carry an orphaned node back from later in the tree. Returns a result vector
   with height zero and the updated sequence of partitions, or a -1 height result
   if there were not enough records left."

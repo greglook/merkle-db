@@ -55,28 +55,9 @@ $ lein run load-db data/ml-latest
 
 Need to demonstrate:
 
-### Load Phase
+### Versioning
 
-Constructing merkle-db tables from raw dataset input:
-
-- take input CSV
-- convert to RDD of rows
-- map to pairRDD of [key record]
-- sort by key
-- split pairRDD into partition-sized chunks
-- convert each chunk into a merkle-db partition node
-- build index tree over partition-node metadata
-
-### Read Phase
-
-Performing computation over a merkle-db table:
-
-Parallel of table ns methods for keys, scan, read which return an RDD instead of
-a collection.
-
-**TODO:** how does this fit dataframe? seems like that's almost more like the
-table itself.
-
+- actually save the db versions in a ref tracker
 
 ### Update Phase
 
@@ -89,3 +70,12 @@ Update an existing table with new raw data:
 - for each [id partition [key updates]], update the partition to produce
   one-or-more new partitions
 - collect updated partitions and build a new index tree over them
+
+### Cluster Deployment
+
+Demonstrate running the job on EMR against data in S3.
+
+- Terraform config needed?
+- Host uberjar in S3, pick up settings from environment
+- Host input data in S3
+- Host ref tracker in DynamoDB?

@@ -3,6 +3,7 @@
   (:require
     [blocks.core :as block]
     [blocks.store.file]
+    [blocks.store.s3]
     [clojure.string :as str]
     [clojure.tools.cli :as cli]
     [clojure.tools.logging :as log]
@@ -18,7 +19,8 @@
     [multihash.core :as multihash]
     [sparkling.conf :as conf]
     [sparkling.core :as spark]
-    [sparkling.destructuring :as sde]))
+    [sparkling.destructuring :as sde]
+    [sparkling.serialization]))
 
 
 (def cli-options
@@ -26,8 +28,8 @@
     :default "file://data/db/blocks"]
    ["-r" "--refs URL" "Location of backing ref tracker"
     :default "file://data/db/refs.tsv"]
-   ["-m" "--master URL" "Spark master connection URL"
-    :default "local"]
+   ["-m" "--master URL" "Spark master connection URL"]
+   [nil  "--no-prompt" "Disable the prompt for user input before exiting"]
    ["-h" "--help"]])
 
 
@@ -41,8 +43,9 @@
   [cfg]
   (fn init
     []
+    (require 'blocks.store.s3)
     (mdag/init-store
-      :encoding [:mdag :gzip :edn]
+      :encoding [:mdag :gzip :cbor]
       :store (block/->store (:blocks-url cfg))
       :cache {:total-size-limit (:cache-size cfg (* 32 1024 1024))}
       :types merkle-db.graph/codec-types)))
@@ -168,7 +171,8 @@
   "Main entry point for example."
   [& raw-args]
   (let [{:keys [options arguments summary errors]} (cli/parse-opts raw-args cli-options)
-        command (first arguments)]
+        command (first arguments)
+        success? (atom true)]
     (when errors
       (binding [*out* *err*]
         (doseq [err errors]
@@ -194,14 +198,20 @@
           elapsed (delay (/ (- (System/currentTimeMillis) start) 1e3))]
       (spark/with-context spark-ctx (-> (conf/spark-conf)
                                         (conf/app-name "movie-lens-recommender")
-                                        (conf/master (:master options)))
+                                        (cond->
+                                          (:master options)
+                                            (conf/master (:master options))))
         (try
           (command-fn spark-ctx options (rest arguments))
           (catch Throwable err
             (log/error err "Command failed!")
             (when-let [err (ex-data err)]
+              (reset! success? false)
               (u/pprint err))))
-        (println "\nCommand finished in" (u/duration-str @elapsed))
-        (println "Press RETURN to exit")
-        (flush)
-        (read-line)))))
+        (when-not (:no-prompt options)
+          (println "\nCommand finished in" (u/duration-str @elapsed))
+          (println "Press RETURN to exit")
+          (flush)
+          (read-line)))
+      (when-not @success?
+        (System/exit 1)))))

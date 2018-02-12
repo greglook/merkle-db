@@ -1,5 +1,5 @@
-(defproject mvxcvi/movie-lens-recommender "0.1.0-SNAPSHOT"
-  :description "Example of building a recommender model from the MovieLens dataset."
+(defproject mvxcvi/movie-lens "0.1.0-SNAPSHOT"
+  :description "Example project demonstrating working with the MovieLens dataset."
   :url "https://github.com/greglook/merkle-db"
   :license {:name "Public Domain"
             :url "http://unlicense.org/"}

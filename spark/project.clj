@@ -4,6 +4,7 @@
   :license {:name "Public Domain"
             :url "http://unlicense.org/"}
 
+  :monolith/inherit true
   :deploy-branches ["master"]
   :pedantic? :abort
 

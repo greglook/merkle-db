@@ -4,10 +4,7 @@
   :license {:name "Public Domain"
             :url "http://unlicense.org/"}
 
-  :aliases
-  {"coverage" ["with-profile" "+coverage" "cloverage"
-               "--ns-exclude-regex" "merkle-db.validate"]}
-
+  :monolith/inherit true
   :deploy-branches ["master"]
   :pedantic? :abort
 
@@ -20,37 +17,10 @@
    [mvxcvi/merkledag-core "0.4.1"]
    [mvxcvi/merkledag-ref "0.2.0"]]
 
-  :test-selectors
-  {:default (complement :generative)
-   :generative :generative}
-
-  :cljfmt
-  {:remove-consecutive-blank-lines? false
-   :indents {checking [[:block 2]]
-             check-system [[:block 2]]
-             valid? [[:block 1]]
-             invalid? [[:block 1]]}}
-
-  :hiera
-  {:cluster-depth 2
-   :vertical false
-   :show-external false
-   :ignore-ns #{clojure bigml merkle-db.validate}}
-
   :codox
   {:metadata {:doc/format :markdown}
    :source-uri "https://github.com/greglook/merkle-db/blob/master/{filepath}#L{line}"
    :output-path "target/doc/api"}
-
-  :whidbey
-  {:tag-types
-   {'blocks.data.Block {'blocks.data.Block (partial into {})}
-    'merkledag.link.MerkleLink {'merkledag/link 'merkledag.link/link->form}
-    'merkle_db.bloom.BloomFilter {'merkle-db/bloom-filter (juxt :bits :k)}
-    'merkle_db.database.Database {'merkle-db/database (partial into {})}
-    'merkle_db.key.Key {'merkle-db/key 'merkle-db.key/hex}
-    'merkle_db.table.Table {'merkle-db/table (partial into {})}
-    'multihash.core.Multihash {'data/hash 'multihash.core/base58}}}
 
   :profiles
   {:dev

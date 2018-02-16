@@ -15,6 +15,7 @@
     :exclusions [org.objenesis/objenesis]]
 
    ; Version pinning
+   [clj-time "0.10.0"]
    ;[com.fasterxml.jackson.core/jackson-databind "2.6.6"]
    ;[com.fasterxml.jackson.core/jackson-annotations "2.6.5"]
    ;[commons-codec "1.10"]

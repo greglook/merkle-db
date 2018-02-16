@@ -22,7 +22,7 @@
    [merkle-db/tools "0.1.0-SNAPSHOT"]]
 
   :monolith
-  {:project-dirs ["core" "spark" "tools"]
+  {:project-dirs ["lib/*"]
    :inherit [:pedantic?
              :test-selectors
              :cljfmt

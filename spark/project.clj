@@ -23,13 +23,6 @@
    ;[org.apache.httpcomponents/httpclient "4.5.2"]
    ]
 
-  :aot
-  [clojure.tools.logging.impl
-   merkle-db.spark.key-partitioner
-   merkle-db.spark.table-rdd
-   sparkling.destructuring
-   sparkling.serialization]
-
   :profiles
   {:provided
    {:dependencies
@@ -42,4 +35,12 @@
                    org.slf4j/slf4j-log4j12]]
      [org.apache.spark/spark-mllib_2.11 "2.2.1"
       :exclusions [log4j org.slf4j/slf4j-log4j12]]
-     [com.thoughtworks.paranamer/paranamer "2.6"]]}})
+     [com.thoughtworks.paranamer/paranamer "2.6"]]}
+
+   :dev
+   {:aot
+    [clojure.tools.logging.impl
+     merkle-db.spark.key-partitioner
+     merkle-db.spark.table-rdd
+     sparkling.destructuring
+     sparkling.serialization]}})

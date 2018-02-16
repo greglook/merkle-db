@@ -6,10 +6,10 @@
 
   :monolith/inherit true
   :deploy-branches ["master"]
-  :pedantic? :abort
 
   :dependencies
   [[org.clojure/clojure "1.9.0"]
+   [org.clojure/tools.logging "0.4.0"]
    [merkle-db/core "0.1.0-SNAPSHOT"]
    [gorillalabs/sparkling "2.1.2"
     :exclusions [org.objenesis/objenesis]]

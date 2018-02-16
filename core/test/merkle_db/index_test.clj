@@ -15,7 +15,6 @@
     [merkle-db.patch :as patch]
     [merkle-db.record :as record]
     [merkle-db.test-utils :as tu]
-    [merkle-db.validate :as validate]
     [merkledag.core :as mdag]
     [merkledag.link :as link]
     [merkledag.node :as node]))

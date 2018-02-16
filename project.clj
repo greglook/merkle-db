@@ -4,19 +4,30 @@
   :license {:name "Public Domain"
             :url "http://unlicense.org/"}
 
+  :aliases
+  {"coverage" ["with-profile" "+coverage" "monolith" "with-all" "cloverage"]}
+
   :min-lein-version "2.7.0"
+  :pedantic? :abort
 
   :plugins
   [[lein-monolith "1.0.1"]
    [mvxcvi/lein-cljfmt "0.7.0-SNAPSHOT"]
-   ;[lein-cloverage "1.0.9"]
-   ]
+   [lein-cloverage "1.0.10"]]
 
   :dependencies
   [[org.clojure/clojure "1.9.0"]
    [merkle-db/core "0.1.0-SNAPSHOT"]
    [merkle-db/spark "0.1.0-SNAPSHOT"]
    [merkle-db/tools "0.1.0-SNAPSHOT"]]
+
+  :monolith
+  {:project-dirs ["core" "spark" "tools"]
+   :inherit [:pedantic?
+             :test-selectors
+             :cljfmt
+             :hiera
+             :whidbey]}
 
   :test-selectors
   {:default (complement :generative)
@@ -47,14 +58,35 @@
     'merkle_db.table.Table {'merkle-db/table (partial into {})}
     'multihash.core.Multihash {'data/hash 'multihash.core/base58}}}
 
-  :monolith
-  {:inherit
-   [:test-selectors
-    :cljfmt
-    :hiera
-    :whidbey]
+  :profiles
+  {:dev
+   {:dependencies
+    [[org.clojure/data.csv "0.1.4"]
+     [org.clojure/test.check "0.9.0"]
+     [org.clojure/tools.logging "0.4.0"]
+     [com.gfredericks/test.chuck "0.2.8"]
+     [commons-logging "1.2"]
+     [mvxcvi/test.carly "0.4.1"]
+     [riddley "0.1.14"]
+     [org.apache.spark/spark-core_2.11 "2.2.1"
+      :exclusions [commons-codec
+                   commons-net
+                   log4j
+                   org.apache.commons/commons-compress
+                   org.scala-lang/scala-reflect
+                   org.slf4j/slf4j-log4j12]]
+     [org.apache.spark/spark-mllib_2.11 "2.2.1"
+      :exclusions [log4j org.slf4j/slf4j-log4j12]]
+     [com.thoughtworks.paranamer/paranamer "2.6"]]}
 
-   :project-dirs
-   ["core"
-    "spark"
-    "tools"]})
+   :repl
+   {:source-paths ["dev"]
+    :dependencies
+    [[clj-stacktrace "0.2.8"]
+     [org.clojure/tools.namespace "0.2.11"]]}
+
+   :coverage
+   {:dependencies
+    [[commons-logging "1.2"]]
+    :jvm-opts ["-Dorg.apache.commons.logging.Log=org.apache.commons.logging.impl.SimpleLog"
+               "-Dorg.apache.commons.logging.simplelog.defaultlog=trace"]}})

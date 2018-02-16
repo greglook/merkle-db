@@ -167,6 +167,7 @@
 (defn- get-tablet
   "Return the tablet data for the given family key."
   [store part family-key]
+  ; TODO: only graph reference...
   (graph/get-link! store part (get (::tablets part) family-key)))
 
 

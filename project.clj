@@ -1,4 +1,4 @@
-(defproject mvxcvi/merkle-db "0.1.0-SNAPSHOT"
+(defproject merkle-db "0.1.0-SNAPSHOT"
   :description "Hybrid data store built on merkle trees."
   :url "https://github.com/greglook/merkle-db"
   :license {:name "Public Domain"
@@ -13,7 +13,10 @@
    ]
 
   :dependencies
-  [[org.clojure/clojure "1.9.0"]]
+  [[org.clojure/clojure "1.9.0"]
+   [merkle-db/core "0.1.0-SNAPSHOT"]
+   [merkle-db/spark "0.1.0-SNAPSHOT"]
+   [merkle-db/tools "0.1.0-SNAPSHOT"]]
 
   :test-selectors
   {:default (complement :generative)

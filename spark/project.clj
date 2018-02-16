@@ -1,4 +1,4 @@
-(defproject mvxcvi/merkle-db.spark "0.1.0-SNAPSHOT"
+(defproject merkle-db/spark "0.1.0-SNAPSHOT"
   :description "MerkleDB integration with Apache Spark."
   :url "https://github.com/greglook/merkle-db"
   :license {:name "Public Domain"
@@ -10,7 +10,7 @@
 
   :dependencies
   [[org.clojure/clojure "1.9.0"]
-   [mvxcvi/merkle-db "0.1.0-SNAPSHOT"]
+   [merkle-db/core "0.1.0-SNAPSHOT"]
    [gorillalabs/sparkling "2.1.2"
     :exclusions [org.objenesis/objenesis]]
 

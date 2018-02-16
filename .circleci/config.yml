@@ -5,7 +5,7 @@ jobs:
     docker:
       - image: circleci/clojure:lein-2.7.1
     environment:
-      JVM_OPTS: -Xmx3200m
+      JVM_OPTS: "-Xmx3200m -Djava.awt.headless=true"
       LEIN_ROOT: nbd
     steps:
       - checkout

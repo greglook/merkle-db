@@ -18,8 +18,8 @@
 
   :codox
   {:metadata {:doc/format :markdown}
-   :source-uri "https://github.com/greglook/merkle-db/blob/master/{filepath}#L{line}"
-   :output-path "target/doc/api"}
+   :source-uri "https://github.com/greglook/merkle-db/blob/master/lib/core/{filepath}#L{line}"
+   :output-path "../../target/doc/codox/core"}
 
   :profiles
   {:dev

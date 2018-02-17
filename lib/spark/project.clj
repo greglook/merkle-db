@@ -23,6 +23,11 @@
    ;[org.apache.httpcomponents/httpclient "4.5.2"]
    ]
 
+  :codox
+  {:metadata {:doc/format :markdown}
+   :source-uri "https://github.com/greglook/merkle-db/blob/master/lib/spark/{filepath}#L{line}"
+   :output-path "../../target/doc/codox/spark"}
+
   :profiles
   {:provided
    {:dependencies

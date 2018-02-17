@@ -22,4 +22,4 @@ fi
 
 echo "Generating documentation in $DOC_TARGET ..."
 #lein with-profile +doc do codox, marg --dir $DOC_TARGET/marginalia
-lein codox
+lein monolith each codox

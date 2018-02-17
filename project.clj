@@ -88,5 +88,10 @@
    :coverage
    {:dependencies
     [[commons-logging "1.2"]]
+
+    :aot
+    [merkle-db.spark.key-partitioner
+     merkle-db.spark.table-rdd]
+
     :jvm-opts ["-Dorg.apache.commons.logging.Log=org.apache.commons.logging.impl.SimpleLog"
                "-Dorg.apache.commons.logging.simplelog.defaultlog=trace"]}})

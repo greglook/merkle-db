@@ -115,30 +115,33 @@
 
 (deftest evaluate-tutorial
   (io/delete-file "var/playground/refs.tsv" true)
-  (loop [history []
-         statements (into []
-                          (comp
-                            (remove #(= "skip-test" (second %)))
-                            (map #(nth % 2))
-                            (mapcat split-statements)
-                            (map parse-sections)
-                            (map split-body)
-                            (map read-form))
-                          (find-code-blocks (slurp "doc/tutorial.md")))]
-    (when-let [{:keys [pre body form expected post]} (first statements)]
-      (if form
-        (let [[result err] (try-eval
-                             history
-                             form
-                             expected
-                             post)]
-          ;(puget/cprint [form result err])
-          ; TODO: assertions on result vs expected
-          ; TODO: assert that % of lines different is under some threshold?
-          (recur (if-not err
-                   (take 3 (cons result history))
-                   history)
-                 (next statements)))
-        (do (println "Ignoring non-statement body:\n"
-                     (str/join "\n" body))
-            (recur history (next statements)))))))
+  (let [pwd (System/getProperty "user.dir")
+        tutorial-path (str pwd "/doc/tutorial.md")]
+    (println tutorial-path)
+    (loop [history []
+           statements (into []
+                            (comp
+                              (remove #(= "skip-test" (second %)))
+                              (map #(nth % 2))
+                              (mapcat split-statements)
+                              (map parse-sections)
+                              (map split-body)
+                              (map read-form))
+                            (find-code-blocks (slurp tutorial-path)))]
+      (when-let [{:keys [pre body form expected post]} (first statements)]
+        (if form
+          (let [[result err] (try-eval
+                               history
+                               form
+                               expected
+                               post)]
+            ;(puget/cprint [form result err])
+            ; TODO: assertions on result vs expected
+            ; TODO: assert that % of lines different is under some threshold?
+            (recur (if-not err
+                     (take 3 (cons result history))
+                     history)
+                   (next statements)))
+          (do (println "Ignoring non-statement body:\n"
+                       (str/join "\n" body))
+              (recur history (next statements))))))))

@@ -5,7 +5,7 @@ jobs:
     docker:
       - image: circleci/clojure:lein-2.7.1
     environment:
-      JVM_OPTS: -Xmx3200m
+      JVM_OPTS: "-Xmx3200m -Djava.awt.headless=true"
       LEIN_ROOT: nbd
     steps:
       - checkout
@@ -13,12 +13,13 @@ jobs:
           keys:
             - merkle-db-{{ checksum "project.clj" }}
             - merkle-db-
-      - run: lein deps
+      - run: lein monolith each do clean, check, install
       - save_cache:
           paths:
             - ~/.m2
           key: merkle-db-{{ checksum "project.clj" }}
-      - run: lein do check, test
+      - run: lein monolith each test
+      - run: lein test
       - run: lein coverage --codecov
       - store_artifacts:
           path: target/coverage

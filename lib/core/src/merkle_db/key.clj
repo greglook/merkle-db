@@ -16,7 +16,8 @@
       StandardCharsets)
     java.time.Instant
     java.util.Arrays
-    javax.xml.bind.DatatypeConverter))
+    (javax.xml.bind
+      DatatypeConverter)))
 
 
 ;; ## Comparators

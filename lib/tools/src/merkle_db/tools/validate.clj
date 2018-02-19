@@ -301,11 +301,11 @@
       (= (::index/height params) (::index/height index))
       "Index node has expected height")
     (doseq [[first-key child-link last-key]
-              (map vector
-                   (cons (::record/first-key params) (::index/keys index))
-                   (::index/children index)
-                   (conj (::index/keys index) (::record/last-key params)))
-              :let [height' (dec (::index/height index))]]
+            (map vector
+                 (cons (::record/first-key params) (::index/keys index))
+                 (::index/children index)
+                 (conj (::index/keys index) (::record/last-key params)))
+            :let [height' (dec (::index/height index))]]
       (check-next!
         (if (zero? height')
           validate-partition

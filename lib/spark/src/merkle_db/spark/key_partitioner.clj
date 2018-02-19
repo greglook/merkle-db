@@ -15,17 +15,17 @@
     org.apache.spark.Partitioner))
 
 
-(defn -init
+(defn ^:no-doc -init
   [lexicoder splits]
   [[] {:lexicoder lexicoder, :splits splits}])
 
 
-(defn -numPartitions
+(defn ^:no-doc -numPartitions
   [this]
   (inc (count (:splits (.state this)))))
 
 
-(defn -getPartition
+(defn ^:no-doc -getPartition
   [this key-value]
   ; TODO: should this deal with lexicoder?
   (let [{:keys [lexicoder splits]} (.state this)

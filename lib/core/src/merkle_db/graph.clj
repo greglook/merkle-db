@@ -8,7 +8,8 @@
     [merkledag.node :as node])
   (:import
     java.time.Instant
-    java.time.format.DateTimeFormatter
+    (java.time.format
+      DateTimeFormatter)
     merkle_db.bloom.BloomFilter
     merkle_db.key.Key))
 

@@ -55,6 +55,7 @@
                   ::key/lexicoder])
     #(= :merkle-db/table (:data/type %))))
 
+
 (s/def ::table-info
   (s/keys :req [::node/id
                 ::name]))

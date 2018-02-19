@@ -39,6 +39,7 @@
    :single-import-break-width 30
    :indents {checking [[:block 2]]
              check-system [[:block 2]]
+             check [[:block 1]]
              valid? [[:block 1]]
              invalid? [[:block 1]]}}
 

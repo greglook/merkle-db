@@ -155,7 +155,7 @@
 
 ;; ## RDD Methods
 
-(defn -init
+(defn ^:no-doc -init
   [spark-ctx init-store table scan-opts]
   [[spark-ctx (ArrayBuffer.) (class-tag scala.Tuple2)]
    {:init-store init-store
@@ -167,7 +167,7 @@
     :scan-opts scan-opts}])
 
 
-(defn -partitioner
+(defn ^:no-doc -partitioner
   [this]
   (let [parts (load-partitions this)]
     (scala.Option/apply
@@ -176,7 +176,7 @@
         (mapv ::record/first-key (rest parts))))))
 
 
-(defn -getPartitions
+(defn ^:no-doc -getPartitions
   [this]
   ; - if table has no pending changes, no patch tablet, and no data link,
   ;   return an empty rdd
@@ -189,7 +189,7 @@
     (into-array TablePartition)))
 
 
-(defn -compute
+(defn ^:no-doc -compute
   [this ^TablePartition tpart ^TaskContext task-context]
   (let [{:keys [init-store lexicoder primary-key patch-link pending scan-opts]} (.state this)
         lexicoder (key/lexicoder lexicoder) ; TODO: improve terms
@@ -220,6 +220,7 @@
 ;; ## RDD Construction
 
 (defmacro with-op-scope
+  "Apply a Spark context operation scope around the statements in the body."
   [spark-ctx scope-name & body]
   `(.withScope org.apache.spark.rdd.RDDOperationScope$/MODULE$
      ~spark-ctx ~scope-name true false

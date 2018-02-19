@@ -2,11 +2,11 @@
   "Utilities for visualizing merkle-db databases."
   (:require
     [clojure.string :as str]
+    [merkle-db.database :as db]
+    [merkle-db.graph :as graph]
     [merkledag.core :as mdag]
     [merkledag.link :as link]
     [merkledag.node :as node]
-    [merkle-db.database :as db]
-    [merkle-db.graph :as graph]
     [multihash.core :as multihash]
     [rhizome.viz :as rhizome]))
 
@@ -76,9 +76,9 @@
         {:shape :doublecircle
          :label (node-label node)}
       ; else
-        {:shape :doubleoctagon
-         :color :red
-         :label (node-label node)})))
+      {:shape :doubleoctagon
+       :color :red
+       :label (node-label node)})))
 
 
 (defn link-label
@@ -99,7 +99,8 @@
 (defn graph-tree
   [rf store root-id follow? & args]
   (let [nodes (graph/find-nodes store {} (mdag/get-node store root-id) follow?)]
-    (apply rf
+    (apply
+      rf
       (vals nodes)
       (fn adjacent
         [node]

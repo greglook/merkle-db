@@ -318,7 +318,7 @@ the vizualization tools (you will need `graphviz` installed):
 
 <!-- skip-test -->
 ```clojure
-=> (require '[merkle-db.viz :as viz])
+=> (require '[merkle-db.tools.viz :as viz])
 
 => (viz/view-database db)
 ```

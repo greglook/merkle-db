@@ -117,7 +117,6 @@
   (io/delete-file "var/playground/refs.tsv" true)
   (let [pwd (System/getProperty "user.dir")
         tutorial-path (str pwd "/doc/tutorial.md")]
-    (println tutorial-path)
     (loop [history []
            statements (into []
                             (comp

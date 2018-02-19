@@ -6,7 +6,6 @@
   (:require
     [clojure.spec.alpha :as s]
     [clojure.string :as str]
-    [merkle-db.graph :as graph]
     [merkle-db.index :as index]
     [merkle-db.key :as key]
     [merkle-db.partition :as part]
@@ -519,9 +518,8 @@
         extra-keys (apply disj id-keys (map key patch-changes))
         patch-changes (filter-records {:fields (:fields opts)} patch-changes)
         data-entries (when-let [data-node (and (seq extra-keys)
-                                               (graph/get-link!
+                                               (mdag/get-data
                                                  (.store table)
-                                                 table
                                                  (::data table)))]
                        (index/read-batch
                          (.store table)

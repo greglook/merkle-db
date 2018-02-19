@@ -11,7 +11,6 @@
   single partition node."
   (:require
     [clojure.spec.alpha :as s]
-    [merkle-db.graph :as graph]
     [merkle-db.key :as key]
     [merkle-db.partition :as part]
     [merkle-db.record :as record]
@@ -55,14 +54,14 @@
   256)
 
 
-(defn max-branches
+(defn- max-branches
   "Return the maximum number of children a valid index node can have given the
   parameters."
   [params]
   (::fan-out params default-fan-out))
 
 
-(defn min-branches
+(defn- min-branches
   "Return the minimum number of children a valid index node must have given the
   parameters."
   [params]
@@ -161,6 +160,22 @@
 
 ;; ## Read Functions
 
+(defn- get-link!
+  "Load the data for the given link, throwing an exception if the node is not
+  found."
+  [store node link]
+  (let [node-id (::node/id (meta node))
+        child (mdag/get-data store link nil ::not-found)]
+    (when (identical? ::not-found child)
+      (throw (ex-info (if node
+                        (format "Broken child link from %s node %s to: %s"
+                                (:data/type node) node-id link)
+                        (str "Broken child link to: " link))
+                      {:parent node-id
+                       :child link})))
+    child))
+
+
 (defn- assign-records
   "Assigns records to the children of this node which they would belong
   to. Returns a sequence of vectors containing each child link and a collection
@@ -231,7 +246,7 @@
         (mapcat
           (fn read-child
             [[child-link child-ctx]]
-            (let [child (graph/get-link! store node child-link)]
+            (let [child (get-link! store node child-link)]
               (find-partitions store f child child-ctx)))
           (f node ctx))
 
@@ -330,7 +345,7 @@
     ; Otherwise recursively fold last element.
     :else
       (let [nodes' (pop nodes)
-            children (mapv #(graph/get-link! store (peek nodes) %)
+            children (mapv #(get-link! store (peek nodes) %)
                            (::children (peek nodes)))
             result (if (= 1 height)
                      (part/carry-back store params children carry)
@@ -389,7 +404,7 @@
 
     ; Divide up changes and apply to children.
     (let [child-inputs (map (fn [[child child-changes]]
-                              [(graph/get-link! store index child)
+                              [(get-link! store index child)
                                child-changes])
                             (assign-records index changes))
           child-height (dec (::height index))]

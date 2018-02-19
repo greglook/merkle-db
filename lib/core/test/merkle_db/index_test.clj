@@ -23,10 +23,10 @@
 #_
 (deftest index-limits
   (testing "limits"
-    (is (= index/default-fan-out (index/max-branches {})))
-    (is (= 420 (index/max-branches {::index/fan-out 420})))
-    (is (= 2 (index/min-branches {::index/fan-out 4})))
-    (is (= 3 (index/min-branches {::index/fan-out 5}))))
+    (is (= index/default-fan-out (@#'index/max-branches {})))
+    (is (= 420 (@#'index/max-branches {::index/fan-out 420})))
+    (is (= 2 (@#'index/min-branches {::index/fan-out 4})))
+    (is (= 3 (@#'index/min-branches {::index/fan-out 5}))))
   (testing "split-limited"
     (let [split-limited @#'index/split-limited]
       (is (nil? (split-limited 3 [])))

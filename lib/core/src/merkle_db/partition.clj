@@ -5,7 +5,6 @@
   (:require
     [clojure.spec.alpha :as s]
     [merkle-db.bloom :as bloom]
-    [merkle-db.graph :as graph]
     [merkle-db.key :as key]
     [merkle-db.patch :as patch]
     [merkle-db.record :as record]
@@ -167,8 +166,15 @@
 (defn- get-tablet
   "Return the tablet data for the given family key."
   [store part family-key]
-  ; TODO: only graph reference...
-  (graph/get-link! store part (get (::tablets part) family-key)))
+  (let [tablet-link (get (::tablets part) family-key)
+        part-id (::node/id (meta part))
+        tablet (mdag/get-data store tablet-link nil ::not-found)]
+     (when (identical? ::not-found tablet)
+       (throw (ex-info (format "Broken tablet link from %s to: %s"
+                               part-id tablet-link)
+                       {:parent part-id
+                        :child tablet-link})))
+     tablet))
 
 
 (defn- choose-tablets

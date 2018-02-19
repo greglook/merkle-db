@@ -10,9 +10,9 @@ MerkleDB
 MerkleDB is a Clojure library for storing and accessing large data sets in a
 hybrid column-oriented tree of content-adressable data blocks.
 
-**Right now this project is still a work in progress.** For details, see the
-[design doc](doc/design.md), proposed [client interface](doc/api.md), and sample
-[usage patterns](doc/usage.md).
+**This project is usable, but should be considered alpha quality.** For more
+details, see the [design doc](doc/design.md), proposed [client
+interface](doc/api.md), and sample [usage patterns](doc/usage.md).
 
 
 ## Installation

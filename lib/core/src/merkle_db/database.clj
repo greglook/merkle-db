@@ -151,7 +151,7 @@
 
 ;; ## Database Type
 
-;; Databases are implementad as a custom type so they can behave similarly to
+;; Databases are implemented as a custom type so they can behave similarly to
 ;; natural Clojure values.
 ;;
 ;; - `store` reference to the merkledag node store backing the database.

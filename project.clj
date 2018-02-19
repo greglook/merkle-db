@@ -17,9 +17,9 @@
 
   :dependencies
   [[org.clojure/clojure "1.9.0"]
-   [merkle-db/core "0.1.0-SNAPSHOT"]
-   [merkle-db/spark "0.1.0-SNAPSHOT"]
-   [merkle-db/tools "0.1.0-SNAPSHOT"]]
+   [merkle-db/merkle-db-core "0.1.0-SNAPSHOT"]
+   [merkle-db/merkle-db-spark "0.1.0-SNAPSHOT"]
+   [merkle-db/merkle-db-tools "0.1.0-SNAPSHOT"]]
 
   :monolith
   {:project-dirs ["lib/*"]

@@ -3,7 +3,7 @@
   (:require
     [clojure.string :as str]
     [merkle-db.database :as db]
-    [merkle-db.graph :as graph]
+    [merkle-db.tools.graph :as graph]
     [merkledag.core :as mdag]
     [merkledag.link :as link]
     [merkledag.node :as node]

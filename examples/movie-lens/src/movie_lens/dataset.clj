@@ -7,6 +7,7 @@
     [merkle-db.database :as db]
     [merkle-db.spark.load :as msl]
     [merkle-db.table :as table]
+    [merkle-db.tools.stats :as stats]
     [merkledag.node :as node]
     [movie-lens.movie :as movie]
     [movie-lens.rating :as rating]
@@ -51,10 +52,10 @@
                   init-store
                   movie/table-parameters
                   record-rdd)
-          stats (table/collect-stats table)
+          stats (stats/collect-table-stats table)
           elapsed (/ (- (System/currentTimeMillis) start) 1e3)]
       ;(u/pprint table)
-      (table/print-stats stats)
+      (stats/print-table-stats stats)
       (log/infof "Loaded movies table data (%s) in %s"
                  (multihash/base58 (::node/id table))
                  (u/duration-str elapsed))
@@ -73,9 +74,9 @@
                            csv-path
                            tag/csv-header
                            tag/parse-row))
-          stats (table/collect-stats table)
+          stats (stats/collect-table-stats table)
           elapsed (/ (- (System/currentTimeMillis) start) 1e3)]
-      (table/print-stats stats)
+      (stats/print-table-stats stats)
       (log/infof "Loaded tags table (%s) in %s"
                  (multihash/base58 (::node/id table))
                  (u/duration-str elapsed))
@@ -94,9 +95,9 @@
                            csv-path
                            rating/csv-header
                            rating/parse-row))
-          stats (table/collect-stats table)
+          stats (stats/collect-table-stats table)
           elapsed (/ (- (System/currentTimeMillis) start) 1e3)]
-      (table/print-stats stats)
+      (stats/print-table-stats stats)
       (log/infof "Loaded ratings table (%s) in %s"
                  (multihash/base58 (::node/id table))
                  (u/duration-str elapsed))

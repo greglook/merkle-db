@@ -1,4 +1,4 @@
-(ns merkle-db.validate
+(ns merkle-db.tools.validate
   "Validation framework for testing database MerkleDAG structures."
   (:refer-clojure :exclude [run!])
   (:require
@@ -14,9 +14,6 @@
     [merkledag.link :as link]
     [merkledag.node :as node]
     [multihash.core :as multihash]))
-
-
-; TODO: move to 'tools' tld?
 
 
 ;; Path from the validation root to the node being checked.

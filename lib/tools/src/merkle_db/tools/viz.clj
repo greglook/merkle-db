@@ -1,4 +1,4 @@
-(ns merkle-db.viz
+(ns merkle-db.tools.viz
   "Utilities for visualizing merkle-db databases."
   (:require
     [clojure.string :as str]

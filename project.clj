@@ -1,4 +1,4 @@
-(defproject mvxcvi/merkle-db "0.1.0-SNAPSHOT"
+(defproject mvxcvi/merkle-db "0.1.0"
   :description "Hybrid data store built on merkle trees."
   :url "https://github.com/greglook/merkle-db"
   :license {:name "Public Domain"
@@ -11,15 +11,17 @@
   :pedantic? :abort
 
   :plugins
-  [[lein-monolith "1.0.1"]
-   [mvxcvi/lein-cljfmt "0.7.0-SNAPSHOT"]
-   [lein-cloverage "1.0.10"]]
+  [[mvxcvi/lein-cljfmt "0.7.0-SNAPSHOT"]
+   [lein-cloverage "1.0.10"]
+   [lein-cprint "1.3.0"]
+   [lein-hiera "1.0.0"]
+   [lein-monolith "1.0.1"]]
 
   :dependencies
   [[org.clojure/clojure "1.9.0"]
-   [mvxcvi/merkle-db-core "0.1.0-SNAPSHOT"]
-   [mvxcvi/merkle-db-spark "0.1.0-SNAPSHOT"]
-   [mvxcvi/merkle-db-tools "0.1.0-SNAPSHOT"]]
+   [mvxcvi/merkle-db-core "0.1.0"]
+   [mvxcvi/merkle-db-spark "0.1.0"]
+   [mvxcvi/merkle-db-tools "0.1.0"]]
 
   :monolith
   {:project-dirs ["lib/*"]

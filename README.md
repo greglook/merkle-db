@@ -15,6 +15,18 @@ hybrid column-oriented tree of content-adressable data blocks.
 [usage patterns](doc/usage.md).
 
 
+## Installation
+
+Library releases are published on Clojars. To use the latest version with
+Leiningen, add the following dependency to your project definition:
+
+[![Clojars Project](http://clojars.org/mvxcvi/merkle-db/latest-version.svg)](http://clojars.org/mvxcvi/merkle-db)
+
+This will pull in the omnibus package, which in turn depends on each subproject
+of the same version. You may instead depend on the subprojects directly if you
+wish to omit some functionality, such as Spark integration.
+
+
 ## Concepts
 
 The high-level semantics of this library are similar to a traditional key-value

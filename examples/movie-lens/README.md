@@ -1,5 +1,5 @@
-MovieLens Recommender
-=====================
+MovieLens Example
+=================
 
 This project demonstrates the usage of Apache Spark with MerkleDB as the backing
 data store.
@@ -28,21 +28,6 @@ of MerkleDB tables and combine them into a database.
 ```shell
 $ lein run load-db data/ml-latest
 ```
-
-
-## Parameter Discovery
-
-...
-
-
-## Model Training
-
-...
-
-
-## Making Recommendations
-
-...
 
 
 ## References

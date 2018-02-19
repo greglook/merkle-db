@@ -11,4 +11,4 @@ This library provides some optional but useful tools for working with MerkleDB.
 Library releases are published on Clojars. To use the latest version with
 Leiningen, add the following dependency to your project definition:
 
-[![Clojars Project](http://clojars.org/merkle-db/merkle-db-tools/latest-version.svg)](http://clojars.org/merkle-db/merkle-db-tools)
+[![Clojars Project](http://clojars.org/mvxcvi/merkle-db-tools/latest-version.svg)](http://clojars.org/mvxcvi/merkle-db-tools)

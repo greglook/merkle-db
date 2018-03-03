@@ -59,127 +59,6 @@
 
 
 
-;; ## Table API
-
-(defprotocol ITable
-  "Protocol for an immutable table of record data."
-
-  ;; Records
-
-  (keys
-    [table]
-    [table opts]
-    "Scan the table, returning keys of the stored records which match the given
-    options. Returns a lazy sequence of keys, or nil if the table is empty.
-
-    If min and max keys are given, only records within the bounds will be
-    returned (inclusive). A nil min or max implies the beginning or end of
-    the data, respectively.
-
-    Options may include:
-
-    - `:min-key`
-      Return records with keys equal to or greater than the marker.
-    - `:max-key`
-      Return records with keys equal to or less than the marker.
-    - `:reverse` (NYI)
-      Reverse the order the keys are returned in.
-    - `:offset`
-      Skip this many records in the output.
-    - `:limit`
-      Return at most this many records.")
-
-  (scan
-    [table]
-    [table opts]
-    "Scan the table, returning data from records which match the given options.
-    Returns a lazy sequence of record data maps, sorted by key.
-
-    If min and max keys or indices are given, only records within the
-    bounds will be returned (inclusive). A nil min or max implies the beginning
-    or end of the data, respectively.
-
-    Options may include:
-
-    - `:fields`
-      Only return data for the selected set of fields. If provided, only
-      records with data for one or more of the fields are returned, otherwise
-      all fields and records (including empty ones) are returned.
-    - `:min-key`
-      Return records with keys equal to or greater than the marker.
-    - `:max-key`
-      Return records with keys equal to or less than the marker.
-    - `:reverse` (NYI)
-      Reverse the order the keys are returned in.
-    - `:offset`
-      Skip this many records in the output.
-    - `:limit`
-      Return at most this many records.")
-
-  (read
-    [table id-keys]
-    [table id-keys opts]
-    "Read a set of records from the database, returning data for each present
-    record. Returns a sequence of record data maps.
-
-    Options may include:
-
-    - `:fields`
-      Only return data for the selected set of fields. If provided, only
-      records with data for one or more of the fields are returned, otherwise
-      all fields and records are returned.")
-
-  (insert
-    [table records]
-    [table records opts]
-    "Insert some record data into the database, represented by a collection
-    of record data maps. Returns an updated table.
-
-    Options may include:
-
-    - `:update-field`
-      A function which will be called with `(f field-key old-val new-val)`, and
-      should return the new value to use for that field. By default, `new-val`
-      is used directly.
-    - `:update-record`
-      A function which will be called with `(f record-key old-data new-data)`,
-      and should return the data map to use for the record. By default, this
-      merges the data maps and removes nil-valued fields.")
-
-  (delete
-    [table id-keys]
-    "Remove some records from the table, identified by a collection of id keys.
-    Returns an updated table.")
-
-  (dirty?
-    [table]
-    "Return true if the table has local non-persisted modifications.")
-
-  (flush!
-    [table]
-    [table opts]
-    "Ensure that all local state has been persisted to the storage backend.
-    Returns an updated persisted table.
-
-    Options may include:
-
-    - `:apply-patch?`
-      If true, the current patch data will be merged into the main data tree
-      and the returned table will have no patch link.")
-
-  ;; Partitions
-
-  (list-partitions
-    [table]
-    "List the partitions which comprise the table. Returns a sequence of
-    partition nodes.")
-
-  (read-partition
-    [table partition-id opts]
-    "Read all the records in the identified partition."))
-
-
-
 ;; ## Table Type
 
 ;; Tables are implementad as a custom type so they can behave similarly to
@@ -357,7 +236,12 @@
 (alter-meta! #'->Table assoc :private true)
 
 
-(defn ^:no-doc bare-table
+
+;; ## Constructors
+
+; TODO: better names and docs
+
+(defn bare-table
   "Build a new detached table value with the given backing store."
   [store table-name opts]
   (->Table
@@ -375,7 +259,7 @@
     nil))
 
 
-(defn ^:no-doc load-table
+(defn load-table
   "Load a table node from the store."
   [store table-name target]
   (let [node (mdag/get-node store target)]
@@ -390,7 +274,7 @@
       {::node/links (::node/links node)})))
 
 
-(defn ^:no-doc set-backing
+(defn set-backing
   "Change the backing store and info for a table."
   [^Table table store table-name]
   (->Table
@@ -402,24 +286,8 @@
     (._meta table)))
 
 
-(defn- update-pending
-  "Returns a new `Table` value with the given function applied to update its
-  pending data."
-  [^Table table f & args]
-  (let [patch' (apply f (.pending table) args)]
-    (if (= patch' (.pending table))
-      table
-      (->Table
-        (.store table)
-        (dissoc (.table-info table) ::node/id)
-        (.root-data table)
-        patch'
-        true
-        (._meta table)))))
 
-
-
-;; ## Protocol Implementation
+;; ## Internal Functions
 
 (defn- table-lexicoder
   "Construct a lexicoder for the keys in a table."
@@ -457,20 +325,56 @@
                [k (if (map? r) (select-keys r (:fields opts)) r)])))))
 
 
-(defn- -keys
-  "Internal `keys` implementation."
-  ([table]
-   (-keys table nil))
-  ([table opts]
-   ; OPTIMIZE: push down key-only read to avoid loading non-base tablets
-   (map (comp ::record/id meta)
-        (scan table opts))))
+(defn- read-batch
+  "Retrieve a batch of records from the table by key. Returns a sequence of
+  record entries."
+  [^Table table id-keys opts]
+  (let [id-keys (set id-keys)
+        patch-map (load-changes table)
+        patch-changes (filter (comp id-keys key) patch-map)
+        extra-keys (apply disj id-keys (map key patch-changes))
+        patch-changes (filter-records {:fields (:fields opts)} patch-changes)
+        data-entries (when-let [data-node (and (seq extra-keys)
+                                               (mdag/get-data
+                                                 (.store table)
+                                                 (::data table)))]
+                       (index/read-batch
+                         (.store table)
+                         data-node
+                         (:fields opts)
+                         extra-keys))]
+    (patch/patch-seq patch-changes data-entries)))
 
 
-(defn- -scan
-  "Internal `scan` implementation."
+
+;; ## Read API
+
+(defn scan
+  "Scan the table, returning data from records which match the given options.
+  Returns a lazy sequence of record data maps, sorted by key.
+
+  If min and max keys or indices are given, only records within the
+  bounds will be returned (inclusive). A nil min or max implies the beginning
+  or end of the data, respectively.
+
+  Options may include:
+
+  - `:fields`
+    Only return data for the selected set of fields. If provided, only
+    records with data for one or more of the fields are returned, otherwise
+    all fields and records (including empty ones) are returned.
+  - `:min-key`
+    Return records with keys equal to or greater than the marker.
+  - `:max-key`
+    Return records with keys equal to or less than the marker.
+  - `:reverse` (NYI)
+    Reverse the order the keys are returned in.
+  - `:offset`
+    Skip this many records in the output.
+  - `:limit`
+    Return at most this many records."
   ([table]
-   (-scan table nil))
+   (scan table nil))
   ([^Table table opts]
    (let [lexicoder (table-lexicoder table)
          min-k (some->> (:min-key opts) (key/encode lexicoder))
@@ -508,31 +412,46 @@
                        (::primary-key table))))))))
 
 
-(defn- read-batch
-  "Retrieve a batch of records from the table by key. Returns a sequence of
-  record entries."
-  [^Table table id-keys opts]
-  (let [id-keys (set id-keys)
-        patch-map (load-changes table)
-        patch-changes (filter (comp id-keys key) patch-map)
-        extra-keys (apply disj id-keys (map key patch-changes))
-        patch-changes (filter-records {:fields (:fields opts)} patch-changes)
-        data-entries (when-let [data-node (and (seq extra-keys)
-                                               (mdag/get-data
-                                                 (.store table)
-                                                 (::data table)))]
-                       (index/read-batch
-                         (.store table)
-                         data-node
-                         (:fields opts)
-                         extra-keys))]
-    (patch/patch-seq patch-changes data-entries)))
+(defn keys
+  "Scan the table, returning keys of the stored records which match the given
+  options. Returns a lazy sequence of keys, or nil if the table is empty.
+
+  If min and max keys are given, only records within the bounds will be
+  returned (inclusive). A nil min or max implies the beginning or end of
+  the data, respectively.
+
+  Options may include:
+
+  - `:min-key`
+    Return records with keys equal to or greater than the marker.
+  - `:max-key`
+    Return records with keys equal to or less than the marker.
+  - `:reverse` (NYI)
+    Reverse the order the keys are returned in.
+  - `:offset`
+    Skip this many records in the output.
+  - `:limit`
+    Return at most this many records."
+  ([table]
+   (keys table nil))
+  ([table opts]
+   ; OPTIMIZE: push down key-only read to avoid loading non-base tablets
+   (map (comp ::record/id meta)
+        (scan table opts))))
 
 
-(defn- -read
-  "Internal `read` implementation."
+(defn read
+  "Read a set of records from the database, returning data for each present
+  record. Returns a sequence of record data maps.
+
+  Options may include:
+
+  - `:fields`
+    Only return data for the selected set of fields. If provided, only
+    records with data for one or more of the fields are returned, otherwise
+    all fields and records are returned."
   ([table ids]
-   (-read table ids nil))
+   (read table ids nil))
   ([^Table table ids opts]
    (if (seq ids)
      (let [lexicoder (table-lexicoder table)
@@ -548,6 +467,25 @@
                          lexicoder
                          (::primary-key table))))))
      (list))))
+
+
+
+;; ## Record Updates
+
+(defn- update-pending
+  "Returns a new `Table` value with the given function applied to update its
+  pending data."
+  [^Table table f & args]
+  (let [patch' (apply f (.pending table) args)]
+    (if (= patch' (.pending table))
+      table
+      (->Table
+        (.store table)
+        (dissoc (.table-info table) ::node/id)
+        (.root-data table)
+        patch'
+        true
+        (._meta table)))))
 
 
 (defn- record-updater
@@ -582,10 +520,22 @@
         (merge old-data new-data))))
 
 
-(defn- -insert
-  "Internal `insert` implementation."
+(defn insert
+  "Insert some record data into the database, represented by a collection
+  of record data maps. Returns an updated table.
+
+  Options may include:
+
+  - `:update-field`
+    A function which will be called with `(f field-key old-val new-val)`, and
+    should return the new value to use for that field. By default, `new-val`
+    is used directly.
+  - `:update-record`
+    A function which will be called with `(f record-key old-data new-data)`,
+    and should return the data map to use for the record. By default, this
+    merges the data maps and removes nil-valued fields."
   ([table records]
-   (-insert table records nil))
+   (insert table records nil))
   ([table records opts]
    (if (seq records)
      (let [lexicoder (table-lexicoder table)
@@ -610,8 +560,9 @@
      table)))
 
 
-(defn- -delete
-  "Internal `delete` implementation."
+(defn delete
+  "Remove some records from the table, identified by a collection of id keys.
+  Returns an updated table."
   [table ids]
   (if (seq ids)
     (let [lexicoder (table-lexicoder table)
@@ -627,8 +578,11 @@
     table))
 
 
-(defn- -dirty?
-  "Internal `dirty?` implementation."
+
+;; ## Table Persistence
+
+(defn dirty?
+  "True if the table has local non-persisted modifications."
   [^Table table]
   (.dirty table))
 
@@ -656,11 +610,17 @@
       [nil (::data table)])))
 
 
-(defn- -flush!
-  "Ensure that all local state has been persisted to the storage backend and
-  return an updated non-dirty table."
+(defn flush!
+  "Ensure that all local state has been persisted to the storage backend.
+  Returns an updated persisted table.
+
+  Options may include:
+
+  - `:apply-patch?`
+    If true, the current patch data will be merged into the main data tree
+    and the returned table will have no patch link."
   ([table]
-   (-flush! table nil))
+   (flush! table nil))
   ([^Table table opts]
    (if (.dirty table)
      (let [[patch-link data-link] (flush-changes table (:apply-patch? opts))
@@ -685,16 +645,3 @@
            table-meta)))
      ; Table is clean, return directly.
      table)))
-
-
-(extend Table
-
-  ITable
-
-  {:keys -keys
-   :scan -scan
-   :read -read
-   :insert -insert
-   :delete -delete
-   :dirty? -dirty?
-   :flush! -flush!})

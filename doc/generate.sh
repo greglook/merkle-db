@@ -21,5 +21,7 @@ if [[ ! -d $DOC_TARGET ]]; then
 fi
 
 echo "Generating documentation in $DOC_TARGET ..."
-#lein with-profile +doc do codox, marg --dir $DOC_TARGET/marginalia
-lein monolith each codox
+lein monolith each doc
+for project in lib/*; do
+    cp -r "$project/target/doc" "$DOC_TARGET/$(basename $project)"
+done

@@ -100,10 +100,10 @@
   (when (get-table db table-name)
     (throw (ex-info
              (str "Cannot create table: database already has a table named "
-                  table-name)
+                  (pr-str table-name))
              {:type ::table-conflict
               :table-name table-name})))
-  (set-table db table-name (table/bare-table nil table-name attrs)))
+  (set-table db table-name (table/new-table nil table-name attrs)))
 
 
 (defn update-table

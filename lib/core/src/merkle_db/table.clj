@@ -1,7 +1,9 @@
 (ns merkle-db.table
-  "Tables are named top-level containers of records. Generally, a single table
-  corresponds to a certain 'kind' of data. Tables also contain configuration
-  determining how keys are encoded and records are stored."
+  "Tables are collections of records which specify how the records are
+  identified and stored. A table is presented as an immutable value; functions
+  in this namespace return a new version of the table argument, keeping the
+  original unchanged. Modifications are kept in memory until `flush!` is
+  called."
   (:refer-clojure :exclude [keys read])
   (:require
     [clojure.spec.alpha :as s]
@@ -241,8 +243,9 @@
 
 ; TODO: better names and docs
 
-(defn bare-table
-  "Build a new detached table value with the given backing store."
+(defn new-table
+  "Create a new table value backed by the given graph store. Any options given
+  will be merged into the table root."
   [store table-name opts]
   (->Table
     store
@@ -260,9 +263,16 @@
 
 
 (defn load-table
-  "Load a table node from the store."
+  "Load a table root node from the graph store."
   [store table-name target]
-  (let [node (mdag/get-node store target)]
+  (let [node (mdag/get-node store target)
+        data-type (get-in node [::node/data :data/type])]
+    (when (not= data-type :merkle-db/table)
+      (throw (ex-info (format "Expected node at %s to be a merkle-db table, but found %s"
+                              target data-type)
+                      {:type ::bad-target
+                       :expected :merkle-db/table
+                       :actual data-type})))
     (->Table
       store
       {::name table-name
@@ -402,6 +412,7 @@
        (cond->>
          (seq (:fields opts))
            (remove (comp empty? second))
+         ; OPTIMIZE: push down offset to skip subtrees
          (and (:offset opts) (pos? (:offset opts)))
            (drop (:offset opts))
          (and (:limit opts) (nat-int? (:limit opts)))
@@ -521,8 +532,8 @@
 
 
 (defn insert
-  "Insert some record data into the database, represented by a collection
-  of record data maps. Returns an updated table.
+  "Insert a collection of records into the table. Returns an updated table
+  value which includes the data.
 
   Options may include:
 
@@ -561,8 +572,8 @@
 
 
 (defn delete
-  "Remove some records from the table, identified by a collection of id keys.
-  Returns an updated table."
+  "Remove the identified records from the table. Returns an updated version of
+  the table which does not contain records whose id was in the collection."
   [table ids]
   (if (seq ids)
     (let [lexicoder (table-lexicoder table)
@@ -617,8 +628,7 @@
   Options may include:
 
   - `:apply-patch?`
-    If true, the current patch data will be merged into the main data tree
-    and the returned table will have no patch link."
+    If true, any current patch data will be merged into the main data tree."
   ([table]
    (flush! table nil))
   ([^Table table opts]

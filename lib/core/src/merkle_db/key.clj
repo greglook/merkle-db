@@ -192,7 +192,7 @@
 
 ;; ## Lexicoder Protocol
 
-(defprotocol Lexicoder
+(defprotocol ^:no-doc Lexicoder
   "Simple codec for transforming values into keys that have specific ordering
   semantics."
 

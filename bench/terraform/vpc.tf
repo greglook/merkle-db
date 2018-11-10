@@ -45,7 +45,7 @@ variable "vpc_cidr" {
   default     = "10.248.0.0/16"
 }
 
-variable "emr_subnet_cidr" {
+variable "cluster_subnet_cidr" {
   description = "CIDR block for EMR cluster hosts."
   default     = "10.248.8.0/24"
 }
@@ -64,12 +64,12 @@ resource "aws_vpc" "main" {
   }
 }
 
-resource "aws_subnet" "emr" {
+resource "aws_subnet" "cluster" {
   vpc_id     = "${aws_vpc.main.id}"
-  cidr_block = "${var.emr_subnet_cidr}"
+  cidr_block = "${var.cluster_subnet_cidr}"
 
   tags {
-    name = "merkle-db-bench emr"
+    name = "merkle-db-bench cluster"
   }
 }
 

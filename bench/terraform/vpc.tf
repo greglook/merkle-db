@@ -16,11 +16,6 @@ provider "aws" {
 
 ### SSH Key Pair ###
 
-variable "key_name" {
-  description = "Desired name of AWS key pair"
-  default     = "mantle"
-}
-
 variable "public_key_path" {
   description = "Path to SSH public key."
   default     = "~/.ssh/id_rsa.pub"
@@ -31,8 +26,8 @@ variable "private_key_path" {
   default     = "~/.ssh/id_rsa"
 }
 
-resource "aws_key_pair" "terraform_key_pair" {
-  key_name   = "${var.key_name}"
+resource "aws_key_pair" "benchmark" {
+  key_name   = "merkle-db-benchmark"
   public_key = "${file(var.public_key_path)}"
 }
 

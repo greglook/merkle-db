@@ -9,7 +9,8 @@ against the current version of the MerkleDB code.
 
 First, set up a long-lived S3 bucket which will hold:
 - test dataset(s)
-- riemann-profiler.jar
+- riemann-jvm-profiler.jar
+- solanum installer script
 - published task uberjars
 - directory for EMR job logs
 - blocks
@@ -18,19 +19,21 @@ All but the first one could be put in an ephemeral S3 bucket which is part of
 the TF state, or just set a lifecycle policy on those prefixes.
 
 
-## Building AMIs
+## Cluster Bootstrapping
 
-First, need to build at least two AMIs. Have this scripted - look into Packer,
-maybe? Could just use Ansible as well.
+The EMR cluster uses [bootstrap actions](https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-plan-bootstrap.html)
+to set up some extra software. This pulls scripts from S3 and executes them on
+each machine beforee the cluster starts. Specifically, this installs
+[Solanum](https://github.com/greglook/solanum) and the related configuration to
+perform host monitoring, and the [riemann-jvm-profiler](https://github.com/amperity/riemann-jvm-profiler)
+jar.
 
-### Spark Worker
+In order to prepare for these steps, the correct scripts need to be uploaded to
+the S3 data bucket being used:
 
-**TODO:** can we even provide a custom AMI for this? If not, need to figure out
-good bootstrapping steps.
+- `s3://${var.s3_data_bucket}/bootstrap/install-solanum`
+- `s3://${var.s3_data_bucket}/bootstrap/install-profiler`
 
-- Need to provide the `riemann-profiler.jar` on the host somewhere that the job
-  can instrument itself with.
-- Ideally, run Solanum on each worker to report host-level resource utilization.
 
 ### Riemann/Influx/Grafana
 

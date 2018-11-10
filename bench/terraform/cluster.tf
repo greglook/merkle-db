@@ -230,7 +230,6 @@ resource "aws_emr_cluster" "benchmark" {
     instance_profile                  = "${aws_iam_instance_profile.emr_cluster.arn}"
   }
 
-  #custom_ami_id = "..."
   master_instance_type = "${var.master_type}"
   core_instance_type   = "${var.worker_type}"
   core_instance_count  = "${var.worker_count}"

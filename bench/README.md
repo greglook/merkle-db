@@ -34,26 +34,21 @@ the S3 data bucket being used:
 - `s3://${var.s3_data_bucket}/bootstrap/install-solanum`
 - `s3://${var.s3_data_bucket}/bootstrap/install-profiler`
 
+Could use Terraform's `aws_s3_bucket_object` resource to ensure local scripts
+are uploaded, but would it try to destroy them after?
 
-### Riemann/Influx/Grafana
 
-Pre-build an AMI that has Riemann, riemann-dash, InfluxDB, and Grafana
-installed. Use nginx to reverse-proxy the two dashboard endpoints.  Potentially
-proxy to the spark master as well if that's feasible?
+## Riemann/Influx/Grafana
+
+Set up an instance that has Riemann, riemann-dash, InfluxDB, and Grafana
+installed. Use nginx to reverse-proxy the two dashboard endpoints. If we can set
+up an SSH tunnel from this instance to the cluster master (or some kind of IPsec
+tunnel?) then it should proxy the spark application pages as well.
 
 This will only work well if there's a good way to edit the dashboards and then
 save the updated configs for application to the next run... perhaps part of the
 shutdown can be an export command, and part of the spin-up can be a programmatic
 import.
-
-
-## Cluster Lifecycle
-
-Once the AMIs are ready, set various Terraform variables and `terraform up` to
-get the cluster running. This should also spin up a monitoring instance and
-configure it for viewing.
-
-When all the experiments are done, use `terraform destroy` to clean up.
 
 
 ## Data Collection
@@ -72,7 +67,6 @@ spark task phase after the run completes.
 
 ## Other Thoughts
 
-- Terraform config for setting up an entire test VPC and EMR cluster.
 - Script to manage submitting jobs to the EMR cluster and monitoring/recording
   the results.
 - Better: unattended "build uberjar, publish, spin up cluster, run ten times, then shut down"

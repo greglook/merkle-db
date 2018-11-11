@@ -9,8 +9,8 @@ KillMode=process
 Restart=on-failure
 RestartPreventExitStatus=255
 Type=simple
-User=daemon
-Group=daemon
+User=riemann
+Group=riemann
 
 [Install]
 WantedBy=multi-user.target

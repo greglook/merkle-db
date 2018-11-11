@@ -55,7 +55,7 @@
 
 - name: Sync dashboard configs
   synchronize:
-    src: roles/grafana/files/dashboards
+    src: roles/grafana/files/dashboards/
     dest: "{{ grafana_data_dir }}/dashboards"
 
 - name: Start Grafana

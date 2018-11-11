@@ -26,17 +26,7 @@
 - name: Configure service
   template:
     src: riemann-dash.service
-    dest: "/etc/systemd/system/riemann-dash.service"
-    owner: root
-    group: root
-    mode: '0644'
-  notify:
-    - Restart riemann-dash
-
-- name: Write dashboard configuration
-  template:
-    src: dash-config.rb
-    dest: "/etc/riemann/dash-config.rb"
+    dest: /etc/systemd/system/riemann-dash.service
     owner: root
     group: root
     mode: '0644'
@@ -50,6 +40,24 @@
     owner: riemann
     group: riemann
     mode: '0755'
+
+- name: Write initial dashboards
+  template:
+    src: dashboards.json
+    dest: /data/riemann/dashboards.json
+    owner: riemann
+    group: riemann
+    mode: '0644'
+
+- name: Write service configuration
+  template:
+    src: dash-config.rb
+    dest: /etc/riemann/dash-config.rb
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - Restart riemann-dash
 
 - name: Start riemann-dash
   service:

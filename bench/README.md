@@ -50,6 +50,9 @@ save the updated configs for application to the next run... perhaps part of the
 shutdown can be an export command, and part of the spin-up can be a programmatic
 import.
 
+- `/data/riemann/dashboards.json`
+- `/data/grafana/dashboards/`
+
 
 ## Data Collection
 

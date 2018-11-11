@@ -1,0 +1,37 @@
+{
+  "server": "{{ ansible_host }}:5556",
+  "server_type": "ws",
+  "workspaces": [
+    {
+      "name": "Riemann",
+      "view": {
+        "type": "Balloon",
+        "weight": 1,
+        "id": "cde89713e1c2c53b36218f69298dca48d8bdfc90",
+        "version": 3,
+        "child": {
+          "type": "VStack",
+          "weight": 1,
+          "id": "02fa322dee9ee5a38de24f2b59ecd6d8a36a58c1",
+          "version": 3,
+          "children": [
+            {
+              "type": "Grid",
+              "weight": 1,
+              "id": "5de47acfc2e782df91ef0da8a02fe5828675476b",
+              "version": 3,
+              "title": "Riemann",
+              "query": "true",
+              "max": "",
+              "rows": "service",
+              "cols": "host",
+              "row_sort": "lexical",
+              "col_sort": "lexical",
+              "description": ""
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

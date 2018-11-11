@@ -13,6 +13,7 @@
   gem:
     name: "{{ item }}"
     state: present
+    user_install: false
   with_items:
     - erubis
 

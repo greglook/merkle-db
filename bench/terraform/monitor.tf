@@ -96,12 +96,24 @@ resource "aws_instance" "monitor" {
     delete_on_termination = true
   }
 
-  user_data = <<EOF
-#!/usr/bin/env bash
-echo $(hostname --ip) monitor >> /etc/hosts
-echo monitor > /etc/hostname
-hostname -F /etc/hostname
-EOF
+  provisioner "remote-exec" {
+    inline = [
+      "sudo echo $(hostname --ip) monitor >> /etc/hosts",
+      "sudo echo monitor > /etc/hostname",
+      "sudo hostname -F /etc/hostname",
+      "sudo apt-get -y install python",
+    ]
+
+    connection {
+      type        = "ssh"
+      user        = "ubuntu"
+      private_key = "${file(var.private_key_path)}"
+    }
+  }
+
+  provisioner "local-exec" {
+    command = "cd ../ansible; ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -u ubuntu -i '${aws_instance.monitor.public_ip},' monitor.yml"
+  }
 
   depends_on = ["aws_internet_gateway.igw"]
 }

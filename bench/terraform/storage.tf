@@ -4,13 +4,14 @@ variable "s3_data_bucket" {
   description = "Bucket which holds test and result data"
 }
 
+
+
+### Bootstrap Resources ###
+
 variable "solanum_version" {
   description = "Version of Solanum daemon to install"
   default = "3.1.0"
 }
-
-
-### Bootstrap Resources ###
 
 resource "aws_s3_bucket_object" "install_solanum" {
   bucket = "${var.s3_data_bucket}"

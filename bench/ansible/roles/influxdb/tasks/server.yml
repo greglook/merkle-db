@@ -23,7 +23,7 @@
 - name: Write InfluxDB configuration
   template:
     src: influxdb.conf
-    dest: "{{ influxdb_config_dir }}/influxdb.conf"
+    dest: "/etc/influxdb/influxdb.conf"
     owner: root
     group: root
     mode: '0644'
@@ -37,11 +37,11 @@
 
 - name: Create database
   influxdb_database:
-    database_name: riemann
+    database_name: merkledb
 
 - name: Create retention policy
   influxdb_retention_policy:
-    database_name: riemann
+    database_name: merkledb
     policy_name: raw
     duration: 1w
     replication: 1

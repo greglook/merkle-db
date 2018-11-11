@@ -115,14 +115,15 @@ resource "aws_instance" "monitor" {
     command = "./write-inventory; ansible-playbook -i inventory.ini monitor.yml"
     working_dir = "../ansible"
     environment = {
+      ANSIBLE_FORCE_COLOR = true
       ANSIBLE_HOST_KEY_CHECKING = false
-      MERKLEDB_MONITOR_HOST = "${aws_instance.monitor.public_dns}"
+      MERKLEDB_MONITOR_HOST = "${aws_instance.monitor.public_ip}"
     }
   }
 
   depends_on = ["aws_internet_gateway.igw"]
 }
 
-output "monitor_instance_dns" {
+output "monitor_instance" {
   value = "${aws_instance.monitor.public_dns}"
 }

@@ -17,7 +17,7 @@
     group: root
     mode: '0644'
   notify:
-    - Reload riemann
+    - Restart riemann
 
 - name: Start Riemann
   service:

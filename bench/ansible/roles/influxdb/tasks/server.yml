@@ -3,6 +3,7 @@
   apt:
     name: influxdb
     state: present
+    update_cache: true
 
 - name: Install Python tools
   apt:

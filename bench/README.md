@@ -72,6 +72,8 @@ spark task phase after the run completes.
 - Better: unattended "build uberjar, publish, spin up cluster, run ten times, then shut down"
 - Save test results in a rich format, since different tasks have different
   inputs/metrics.
+- Use a terraform null-resource to run the final tunnel-setup script once the
+  cluster is up?
 
 
 ## Load Test

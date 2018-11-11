@@ -112,7 +112,11 @@ resource "aws_instance" "monitor" {
   }
 
   provisioner "local-exec" {
-    command = "cd ../ansible; ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -u ubuntu -i '${aws_instance.monitor.public_ip},' monitor.yml"
+    command = "./write-inventory ${aws_instance.monitor.public_ip}; ansible-playbook -i inventory.ini monitor.yml"
+    working_dir = "../ansible"
+    environment = {
+      ANSIBLE_HOST_KEY_CHECKING = false
+    }
   }
 
   depends_on = ["aws_internet_gateway.igw"]

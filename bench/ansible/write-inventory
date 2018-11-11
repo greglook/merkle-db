@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+# Helper script to write out an inventory file for Ansible.
+
+if [[ -z $1 ]]; then
+    echo "Usage: $(basename $0) <monitor-ip>"
+    exit 1
+fi
+
+cat > inventory.ini <<EOF
+[support]
+monitor ansible_ssh_user=ubuntu ansible_host=$1
+EOF

@@ -1,3 +1,4 @@
+/ansible/inventory.ini
 /ansible/*.retry
 /bench/*.jar
 /terraform/.terraform

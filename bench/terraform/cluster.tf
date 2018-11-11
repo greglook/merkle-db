@@ -222,7 +222,7 @@ resource "aws_emr_cluster" "benchmark" {
   keep_job_flow_alive_when_no_steps = true
 
   ec2_attributes {
-    key_name                          = "${aws_key_pair.benchmark.key_name}"
+    key_name                          = "${aws_key_pair.benchmark.id}"
     subnet_id                         = "${aws_subnet.cluster.id}"
     service_access_security_group     = "${aws_security_group.service.id}"
     emr_managed_master_security_group = "${aws_security_group.master.id}"

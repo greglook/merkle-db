@@ -8,8 +8,13 @@ variable "region" {
   default = "us-west-2"
 }
 
+variable "availability_zone" {
+  description = "AWS availability zone to use within the region."
+  default = "us-west-2c"
+}
+
 provider "aws" {
-  region = "us-west-2"
+  region = "${var.region}"
 }
 
 
@@ -40,14 +45,14 @@ variable "vpc_cidr" {
   default     = "10.248.0.0/16"
 }
 
-variable "cluster_subnet_cidr" {
-  description = "CIDR block for EMR cluster hosts."
-  default     = "10.248.8.0/24"
-}
-
 variable "support_subnet_cidr" {
   description = "CIDR block for supporting hosts."
-  default     = "10.248.16.0/24"
+  default     = "10.248.1.0/24"
+}
+
+variable "cluster_subnet_cidr" {
+  description = "CIDR block for EMR cluster hosts."
+  default     = "10.248.16.0/20"
 }
 
 resource "aws_vpc" "main" {
@@ -59,21 +64,25 @@ resource "aws_vpc" "main" {
   }
 }
 
-resource "aws_subnet" "cluster" {
-  vpc_id     = "${aws_vpc.main.id}"
-  cidr_block = "${var.cluster_subnet_cidr}"
-
-  tags {
-    name = "merkle-db-bench cluster"
-  }
-}
-
 resource "aws_subnet" "support" {
   vpc_id     = "${aws_vpc.main.id}"
   cidr_block = "${var.support_subnet_cidr}"
 
+  availability_zone = "${var.availability_zone}"
+
   tags {
     name = "merkle-db-bench support"
+  }
+}
+
+resource "aws_subnet" "cluster" {
+  vpc_id     = "${aws_vpc.main.id}"
+  cidr_block = "${var.cluster_subnet_cidr}"
+
+  availability_zone = "${var.availability_zone}"
+
+  tags {
+    name = "merkle-db-bench cluster"
   }
 }
 
@@ -81,20 +90,45 @@ resource "aws_subnet" "support" {
 
 ### Networking ###
 
-resource "aws_internet_gateway" "main" {
+resource "aws_internet_gateway" "igw" {
   vpc_id = "${aws_vpc.main.id}"
 }
 
-resource "aws_route_table" "main" {
+resource "aws_eip" "nat" {
+  vpc = true
+}
+
+resource "aws_nat_gateway" "ngw" {
+  allocation_id = "${aws_eip.nat.id}"
+  subnet_id     = "${aws_subnet.support.id}"
+
+  depends_on = ["aws_internet_gateway.igw"]
+}
+
+resource "aws_route_table" "support" {
   vpc_id = "${aws_vpc.main.id}"
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = "${aws_internet_gateway.main.id}"
+    gateway_id = "${aws_internet_gateway.igw.id}"
+  }
+}
+
+resource "aws_route_table" "cluster" {
+  vpc_id = "${aws_vpc.main.id}"
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = "${aws_nat_gateway.ngw.id}"
   }
 }
 
 resource "aws_main_route_table_association" "main" {
   vpc_id         = "${aws_vpc.main.id}"
-  route_table_id = "${aws_route_table.main.id}"
+  route_table_id = "${aws_route_table.support.id}"
+}
+
+resource "aws_route_table_association" "cluster" {
+  subnet_id      = "${aws_subnet.cluster.id}"
+  route_table_id = "${aws_route_table.cluster.id}"
 }

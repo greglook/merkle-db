@@ -1,0 +1,7 @@
+---
+# Riemann settings
+riemann_version: 0.3.1
+
+# Dashboard settings
+riemann_dash_bind_address: 127.0.0.1
+riemann_dash_port: 5558

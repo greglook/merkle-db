@@ -1,0 +1,8 @@
+---
+- include: server.yml
+  tags:
+    - riemann
+
+- include: dash.yml
+  tags:
+    - riemann

@@ -34,7 +34,7 @@
 - name: Start InfluxDB
   service:
     name: influxdb
-    state: started
+    state: restarted
 
 - name: Create database
   influxdb_database:

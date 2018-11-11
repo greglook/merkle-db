@@ -56,22 +56,31 @@ resource "aws_security_group" "monitor" {
 
 ### Monitor Instance ###
 
-variable "monitor_ami" {
-  description = "Base AMI to use for the monitor instance"
-  default = "ami-0afae182eed9d2b46"
-}
-
 variable "monitor_instance_type" {
   description = "Instance type to use for the monitor instance"
   default = "c5.2xlarge"
 }
 
+data "aws_ami" "ubuntu" {
+  owners = ["099720109477"] # Canonical
+  most_recent = true
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
 resource "aws_instance" "monitor" {
-  ami           = "${var.monitor_ami}"
+  ami           = "${data.aws_ami.ubuntu.id}"
   instance_type = "${var.monitor_instance_type}"
-  subnet_id     = "${aws_subnet.support.id}"
   key_name      = "${aws_key_pair.benchmark.id}"
-  ebs_optimized = true
+  subnet_id     = "${aws_subnet.support.id}"
 
   vpc_security_group_ids = ["${aws_security_group.monitor.id}"]
   associate_public_ip_address = true
@@ -80,10 +89,22 @@ resource "aws_instance" "monitor" {
     Name = "merkle-db monitor"
   }
 
+  root_block_device = {
+    volume_type           = "gp2"
+    volume_size           = 256
+    delete_on_termination = true
+  }
+
   user_data = <<EOF
 #!/usr/bin/env bash
 echo $(hostname --ip) monitor >> /etc/hosts
 echo monitor > /etc/hostname
 hostname -F /etc/hostname
 EOF
+
+  depends_on = ["aws_internet_gateway.igw"]
+}
+
+output "monitor_instance_dns" {
+  value = "${aws_instance.monitor.public_dns}"
 }

@@ -246,9 +246,10 @@ resource "aws_emr_cluster" "benchmark" {
   bootstrap_action {
     name = "install-solanum"
     path = "s3://${var.s3_data_bucket}/bootstrap/install-solanum"
-    # TODO: enable expansion when monitoring instance exists
-    args = ["s3://${var.s3_data_bucket}/bootstrap", "{aws_instance.riemann.private_ip}"]
+    args = ["s3://${var.s3_data_bucket}/bootstrap", "${aws_instance.monitor.private_ip}"]
   }
+
+  depends_on = ["aws_nat_gateway.ngw", "aws_instance.monitor"]
 
   lifecycle {
     ignore_changes = ["step"]

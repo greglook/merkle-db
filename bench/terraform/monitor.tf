@@ -68,7 +68,7 @@ data "aws_ami" "ubuntu" {
 
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-xenial-16.04-amd64-server-*"]
+    values = ["ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-amd64-server-*"]
   }
 
   filter {
@@ -101,7 +101,7 @@ resource "aws_instance" "monitor" {
       "sudo echo $(hostname --ip) monitor >> /etc/hosts",
       "sudo echo monitor > /etc/hostname",
       "sudo hostname -F /etc/hostname",
-      "sudo apt-get -y install python",
+      "sudo apt-get install -y python python-apt",
     ]
 
     connection {

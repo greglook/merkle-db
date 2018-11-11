@@ -60,7 +60,7 @@ resource "aws_vpc" "main" {
   enable_dns_hostnames = true
 
   tags {
-    name = "merkle-db-bench"
+    Name = "merkle-db-bench"
   }
 }
 
@@ -71,7 +71,7 @@ resource "aws_subnet" "support" {
   availability_zone = "${var.availability_zone}"
 
   tags {
-    name = "merkle-db-bench support"
+    Name = "merkle-db-bench support"
   }
 }
 
@@ -82,7 +82,7 @@ resource "aws_subnet" "cluster" {
   availability_zone = "${var.availability_zone}"
 
   tags {
-    name = "merkle-db-bench cluster"
+    Name = "merkle-db-bench cluster"
   }
 }
 
@@ -118,8 +118,8 @@ resource "aws_route_table" "cluster" {
   vpc_id = "${aws_vpc.main.id}"
 
   route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = "${aws_nat_gateway.ngw.id}"
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = "${aws_nat_gateway.ngw.id}"
   }
 }
 

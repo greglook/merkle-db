@@ -1,4 +1,6 @@
+/ansible/*.retry
 /bench/*.jar
 /terraform/.terraform
 /terraform/*.tfvars
+/terraform/*.tfstate*
 *.env

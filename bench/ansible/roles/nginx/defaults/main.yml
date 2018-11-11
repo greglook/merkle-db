@@ -1,0 +1,6 @@
+---
+server_name: monitor
+
+# Backend ports
+riemann_dash_port: 5558
+grafana_port: 3000

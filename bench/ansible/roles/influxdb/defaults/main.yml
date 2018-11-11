@@ -1,0 +1,4 @@
+---
+influxdb_config_dir: /etc/influxdb
+influxdb_data_dir: /data/influxdb
+influxdb_api_port: 8086

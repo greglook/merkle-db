@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+
+set -e
+
+if [[ -z $1 || -z $2 ]]; then
+    echo "Usage: $(basename $0) <version> <riemann-addr>"
+    exit 1
+fi
+
+SOLANUM_VERSION=$1
+RIEMANN_ADDR=$2
+
+SOLANUM_RELEASE="https://github.com/greglook/solanum/releases/download/${SOLANUM_VERSION}"
+SOLANUM_FILE="solanum_${SOLANUM_VERSION}_linux.tar.gz"
+
+echo "Fetching Solanum ${SOLANUM_VERSION}"
+wget "${SOLANUM_RELEASE}/${SOLANUM_FILE} -o /tmp/${SOLANUM_FILE}"
+
+echo "Installing Solanum..."
+tar -xvzf "/tmp/${SOLANUM_FILE}" -C /tmp/
+sudo chown root:root /tmp/solanum
+sudo mv /tmp/solanum /usr/local/bin/solanum
+
+echo "Configuring sources..."
+sudo mkdir /etc/solanum
+sudo cat > /etc/solanum/config.yml <<EOF
+defaults:
+  ttl: 180
+  tags:
+    - solanum
+
+sources:
+  - type: cpu
+  - type: load
+  - type: memory
+  - type: network
+  - type: disk-space
+  - type: disk-stats
+
+outputs:
+  - type: riemann
+    host: ${RIEMANN_ADDR}
+    port: 5555
+EOF
+
+echo "Configuring service..."
+sudo cat > /etc/systemd/system/solanum.service <<EOF
+[Unit]
+Description=Solanum Monitoring Daemon
+Requires=network.target
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/solanum /etc/solanum/config.yml
+KillMode=process
+Restart=on-failure
+RestartPreventExitStatus=255
+Type=simple
+User=daemon
+Group=daemon
+
+[Install]
+WantedBy=multi-user.target
+Alias=solanum.service
+EOF
+
+echo "Starting service..."
+sudo systemctl start solanum.service

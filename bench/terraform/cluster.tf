@@ -1,10 +1,5 @@
 # EMR cluster resources
 
-variable "s3_data_bucket" {
-  description = "Bucket which holds test and result data"
-}
-
-
 
 ### IAM EMR Role ###
 
@@ -238,15 +233,15 @@ resource "aws_emr_cluster" "benchmark" {
   log_uri = "s3n://${var.s3_data_bucket}/emr-logs/"
 
   bootstrap_action {
-    name = "install-profiler"
-    path = "s3://${var.s3_data_bucket}/bootstrap/install-profiler"
-    args = ["s3://${var.s3_data_bucket}/bootstrap/riemann-jvm-profiler.jar"]
+    name = "install-solanum"
+    path = "s3://${var.s3_data_bucket}/${aws_s3_bucket_object.install_solanum.id}"
+    args = ["${var.solanum_version}", "${aws_instance.monitor.private_ip}"]
   }
 
   bootstrap_action {
-    name = "install-solanum"
-    path = "s3://${var.s3_data_bucket}/bootstrap/install-solanum"
-    args = ["s3://${var.s3_data_bucket}/bootstrap", "${aws_instance.monitor.private_ip}"]
+    name = "install-profiler"
+    path = "s3://${var.s3_data_bucket}/${aws_s3_bucket_object.install_profiler.id}"
+    args = ["s3://${var.s3_data_bucket}/${aws_s3_bucket_object.riemann_profiler_jar.id}"]
   }
 
   depends_on = ["aws_nat_gateway.ngw", "aws_instance.monitor"]

@@ -1,6 +1,7 @@
 # Monitoring node for capturing benchmarking metrics.
 
-### Security ###
+
+### Security Group ###
 
 resource "aws_security_group" "monitor" {
   name        = "monitor"

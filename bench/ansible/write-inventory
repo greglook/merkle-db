@@ -2,12 +2,12 @@
 
 # Helper script to write out an inventory file for Ansible.
 
-if [[ -z $1 ]]; then
-    echo "Usage: $(basename $0) <monitor-ip>"
+if [[ -z $MERKLEDB_MONITOR_HOST ]]; then
+    echo "Missing required MERKLEDB_MONITOR_HOST env var"
     exit 1
 fi
 
 cat > inventory.ini <<EOF
 [support]
-monitor ansible_ssh_user=ubuntu ansible_host=$1
+monitor ansible_ssh_user=ubuntu ansible_host=$MERKLEDB_MONITOR_HOST
 EOF

@@ -200,17 +200,17 @@ resource "aws_security_group" "worker" {
 
 variable "master_type" {
   description = "Instance size to use for the EMR cluster master"
-  default = "m3.xlarge"
+  default = "m5.xlarge"
 }
 
 variable "worker_type" {
   description = "Instance size to use for the EMR cluster workers"
-  default = "m3.xlarge"
+  default = "m5.2xlarge"
 }
 
-variable "worker_count" {
-  description = "Instance size to use for the EMR cluster workers"
-  default = 3
+variable "cluster_size" {
+  description = "Number of instances to spin up in the EMR cluster"
+  default = 4
 }
 
 resource "aws_emr_cluster" "benchmark" {
@@ -232,7 +232,7 @@ resource "aws_emr_cluster" "benchmark" {
 
   master_instance_type = "${var.master_type}"
   core_instance_type   = "${var.worker_type}"
-  core_instance_count  = "${var.worker_count}"
+  core_instance_count  = "${var.cluster_size}"
   ebs_root_volume_size = 128
 
   log_uri = "s3n://${var.s3_data_bucket}/emr-logs/"

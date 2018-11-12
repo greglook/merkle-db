@@ -14,7 +14,7 @@ SOLANUM_RELEASE="https://github.com/greglook/solanum/releases/download/${SOLANUM
 SOLANUM_FILE="solanum_${SOLANUM_VERSION}_linux.tar.gz"
 
 echo "Fetching Solanum ${SOLANUM_VERSION}"
-wget "${SOLANUM_RELEASE}/${SOLANUM_FILE} -o /tmp/${SOLANUM_FILE}"
+wget "${SOLANUM_RELEASE}/${SOLANUM_FILE}" -o "/tmp/${SOLANUM_FILE}"
 
 echo "Installing Solanum..."
 tar -xvzf "/tmp/${SOLANUM_FILE}" -C /tmp/

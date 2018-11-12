@@ -228,7 +228,7 @@ resource "aws_emr_cluster" "benchmark" {
   master_instance_type = "${var.master_type}"
   core_instance_type   = "${var.worker_type}"
   core_instance_count  = "${var.cluster_size}"
-  ebs_root_volume_size = 128
+  ebs_root_volume_size = 64
 
   log_uri = "s3n://${var.s3_data_bucket}/emr-logs/"
 

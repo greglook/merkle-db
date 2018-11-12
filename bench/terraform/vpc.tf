@@ -112,6 +112,10 @@ resource "aws_route_table" "support" {
     cidr_block = "0.0.0.0/0"
     gateway_id = "${aws_internet_gateway.igw.id}"
   }
+
+  tags {
+    Name = "merkle-db-bench support"
+  }
 }
 
 resource "aws_route_table" "cluster" {
@@ -121,6 +125,20 @@ resource "aws_route_table" "cluster" {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = "${aws_nat_gateway.ngw.id}"
   }
+
+  tags {
+    Name = "merkle-db-bench cluster"
+  }
+}
+
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id       = "${aws_vpc.main.id}"
+  service_name = "com.amazonaws.us-west-2.s3"
+}
+
+resource "aws_vpc_endpoint_route_table_association" "cluster_s3" {
+  route_table_id  = "${aws_route_table.cluster.id}"
+  vpc_endpoint_id = "${aws_vpc_endpoint.s3.id}"
 }
 
 resource "aws_main_route_table_association" "main" {

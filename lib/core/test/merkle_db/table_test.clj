@@ -368,7 +368,7 @@
       (fn init-system
         [ctx]
         (->
-          (table/bare-table
+          (table/new-table
             store "test-data"
             {:merkle-db.index/fan-out 5
              :merkle-db.partition/limit 5

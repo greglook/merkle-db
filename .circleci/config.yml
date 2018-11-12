@@ -11,16 +11,20 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - merkle-db-{{ checksum "project.clj" }}
-            - merkle-db-
+            - v1-{{ checksum "project.clj" }}
+            - v1-
       - run: lein monolith each do clean, check, install
       - save_cache:
           paths:
             - ~/.m2
-          key: merkle-db-{{ checksum "project.clj" }}
+          key: v1-{{ checksum "project.clj" }}
       - run: lein monolith each test
       - run: lein test
       - run: lein coverage --codecov
+      - save_cache:
+          paths:
+            - ~/.m2
+          key: v1-{{ checksum "project.clj" }}
       - store_artifacts:
           path: target/coverage
           destination: coverage

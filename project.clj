@@ -12,7 +12,7 @@
 
   :plugins
   [[mvxcvi/lein-cljfmt "0.7.0-SNAPSHOT"]
-   [lein-cloverage "1.0.10"]
+   [lein-cloverage "1.0.13"]
    [lein-cprint "1.3.0"]
    [lein-hiera "1.0.0"]
    [lein-monolith "1.0.1"]]
@@ -66,21 +66,29 @@
    {:dependencies
     [[org.clojure/data.csv "0.1.4"]
      [org.clojure/test.check "0.9.0"]
-     [org.clojure/tools.logging "0.4.0"]
-     [com.gfredericks/test.chuck "0.2.8"]
+     [org.clojure/tools.logging "0.4.1"]
+     [com.gfredericks/test.chuck "0.2.9"]
      [commons-logging "1.2"]
      [mvxcvi/test.carly "0.4.1"]
-     [riddley "0.1.14"]
-     [org.apache.spark/spark-core_2.11 "2.2.1"
+     [org.apache.spark/spark-core_2.11 "2.4.0"
       :exclusions [commons-codec
                    commons-net
                    log4j
+                   com.google.code.findbugs/jsr305
                    org.apache.commons/commons-compress
                    org.scala-lang/scala-reflect
                    org.slf4j/slf4j-log4j12]]
-     [org.apache.spark/spark-mllib_2.11 "2.2.1"
-      :exclusions [log4j org.slf4j/slf4j-log4j12]]
-     [com.thoughtworks.paranamer/paranamer "2.6"]]}
+     [org.apache.spark/spark-mllib_2.11 "2.4.0"
+      :exclusions [log4j
+                   org.slf4j/slf4j-log4j12]]
+
+     ; Conflict resolution
+     [com.fasterxml.jackson.core/jackson-core "2.7.9"]
+     [com.thoughtworks.paranamer/paranamer "2.8"]
+     [instaparse "1.4.1"]
+     [joda-time "2.9.9"]
+     [org.slf4j/slf4j-api "1.7.25"]
+     [riddley "0.1.15"]]}
 
    :repl
    {:source-paths ["dev"]

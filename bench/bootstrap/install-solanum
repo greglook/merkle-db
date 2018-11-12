@@ -10,11 +10,15 @@ fi
 SOLANUM_VERSION=$1
 RIEMANN_ADDR=$2
 
+# TODO: from s3://elasticmapreduce/bootstrap-actions/run-if
+echo "Instance data:"
+cat /mnt/var/lib/info/instance.json
+
 SOLANUM_RELEASE="https://github.com/greglook/solanum/releases/download/${SOLANUM_VERSION}"
 SOLANUM_FILE="solanum_${SOLANUM_VERSION}_linux.tar.gz"
 
 echo "Fetching Solanum ${SOLANUM_VERSION}"
-wget "${SOLANUM_RELEASE}/${SOLANUM_FILE}" -o "/tmp/${SOLANUM_FILE}"
+wget "${SOLANUM_RELEASE}/${SOLANUM_FILE}" -O "/tmp/${SOLANUM_FILE}"
 
 echo "Installing Solanum..."
 tar -xvzf "/tmp/${SOLANUM_FILE}" -C /tmp/
@@ -23,7 +27,7 @@ sudo mv /tmp/solanum /usr/local/bin/solanum
 
 echo "Configuring sources..."
 sudo mkdir /etc/solanum
-sudo cat > /etc/solanum/config.yml <<EOF
+sudo tee /etc/solanum/config.yml > /dev/null <<EOF
 defaults:
   ttl: 180
   tags:
@@ -43,26 +47,13 @@ outputs:
     port: 5555
 EOF
 
-echo "Configuring service..."
-sudo cat > /etc/systemd/system/solanum.service <<EOF
-[Unit]
-Description=Solanum Monitoring Daemon
-Requires=network.target
-After=network.target
-
-[Service]
-ExecStart=/usr/local/bin/solanum /etc/solanum/config.yml
-KillMode=process
-Restart=on-failure
-RestartPreventExitStatus=255
-Type=simple
-User=daemon
-Group=daemon
-
-[Install]
-WantedBy=multi-user.target
-Alias=solanum.service
+echo "Configuring upstart service..."
+sudo tee /etc/init/solanum.conf > /dev/null <<EOF
+start on startup
+setuid daemon
+exec /usr/local/bin/solanum /etc/solanum/*
+respawn
 EOF
 
 echo "Starting service..."
-sudo systemctl start solanum.service
+sudo service solanum start

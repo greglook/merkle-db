@@ -91,6 +91,8 @@ responsible for collecting metrics from the tests.
 
 ## TODO Thoughts
 
+- Make an infrastructure diagram for this doc
+
 ### Spark UI Proxies
 
 If we can set up an SSH tunnel from this instance to the cluster master (or some

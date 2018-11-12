@@ -2,7 +2,9 @@
 - include: server.yml
   tags:
     - riemann
+    - riemann-server
 
 - include: dash.yml
   tags:
     - riemann
+    - riemann-dash

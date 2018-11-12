@@ -1,0 +1,8 @@
+---
+- name: Reload daemons
+  shell: systemctl daemon-reload
+
+- name: Restart solanum
+  service:
+    name: solanum
+    state: restarted

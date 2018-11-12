@@ -1,0 +1,44 @@
+---
+- name: Install Solanum
+  unarchive:
+    src: "https://github.com/greglook/solanum/releases/download/{{ solanum_version }}/solanum_{{ solanum_version }}_linux.tar.gz"
+    dest: /usr/local/bin
+    creates: /usr/local/bin/solanum
+    owner: root
+    group: root
+    mode: '0755'
+    remote_src: true
+
+- name: Create config directory
+  file:
+    path: /etc/solanum
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Write Solanum configuration
+  template:
+    src: host.yml
+    dest: /etc/solanum/host.yml
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - Restart solanum
+
+- name: Configure systemd service
+  template:
+    src: solanum.service
+    dest: /etc/systemd/system/solanum.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - Reload daemons
+    - Restart solanum
+
+- name: Start Solanum
+  service:
+    name: solanum
+    state: started

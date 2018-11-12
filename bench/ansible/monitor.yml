@@ -2,6 +2,7 @@
   remote_user: ubuntu
   become: true
   roles:
+    - base
     - influxdb
     - riemann
     - grafana

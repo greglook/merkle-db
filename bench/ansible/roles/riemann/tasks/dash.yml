@@ -23,7 +23,7 @@
     state: latest
     user_install: false
 
-- name: Configure service
+- name: Configure systemd service
   template:
     src: riemann-dash.service
     dest: /etc/systemd/system/riemann-dash.service
@@ -31,6 +31,7 @@
     group: root
     mode: '0644'
   notify:
+    - Reload daemons
     - Restart riemann-dash
 
 - name: Prepare dashboard data directory

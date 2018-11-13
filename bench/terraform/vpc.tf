@@ -133,7 +133,7 @@ resource "aws_route_table" "cluster" {
 
 resource "aws_vpc_endpoint" "s3" {
   vpc_id       = "${aws_vpc.main.id}"
-  service_name = "com.amazonaws.us-west-2.s3"
+  service_name = "com.amazonaws.${var.region}.s3"
 }
 
 resource "aws_vpc_endpoint_route_table_association" "cluster_s3" {

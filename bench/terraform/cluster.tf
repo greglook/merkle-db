@@ -160,6 +160,14 @@ resource "aws_security_group" "master" {
   #  ignore_changes = ["ingress", "egress"]
   #}
 
+  ingress {
+    description = "SSH"
+    protocol    = "tcp"
+    from_port   = 22
+    to_port     = 22
+    cidr_blocks = ["${aws_vpc.main.cidr_block}"]
+  }
+
   egress {
     description = "Internet"
     protocol    = "-1"

@@ -8,11 +8,16 @@ if [[ -z $1 || -z $2 ]]; then
 fi
 
 SOLANUM_VERSION=$1
-RIEMANN_ADDR=$2
+RIEMANN_HOST=$2
 
-# TODO: from s3://elasticmapreduce/bootstrap-actions/run-if
-echo "Instance data:"
-cat /mnt/var/lib/info/instance.json
+IS_MASTER=$(jq '.isMaster' < /mnt/var/lib/info/instance.json)
+#INSTANCE_GROUP=$(jq '.instanceGroupId' < /mnt/var/lib/info/instance.json)
+
+if [[ $IS_MASTER == true ]]; then
+    EVENT_HOSTNAME=master
+else
+    EVENT_HOSTNAME=$(hostname)
+fi
 
 SOLANUM_RELEASE="https://github.com/greglook/solanum/releases/download/${SOLANUM_VERSION}"
 SOLANUM_FILE="solanum_${SOLANUM_VERSION}_linux.tar.gz"
@@ -30,6 +35,7 @@ sudo mkdir /etc/solanum
 sudo tee /etc/solanum/config.yml > /dev/null <<EOF
 defaults:
   ttl: 180
+  host: ${EVENT_HOSTNAME}
   tags:
     - solanum
 
@@ -43,17 +49,17 @@ sources:
 
 outputs:
   - type: riemann
-    host: ${RIEMANN_ADDR}
+    host: ${RIEMANN_HOST}
     port: 5555
 EOF
 
 echo "Configuring upstart service..."
 sudo tee /etc/init/solanum.conf > /dev/null <<EOF
-start on startup
-setuid daemon
-exec /usr/local/bin/solanum /etc/solanum/*
+description "Solanum monitoring daemon"
+start on started network
 respawn
+exec /usr/local/bin/solanum /etc/solanum/*
 EOF
 
 echo "Starting service..."
-sudo service solanum start
+sudo initctl start solanum

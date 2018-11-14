@@ -1,4 +1,4 @@
-- hosts: all
+- hosts: monitor
   remote_user: ubuntu
   become: true
   roles:

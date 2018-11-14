@@ -1,6 +1,6 @@
 ---
 - name: Reload daemons
-  shell: systemctl daemon-reload
+  command: systemctl daemon-reload
 
 - name: Restart riemann
   service:

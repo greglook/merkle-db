@@ -96,17 +96,22 @@ resource "aws_instance" "monitor" {
     delete_on_termination = true
   }
 
+  user_data = <<EOF
+#cloud-init
+hostname: monitor
+preserve_hostname: false
+manage_etc_hosts: localhost
+EOF
+
   provisioner "remote-exec" {
     inline = [
-      "sudo echo $(hostname --ip) monitor >> /etc/hosts",
-      "sudo echo monitor > /etc/hostname",
-      "sudo hostname -F /etc/hostname",
+      "sudo apt-get update",
       "sudo apt-get install -y python python-apt",
     ]
 
     connection {
-      type        = "ssh"
-      user        = "ubuntu"
+      type = "ssh"
+      user = "ubuntu"
       private_key = "${file(var.private_key_path)}"
     }
   }

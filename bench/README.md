@@ -1,12 +1,17 @@
-MerkleDB Benchmark
-==================
+MerkleDB Benchmark Cluster
+==========================
 
-This directory holds configuration and scripts for running benchmark tasks
+This directory holds configuration and scripts for running benchmarking tasks
 against the MerkleDB code. This is accomplished by spinning up an Elastic Map
 Reduce (EMR) cluster in AWS along with some supporting infrastructure to capture
 metrics from the running jobs.
 
 ![cluster archictecture](doc/cluster-diagram.png)
+
+The diagram above shows the high-level architecture of the cluster. An EMR
+cluster with a single master and multiple worker nodes is paired with an EC2
+instance which serves as a gateway and a monitor for the task metrics.
+
 
 ## Setup
 
@@ -33,7 +38,6 @@ Terraform; you can either do that at runtime or save it to a variable file in
 
 ```
 # Custom benchmark settings
-
 s3_data_bucket = "BUCKET_NAME"
 ```
 
@@ -52,7 +56,7 @@ jar.
 Clone the riemann-jvm-profiler repo and build the uberjar, then copy it into the
 [bootstrap](bootstrap) directory.
 
-```shell
+```sh
 $ git clone git@github.com:amperity/riemann-jvm-profiler.git
 $ cd riemann-jvm-profiler
 $ lein uberjar
@@ -65,7 +69,7 @@ $ cp target/riemann-jvm-profiler-0.1.0-standalone.jar ../bootstrap/riemann-jvm-p
 
 Once ready, spin up the benchmark cluster with terraform:
 
-```shell
+```sh
 $ cd terraform
 $ terraform init
 $ terraform apply
@@ -74,7 +78,7 @@ $ terraform apply
 This will run for a while and create all of the necessary AWS resources. Part of
 this process involves using Ansible to configure the monitor instance, which is
 responsible for collecting metrics from the tests. Once the command returns, you
-should see a pair of outputs with the names of the monitor and cluster master
+should see a few outputs including the names of the monitor and cluster master
 instances:
 
 ```
@@ -92,26 +96,38 @@ cluster.
 
 ## Running Tests
 
-**TODO:** fill in this section more
+**TODO:** fill in this section
 
-```json
-{
-  "Type": "CUSTOM_JAR",
-  "Name": "MerkleDB Benchmark",
-  "ActionOnFailure": "CONTINUE",
-  "Jar": "command-runner.jar",
-  "Args": [
-    "spark-submit",
-    "--deploy-mode", "cluster",
-    "s3://my-test-bucket/jars/benchmark-task.jar",
-    "...args..."
-  ],
-  "MainClass": "string",
-  "Properties": "string"
-}
+Build an uberjar with the task code and upload it to the bucket:
+
+```sh
+$ aws s3 cp target/uberjar/task.jar s3://my-test-bucket/jars/task.jar
 ```
 
-```shell
+Write out a JSON file describing the task step to run:
+
+```json
+[
+  {
+    "Type": "CUSTOM_JAR",
+    "Name": "MerkleDB Benchmark",
+    "ActionOnFailure": "CONTINUE",
+    "Jar": "command-runner.jar",
+    "Args": [
+      "spark-submit",
+      "--deploy-mode", "cluster",
+      "s3://my-test-bucket/jars/task.jar",
+      "...args..."
+    ],
+    "MainClass": "string",
+    "Properties": "string"
+  }
+]
+```
+
+Use the AWS CLI to submit the step to the cluster:
+
+```sh
 $ aws emr add-steps \
     --cluster-id j-XXXXXXXXXXXXX \
     --steps steps.json
@@ -120,7 +136,7 @@ $ aws emr add-steps \
 **TODO:** how to enable the riemann profiler? Need to apply the following java arg:
 
 ```
--javaagent:riemann-jvm-profiler.jar=prefix=movie-lens,host=localhost,localhost-pid?=true
+-javaagent:riemann-jvm-profiler.jar=prefix=merkle-db,host=localhost,localhost-pid?=true
 ```
 
 

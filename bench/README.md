@@ -25,8 +25,8 @@ In order to use these configs, you'll need the following tools installed:
 - [terraform](https://www.terraform.io/)
 - [ansible](https://www.ansible.com/)
 
-You'll need an AWS account and a corresponding IAM access keypair. Running the
-cluster will cost some money, but it can be torn down once the tests are
+You'll also need an AWS account and a corresponding IAM access keypair. Running
+the cluster will cost some money, but it can be torn down once the tests are
 complete.
 
 ### Data Storage
@@ -90,13 +90,24 @@ monitor_instance = ec2-XX-XX-XX-XX.us-west-2.compute.amazonaws.com
 ```
 
 Open the `monitor_instance` address in a browser and you should see the
-benchmark landing page, with links to the various web interfaces exposed by the
-cluster.
+benchmark landing page, with links to the various dashboards for the cluster.
+
+### Connect SOCKS Proxy
+
+The public dashboards allow for a read-only view of things, but in order to
+fully interact with the cluster you will need to set up a SOCKS proxy to route
+traffic into the VPC. In a terminal, run the following to open a dynamic tunnel:
+
+```sh
+$ ssh -N -D 8157 ubuntu@$(terraform output monitor_instance)
+```
+
+Now, you can either manually configure proxy settings in your browser or use a
+plugin which will dynamically enable it such as
+[FoxyProxy](https://addons.mozilla.org/en-US/firefox/addon/foxyproxy-standard/).
 
 
 ## Running Tests
-
-**TODO:** fill in this section
 
 Build an uberjar with the task code and upload it to the bucket:
 
@@ -119,8 +130,7 @@ Write out a JSON file describing the task step to run:
       "s3://my-test-bucket/jars/task.jar",
       "...args..."
     ],
-    "MainClass": "string",
-    "Properties": "string"
+    "Properties": ""
   }
 ]
 ```

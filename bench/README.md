@@ -72,12 +72,55 @@ $ terraform apply
 
 This will run for a while and create all of the necessary AWS resources. Part of
 this process involves using Ansible to configure the monitor instance, which is
-responsible for collecting metrics from the tests.
+responsible for collecting metrics from the tests. Once the command returns, you
+should see a pair of outputs with the names of the monitor and cluster master
+instances:
+
+```
+Outputs:
+
+cluster_id = j-XXXXXXXXXXXXX
+cluster_master_dns = ip-XX-XX-XX-XX.us-west-2.compute.internal
+monitor_instance = ec2-XX-XX-XX-XX.us-west-2.compute.amazonaws.com
+```
+
+Open the `monitor_instance` address in a browser and you should see the
+benchmark landing page, with links to the various web interfaces exposed by the
+cluster.
 
 
 ## Running Tests
 
-**TODO:** fill in this section
+**TODO:** fill in this section more
+
+```json
+{
+  "Type": "CUSTOM_JAR",
+  "Name": "MerkleDB Benchmark",
+  "ActionOnFailure": "CONTINUE",
+  "Jar": "command-runner.jar",
+  "Args": [
+    "spark-submit",
+    "--deploy-mode", "cluster",
+    "s3://my-test-bucket/jars/benchmark-task.jar",
+    "...args..."
+  ],
+  "MainClass": "string",
+  "Properties": "string"
+}
+```
+
+```shell
+$ aws emr add-steps \
+    --cluster-id j-XXXXXXXXXXXXX \
+    --steps steps.json
+```
+
+**TODO:** how to enable the riemann profiler? Need to apply the following java arg:
+
+```
+-javaagent:riemann-jvm-profiler.jar=prefix=movie-lens,host=localhost,localhost-pid?=true
+```
 
 
 
@@ -88,16 +131,9 @@ responsible for collecting metrics from the tests.
 
 
 
-
-## TODO Thoughts
+## TODO Notes
 
 - Make an infrastructure diagram for this doc
-
-### Spark UI Proxies
-
-If we can set up an SSH tunnel from this instance to the cluster master (or some
-kind of IPsec tunnel?) then it should proxy the spark application pages as well.
-
 
 ### Saving Dashboard Changes
 
@@ -109,7 +145,6 @@ Riemann dasboards are also provisioned from a JSON file, which can be pulled
 from the monitor instance with `scp` after saving changes.
 
 - `/data/riemann/dashboards.json`
-- `/data/grafana/dashboards/`
 
 ### Data Collection
 

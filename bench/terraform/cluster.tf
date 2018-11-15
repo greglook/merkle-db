@@ -259,6 +259,10 @@ resource "aws_emr_cluster" "benchmark" {
   }
 }
 
+output "cluster_id" {
+  value = "${aws_emr_cluster.benchmark.id}"
+}
+
 output "cluster_master_dns" {
   value = "${aws_emr_cluster.benchmark.master_public_dns}"
 }

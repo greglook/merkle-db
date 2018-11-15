@@ -1,0 +1,16 @@
+---
+- name: Reload daemons
+  command: systemctl daemon-reload
+
+- name: Restart riemann
+  service:
+    name: riemann
+    state: restarted
+
+- name: Reload riemann
+  shell: kill -s HUP $(( $(cat /var/run/riemann.pid) + 1 ))
+
+- name: Restart riemann-dash
+  service:
+    name: riemann-dash
+    state: restarted

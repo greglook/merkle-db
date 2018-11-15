@@ -1,0 +1,9 @@
+- hosts: monitor
+  remote_user: ubuntu
+  become: true
+  roles:
+    - influxdb
+    - riemann
+    - grafana
+    - nginx
+    - solanum

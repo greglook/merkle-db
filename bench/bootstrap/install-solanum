@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+
+set -e
+
+if [[ -z $1 || -z $2 ]]; then
+    echo "Usage: $(basename $0) <version> <riemann-addr>"
+    exit 1
+fi
+
+SOLANUM_VERSION=$1
+RIEMANN_HOST=$2
+
+IS_MASTER=$(jq '.isMaster' < /mnt/var/lib/info/instance.json)
+#INSTANCE_GROUP=$(jq '.instanceGroupId' < /mnt/var/lib/info/instance.json)
+
+if [[ $IS_MASTER == true ]]; then
+    EVENT_HOSTNAME=master
+else
+    EVENT_HOSTNAME=$(hostname)
+fi
+
+SOLANUM_RELEASE="https://github.com/greglook/solanum/releases/download/${SOLANUM_VERSION}"
+SOLANUM_FILE="solanum_${SOLANUM_VERSION}_linux.tar.gz"
+
+echo "Fetching Solanum ${SOLANUM_VERSION}"
+wget "${SOLANUM_RELEASE}/${SOLANUM_FILE}" -O "/tmp/${SOLANUM_FILE}"
+
+echo "Installing Solanum..."
+tar -xvzf "/tmp/${SOLANUM_FILE}" -C /tmp/
+sudo chown root:root /tmp/solanum
+sudo mv /tmp/solanum /usr/local/bin/solanum
+
+echo "Configuring sources..."
+sudo mkdir /etc/solanum
+sudo tee /etc/solanum/config.yml > /dev/null <<EOF
+defaults:
+  ttl: 180
+  tags:
+    - solanum
+
+sources:
+  - type: cpu
+    period: 10
+  - type: memory
+    period: 10
+  - type: network
+    period: 10
+  - type: load
+  - type: disk-space
+  - type: disk-stats
+
+outputs:
+  - type: riemann
+    host: ${RIEMANN_HOST}
+    port: 5555
+EOF
+
+echo "Configuring upstart service..."
+sudo tee /etc/init/solanum.conf > /dev/null <<EOF
+description "Solanum monitoring daemon"
+start on started network
+respawn
+exec /usr/local/bin/solanum --host ${EVENT_HOST} /etc/solanum/*
+EOF
+
+echo "Starting service..."
+sudo initctl start solanum

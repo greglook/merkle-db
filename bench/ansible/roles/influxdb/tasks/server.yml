@@ -1,0 +1,49 @@
+---
+- name: Install InfluxDB
+  apt:
+    name: influxdb
+    state: present
+    update_cache: true
+
+- name: Install Python tools
+  apt:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - python-requests
+    - python-influxdb
+
+- name: Prepare data directory
+  file:
+    path: "{{ influxdb_data_dir }}"
+    state: directory
+    owner: influxdb
+    group: influxdb
+    mode: '0755'
+
+- name: Write InfluxDB configuration
+  template:
+    src: influxdb.conf
+    dest: "/etc/influxdb/influxdb.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - Restart influxdb
+
+- name: Start InfluxDB
+  service:
+    name: influxdb
+    state: restarted
+
+- name: Create database
+  influxdb_database:
+    database_name: merkledb
+
+- name: Create retention policy
+  influxdb_retention_policy:
+    database_name: merkledb
+    policy_name: raw
+    duration: 1w
+    replication: 1
+    default: true

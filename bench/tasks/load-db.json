@@ -1,0 +1,19 @@
+[
+  {
+    "Type": "CUSTOM_JAR",
+    "Name": "MerkleDB Benchmark",
+    "ActionOnFailure": "CONTINUE",
+    "Jar": "command-runner.jar",
+    "Args": [
+      "spark-submit",
+      "--deploy-mode", "cluster",
+      "--class", "movie_lens.main",
+      "s3://mvxcvi-test-data/jars/movie-lens-recommender.jar",
+      "--blocks", "s3://mvxcvi-test-data/blocks",
+      "--no-prompt",
+      "load-db",
+      "s3://mvxcvi-test-data/datasets/ml-latest/"
+    ],
+    "Properties": ""
+  }
+]

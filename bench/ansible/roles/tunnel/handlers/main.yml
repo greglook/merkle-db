@@ -1,0 +1,13 @@
+---
+- name: Reload daemons
+  command: systemctl daemon-reload
+
+- name: Restart tunnel
+  service:
+    name: cluster-tunnel
+    state: restarted
+
+- name: Restart nginx
+  service:
+    name: nginx
+    state: restarted

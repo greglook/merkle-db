@@ -1,0 +1,66 @@
+---
+- name: Install package dependencies
+  apt:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - ruby
+    - ruby-dev
+    - libffi-dev
+    - build-essential
+
+- name: Install gem dependencies
+  gem:
+    name: "{{ item }}"
+    state: present
+    user_install: false
+  with_items:
+    - erubis
+
+- name: Install riemann-dash gem
+  gem:
+    name: riemann-dash
+    state: latest
+    user_install: false
+
+- name: Configure systemd service
+  template:
+    src: riemann-dash.service
+    dest: /etc/systemd/system/riemann-dash.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - Reload daemons
+    - Restart riemann-dash
+
+- name: Prepare dashboard data directory
+  file:
+    path: /data/riemann
+    state: directory
+    owner: riemann
+    group: riemann
+    mode: '0755'
+
+- name: Write initial dashboards
+  template:
+    src: dashboards.json
+    dest: /data/riemann/dashboards.json
+    owner: riemann
+    group: riemann
+    mode: '0644'
+
+- name: Write service configuration
+  template:
+    src: dash-config.rb
+    dest: /etc/riemann/dash-config.rb
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - Restart riemann-dash
+
+- name: Start riemann-dash
+  service:
+    name: riemann-dash
+    state: started

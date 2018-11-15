@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>MerkleDB Benchmark Cluster</title>
+
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="icon" href="images/favicon.png">
+</head>
+<body>
+    <h1>MerkleDB Benchmark Cluster</h1>
+    <p>Welcome to the benchmark! Use the following links to interact with the test.</p>
+    <ul>
+        <li><a href="/riemann">Riemann Dashboard</a> Realtime metrics from Riemann</li>
+        <li><a href="/grafana">Grafana</a> Structured dashboards showing test metrics</li>
+        <li><a id="yarn-link" href="#">YARN</a> Cluster resource manager</li>
+        <li><a id="spark-link" href="#">Spark</a> Job history server</li>
+    </ul>
+    <script>
+        function setRelativeLink(link_id, port, path) {
+            var link = document.getElementById(link_id);
+            link.href = window.location.protocol + "//" + window.location.hostname + ":" + port + path;
+        }
+        setRelativeLink('yarn-link', 8088, '/cluster');
+        setRelativeLink('spark-link', 8080, '/');
+    </script>
+</body>
+</html>

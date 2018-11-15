@@ -1,0 +1,25 @@
+---
+- name: Install JDK
+  apt:
+    name: openjdk-8-jdk
+    state: present
+
+- name: Install Riemann
+  apt:
+    deb: https://github.com/riemann/riemann/releases/download/{{ riemann_version }}/riemann_{{ riemann_version }}_all.deb
+    state: present
+
+- name: Write Riemann configuration
+  template:
+    src: riemann.config
+    dest: /etc/riemann/riemann.config
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - Restart riemann
+
+- name: Start Riemann
+  service:
+    name: riemann
+    state: started

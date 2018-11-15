@@ -6,6 +6,7 @@ against the MerkleDB code. This is accomplished by spinning up an Elastic Map
 Reduce (EMR) cluster in AWS along with some supporting infrastructure to capture
 metrics from the running jobs.
 
+![cluster archictecture](doc/cluster-diagram.png)
 
 ## Setup
 
@@ -132,8 +133,6 @@ $ aws emr add-steps \
 
 
 ## TODO Notes
-
-- Make an infrastructure diagram for this doc
 
 ### Saving Dashboard Changes
 

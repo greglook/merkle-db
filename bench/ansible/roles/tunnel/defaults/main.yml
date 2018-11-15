@@ -2,11 +2,6 @@
 server_name: monitor
 tunnel_key_path: /etc/ssl/private/cluster-tunnel-key
 
-# YARN Resource Manager
-tunnel_yarn_nginx_port: 8088
-tunnel_yarn_local_port: 18088
-tunnel_yarn_remote_port: 8088
-
 # Spark History Server
 tunnel_spark_nginx_port: 8080
 tunnel_spark_local_port: 18080

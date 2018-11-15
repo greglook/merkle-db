@@ -8,7 +8,6 @@ After=network.target
 ExecStart=/usr/bin/ssh -N \
     -i {{ tunnel_key_path }} \
     -o StrictHostKeyChecking=no \
-    -L {{ tunnel_yarn_local_port }}:{{ cluster_master_host }}:{{ tunnel_yarn_remote_port }} \
     -L {{ tunnel_spark_local_port }}:{{ cluster_master_host }}:{{ tunnel_spark_remote_port }} \
     hadoop@{{ cluster_master_host }}
 KillMode=process

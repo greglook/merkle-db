@@ -1,0 +1,23 @@
+[Unit]
+Description=EMR Cluster Tunnel
+Requires=network.target
+After=network.target
+
+[Service]
+#EnvironmentFile=-/etc/default/cluster-tunnel
+ExecStart=/usr/bin/ssh -N \
+    -i {{ tunnel_key_path }} \
+    -o StrictHostKeyChecking=no \
+    -L {{ tunnel_yarn_local_port }}:{{ cluster_master_host }}:{{ tunnel_yarn_remote_port }} \
+    -L {{ tunnel_spark_local_port }}:{{ cluster_master_host }}:{{ tunnel_spark_remote_port }} \
+    hadoop@{{ cluster_master_host }}
+KillMode=process
+Restart=on-failure
+RestartPreventExitStatus=255
+Type=simple
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
+Alias=cluster-tunnel.service

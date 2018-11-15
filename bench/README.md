@@ -98,8 +98,6 @@ responsible for collecting metrics from the tests.
 If we can set up an SSH tunnel from this instance to the cluster master (or some
 kind of IPsec tunnel?) then it should proxy the spark application pages as well.
 
-- Use a terraform null-resource to run the final tunnel-setup script once the
-  cluster is up?
 
 ### Saving Dashboard Changes
 

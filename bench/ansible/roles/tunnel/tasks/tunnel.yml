@@ -1,0 +1,26 @@
+---
+- name: Write tunnel systemd unit
+  template:
+    src: cluster-tunnel.service
+    dest: /etc/systemd/system/cluster-tunnel.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - Reload daemons
+    - Restart tunnel
+
+- name: Start tunnel
+  service:
+    name: cluster-tunnel
+    state: started
+
+- name: Write site configuration
+  template:
+    src: nginx-site.conf
+    dest: /etc/nginx/sites-enabled/tunnel
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - Restart nginx

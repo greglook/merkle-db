@@ -44,6 +44,22 @@ resource "aws_security_group" "monitor" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    description = "Spark History"
+    protocol    = "tcp"
+    from_port   = 8080
+    to_port     = 8080
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "YARN"
+    protocol    = "tcp"
+    from_port   = 8088
+    to_port     = 8088
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     description = "Internet"
     protocol    = "-1"

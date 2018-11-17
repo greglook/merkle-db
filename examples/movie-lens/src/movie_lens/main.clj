@@ -26,10 +26,8 @@
 (def cli-options
   [["-b" "--blocks URL" "Location of backing block storage"
     :default "file://data/db/blocks"]
-   ["-r" "--refs URL" "Location of backing ref tracker"
-    :default "file://data/db/refs.tsv"]
    ["-m" "--master URL" "Spark master connection URL"]
-   [nil  "--no-prompt" "Disable the prompt for user input before exiting"]
+   [nil  "--wait" "Prompt for user input before exiting to keep the Spark web server alive"]
    ["-h" "--help"]])
 
 
@@ -208,7 +206,7 @@
             (when-let [err (ex-data err)]
               (reset! success? false)
               (u/pprint err))))
-        (when-not (:no-prompt options)
+        (when (:wait options)
           (println "\nCommand finished in" (u/duration-str @elapsed))
           (println "Press RETURN to exit")
           (flush)

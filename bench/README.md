@@ -140,7 +140,7 @@ Use the AWS CLI to submit the step to the cluster:
 ```sh
 $ aws emr add-steps \
     --cluster-id j-XXXXXXXXXXXXX \
-    --steps steps.json
+    --steps $(cat task.json)
 ```
 
 **TODO:** how to enable the riemann profiler? Need to apply the following java arg:

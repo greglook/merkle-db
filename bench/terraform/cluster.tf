@@ -168,6 +168,14 @@ resource "aws_security_group" "master" {
     cidr_blocks = ["${aws_vpc.main.cidr_block}"]
   }
 
+  ingress {
+    description = "Proxy Traffic"
+    protocol    = "tcp"
+    from_port   = 0
+    to_port     = 65535
+    cidr_blocks = ["${aws_instance.monitor.private_ip}/32"]
+  }
+
   egress {
     description = "Internet"
     protocol    = "-1"
@@ -187,6 +195,14 @@ resource "aws_security_group" "worker" {
   #lifecycle {
   #  ignore_changes = ["ingress", "egress"]
   #}
+
+  ingress {
+    description = "Proxy Traffic"
+    protocol    = "tcp"
+    from_port   = 0
+    to_port     = 65535
+    cidr_blocks = ["${aws_instance.monitor.private_ip}/32"]
+  }
 
   egress {
     description = "Internet"

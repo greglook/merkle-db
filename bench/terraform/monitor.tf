@@ -52,14 +52,6 @@ resource "aws_security_group" "monitor" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  ingress {
-    description = "YARN"
-    protocol    = "tcp"
-    from_port   = 8088
-    to_port     = 8088
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
   egress {
     description = "Internet"
     protocol    = "-1"
@@ -122,7 +114,7 @@ EOF
   provisioner "remote-exec" {
     inline = [
       "sudo apt-get update",
-      "sudo apt-get install -y python python-apt",
+      "sudo apt-get install -y python python-apt-common",
     ]
 
     connection {

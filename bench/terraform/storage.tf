@@ -10,7 +10,7 @@ variable "s3_data_bucket" {
 
 variable "solanum_version" {
   description = "Version of Solanum daemon to install"
-  default = "3.1.0"
+  default = "3.1.1"
 }
 
 resource "aws_s3_bucket_object" "install_solanum" {

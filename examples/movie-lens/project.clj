@@ -42,14 +42,14 @@
   :profiles
   {:provided
    {:dependencies
-    [[org.apache.spark/spark-core_2.11 "2.2.1"
+    [[org.apache.spark/spark-core_2.11 "2.3.2"
       :exclusions [commons-codec
                    commons-net
                    log4j
                    org.apache.commons/commons-compress
                    org.scala-lang/scala-reflect
                    org.slf4j/slf4j-log4j12]]
-     [org.apache.spark/spark-mllib_2.11 "2.2.1"
+     [org.apache.spark/spark-mllib_2.11 "2.3.2"
       :exclusions [log4j org.slf4j/slf4j-log4j12]]
      [com.thoughtworks.paranamer/paranamer "2.6"]]}
 

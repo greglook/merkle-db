@@ -7,11 +7,10 @@
 
 - name: Install Python tools
   apt:
-    name: "{{ item }}"
+    name:
+      - python-requests
+      - python-influxdb
     state: present
-  with_items:
-    - python-requests
-    - python-influxdb
 
 - name: Prepare data directory
   file:

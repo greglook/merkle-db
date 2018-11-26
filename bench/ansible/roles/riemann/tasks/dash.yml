@@ -1,21 +1,19 @@
 ---
 - name: Install package dependencies
   apt:
-    name: "{{ item }}"
+    name:
+      - ruby
+      - ruby-dev
+      - libffi-dev
+      - build-essential
     state: present
-  with_items:
-    - ruby
-    - ruby-dev
-    - libffi-dev
-    - build-essential
 
 - name: Install gem dependencies
   gem:
-    name: "{{ item }}"
+    name:
+      - erubis
     state: present
     user_install: false
-  with_items:
-    - erubis
 
 - name: Install riemann-dash gem
   gem:

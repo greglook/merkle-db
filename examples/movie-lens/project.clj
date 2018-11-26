@@ -14,6 +14,7 @@
     :exclusions [org.objenesis/objenesis]]
    [org.slf4j/log4j-over-slf4j "1.7.25"]
    [ch.qos.logback/logback-classic "1.2.3"]
+   [riemann-clojure-client "0.5.0"]
 
    ; Version pinning
    [com.fasterxml.jackson.core/jackson-databind "2.6.6"]

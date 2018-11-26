@@ -17,6 +17,7 @@
     [movie-lens.tag :as tag]
     [movie-lens.util :as u]
     [multihash.core :as multihash]
+    [riemann.client :as riemann]
     [sparkling.conf :as conf]
     [sparkling.core :as spark]
     [sparkling.destructuring :as sde]
@@ -24,8 +25,11 @@
 
 
 (def cli-options
-  [["-b" "--blocks URL" "Location of backing block storage"
+  [["-b" "--blocks-url URL" "Location of backing block storage"
     :default "file://data/db/blocks"]
+   [nil  "--riemann-host HOST" "Host to send riemann metrics to"]
+   [nil  "--riemann-port PORT" "Port to send riemann metrics to"
+    :default 5555]
    ["-m" "--master URL" "Spark master connection URL"]
    [nil  "--wait" "Prompt for user input before exiting to keep the Spark web server alive"]
    ["-h" "--help"]])
@@ -42,9 +46,37 @@
   (fn init
     []
     (require 'blocks.store.s3)
+    (require 'merkle-db.graph)
+    (require 'riemann.client)
     (mdag/init-store
       :encoding [:mdag :gzip :cbor]
-      :store (block/->store (:blocks-url cfg))
+      :store (assoc (block/->store (:blocks-url cfg))
+                    :riemann/client (when-let [host (:riemann-host cfg)]
+                                      (riemann/tcp-client
+                                        :host host
+                                        :port (:riemann-port cfg 5555)))
+                    :blocks.meter/label "s3"
+                    :blocks.meter/recorder
+                    (fn block-recorder
+                      [store event]
+                      (let [client (:riemann/client store)
+                            evt (case (:type event)
+                                  :blocks.meter/method-time
+                                  {:service "block store method time"
+                                   :metric (:value event)
+                                   :method (subs (str (:method event)) 1)
+                                   :args (str/join " " (:args event))}
+
+                                  (:blocks.meter/io-read :blocks.meter/io-write)
+                                  {:service (str "block store " (name (:type event)))
+                                   :metric (:value event)
+                                   :block (:block event)}
+
+                                  (log/warn "Unknown block meter event:" (pr-str event)))]
+                        (when (and client evt)
+                          (when-not (riemann/connected? client)
+                            (riemann/reconnect! client))
+                          @(riemann/send-events client [event])))))
       :cache {:total-size-limit (:cache-size cfg (* 32 1024 1024))}
       :types merkle-db.graph/codec-types)))
 
@@ -191,7 +223,10 @@
                          (println "The argument" (pr-str command)
                                   "is not a supported command")
                          (System/exit 2)))
-          options (assoc options :init-store (store-constructor {:blocks-url (:blocks options)}))
+          options (assoc options :init-store (store-constructor
+                                               {:blocks-url (:blocks-url options)
+                                                :riemann-host (:riemann-host options)
+                                                :riemann-port (:riemann-port options)}))
           start (System/currentTimeMillis)
           elapsed (delay (/ (- (System/currentTimeMillis) start) 1e3))]
       (spark/with-context spark-ctx (-> (conf/spark-conf)

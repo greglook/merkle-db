@@ -7,6 +7,7 @@
     [clojure.string :as str]
     [clojure.tools.cli :as cli]
     [clojure.tools.logging :as log]
+    [com.stuartsierra.component :as component]
     [merkle-db.database :as db]
     [merkle-db.spark.table-rdd :as table-rdd]
     [merkle-db.table :as table]
@@ -39,6 +40,29 @@
   ["load-db" "most-tagged" "best-rated"])
 
 
+(defn- block-recorder
+  [store event]
+  (log/info event)
+  (let [client (:riemann/client store)
+        evt (case (:type event)
+              :blocks.meter/method-time
+              {:service "block store method time"
+               :metric (:value event)
+               :method (subs (str (:method event)) 1)
+               :args (str/join " " (:args event))}
+
+              (:blocks.meter/io-read :blocks.meter/io-write)
+              {:service (str "block store " (name (:type event)))
+               :metric (:value event)
+               :block (:block event)}
+
+              (log/warn "Unknown block meter event:" (pr-str event)))]
+    (when (and client evt)
+      (when-not (riemann/connected? client)
+        (riemann/connect! client))
+      @(riemann/send-events client [event]))))
+
+
 ; TODO: best way to pass around store connection parameters to the executors?
 (defn- store-constructor
   "Initialize a MerkleDAG graph store from the given config."
@@ -50,33 +74,14 @@
     (require 'riemann.client)
     (mdag/init-store
       :encoding [:mdag :gzip :cbor]
-      :store (assoc (block/->store (:blocks-url cfg))
-                    :riemann/client (when-let [host (:riemann-host cfg)]
-                                      (riemann/tcp-client
-                                        :host host
-                                        :port (:riemann-port cfg 5555)))
-                    :blocks.meter/label "s3"
-                    :blocks.meter/recorder
-                    (fn block-recorder
-                      [store event]
-                      (let [client (:riemann/client store)
-                            evt (case (:type event)
-                                  :blocks.meter/method-time
-                                  {:service "block store method time"
-                                   :metric (:value event)
-                                   :method (subs (str (:method event)) 1)
-                                   :args (str/join " " (:args event))}
-
-                                  (:blocks.meter/io-read :blocks.meter/io-write)
-                                  {:service (str "block store " (name (:type event)))
-                                   :metric (:value event)
-                                   :block (:block event)}
-
-                                  (log/warn "Unknown block meter event:" (pr-str event)))]
-                        (when (and client evt)
-                          (when-not (riemann/connected? client)
-                            (riemann/reconnect! client))
-                          @(riemann/send-events client [event])))))
+      :store (-> (block/->store (:blocks-url cfg))
+                 (assoc :riemann/client (when-let [host (:riemann-host cfg)]
+                                          (riemann/tcp-client
+                                            :host host
+                                            :port (:riemann-port cfg 5555)))
+                        :blocks.meter/recorder block-recorder
+                        :blocks.meter/label "s3")
+                 (component/start))
       :cache {:total-size-limit (:cache-size cfg (* 32 1024 1024))}
       :types merkle-db.graph/codec-types)))
 

@@ -29,7 +29,7 @@
 
 (defn- load-movies-table!
   [spark-ctx init-store dataset-dir]
-  (let [start (System/currentTimeMillis)
+  (let [elapsed (u/stopwatch)
         movies-path (str dataset-dir "movies.csv")
         links-path (str dataset-dir "links.csv")]
     (log/info "Loading movies data from" movies-path "and" links-path)
@@ -52,19 +52,18 @@
                   init-store
                   movie/table-parameters
                   record-rdd)
-          stats (stats/collect-table-stats table)
-          elapsed (/ (- (System/currentTimeMillis) start) 1e3)]
+          stats (stats/collect-table-stats table)]
       ;(u/pprint table)
       (stats/print-table-stats stats)
       (log/infof "Loaded movies table data (%s) in %s"
                  (multihash/base58 (::node/id table))
-                 (u/duration-str elapsed))
+                 (u/duration-str @elapsed))
       table)))
 
 
 (defn- load-tags-table!
   [spark-ctx init-store dataset-dir]
-  (let [start (System/currentTimeMillis)
+  (let [elapsed (u/stopwatch)
         csv-path (str dataset-dir "tags.csv")]
     (log/info "Loading tags data from" csv-path)
     (let [table (msl/build-table!
@@ -74,18 +73,17 @@
                            csv-path
                            tag/csv-header
                            tag/parse-row))
-          stats (stats/collect-table-stats table)
-          elapsed (/ (- (System/currentTimeMillis) start) 1e3)]
+          stats (stats/collect-table-stats table)]
       (stats/print-table-stats stats)
       (log/infof "Loaded tags table (%s) in %s"
                  (multihash/base58 (::node/id table))
-                 (u/duration-str elapsed))
+                 (u/duration-str @elapsed))
       table)))
 
 
 (defn- load-ratings-table!
   [spark-ctx init-store dataset-dir]
-  (let [start (System/currentTimeMillis)
+  (let [elapsed (u/stopwatch)
         csv-path (str dataset-dir "ratings.csv")]
     (log/info "Loading ratings data from" csv-path)
     (let [table (msl/build-table!
@@ -95,12 +93,11 @@
                            csv-path
                            rating/csv-header
                            rating/parse-row))
-          stats (stats/collect-table-stats table)
-          elapsed (/ (- (System/currentTimeMillis) start) 1e3)]
+          stats (stats/collect-table-stats table)]
       (stats/print-table-stats stats)
       (log/infof "Loaded ratings table (%s) in %s"
                  (multihash/base58 (::node/id table))
-                 (u/duration-str elapsed))
+                 (u/duration-str @elapsed))
       table)))
 
 

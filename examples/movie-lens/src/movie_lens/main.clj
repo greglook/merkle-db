@@ -227,8 +227,7 @@
                                                {:blocks-url (:blocks-url options)
                                                 :riemann-host (:riemann-host options)
                                                 :riemann-port (:riemann-port options)}))
-          start (System/currentTimeMillis)
-          elapsed (delay (/ (- (System/currentTimeMillis) start) 1e3))]
+          elapsed (u/stopwatch)]
       (spark/with-context spark-ctx (-> (conf/spark-conf)
                                         (conf/app-name "movie-lens-recommender")
                                         (cond->
@@ -241,8 +240,8 @@
             (when-let [err (ex-data err)]
               (reset! success? false)
               (u/pprint err))))
+        (println "\nCommand finished in" (u/duration-str @elapsed))
         (when (:wait options)
-          (println "\nCommand finished in" (u/duration-str @elapsed))
           (println "Press RETURN to exit")
           (flush)
           (read-line)))

@@ -115,40 +115,12 @@ Build an uberjar with the task code and upload it to the bucket:
 $ aws s3 cp target/uberjar/task.jar s3://my-test-bucket/jars/task.jar
 ```
 
-Write out a JSON file describing the task step to run:
-
-```json
-[
-  {
-    "Type": "CUSTOM_JAR",
-    "Name": "MerkleDB Benchmark",
-    "ActionOnFailure": "CONTINUE",
-    "Jar": "command-runner.jar",
-    "Args": [
-      "spark-submit",
-      "--deploy-mode", "cluster",
-      "s3://my-test-bucket/jars/task.jar",
-      "...args..."
-    ],
-    "Properties": ""
-  }
-]
-```
-
-Use the AWS CLI to submit the step to the cluster:
+Write out a [JSON file](tasks/load-db.json) describing the task step to run,
+then use the [run-task](run-task.sh) script to launch it:
 
 ```sh
-$ aws emr add-steps \
-    --cluster-id j-XXXXXXXXXXXXX \
-    --steps $(cat task.json)
+$ ./run-task.sh tasks/load-db.json
 ```
-
-**TODO:** how to enable the riemann profiler? Need to apply the following java arg:
-
-```
--javaagent:riemann-jvm-profiler.jar=prefix=merkle-db,host=localhost,localhost-pid?=true
-```
-
 
 
 
@@ -159,6 +131,15 @@ $ aws emr add-steps \
 
 
 ## TODO Notes
+
+Tune spark:
+- https://spark.apache.org/docs/latest/configuration.html
+- https://spark.apache.org/docs/latest/tuning.html
+
+Try optimizing kryo-registration for keys:
+- `spark.kryo.classesToRegister=merkle_db.key.Key`
+
+`spark.extraListeners` for metrics?
 
 ### Saving Dashboard Changes
 

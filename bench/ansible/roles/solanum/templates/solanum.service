@@ -4,13 +4,13 @@ Requires=network.target
 After=network.target
 
 [Service]
-ExecStart=/usr/local/bin/solanum /etc/solanum/host.yml
-KillMode=process
-Restart=on-failure
-RestartPreventExitStatus=255
 Type=simple
 User=daemon
 Group=daemon
+ExecStart=/usr/local/bin/solanum /etc/solanum
+Restart=always
+RestartSec=10
+RestartPreventExitStatus=255
 
 [Install]
 WantedBy=multi-user.target

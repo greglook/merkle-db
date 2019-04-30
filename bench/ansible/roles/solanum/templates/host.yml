@@ -1,4 +1,5 @@
 defaults:
+  period: 30
   ttl: 180
   tags:
     - solanum

@@ -10,8 +10,7 @@
 
 - name: Install gem dependencies
   gem:
-    name:
-      - erubis
+    name: erubis
     state: present
     user_install: false
 

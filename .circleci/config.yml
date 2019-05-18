@@ -1,10 +1,10 @@
 version: 2
 
 jobs:
-  lint-benchmark:
+  bench-terraform:
     working_directory: ~/merkle-db
     docker:
-      - image: circleci/clojure:lein-2.9.1
+      - image: alpine:3.7
     steps:
       - checkout
       - run:
@@ -12,7 +12,13 @@ jobs:
           command: "wget https://releases.hashicorp.com/terraform/0.11.13/terraform_0.11.13_linux_amd64.zip && unzip terraform_0.11.13_linux_amd64.zip"
       - run:
           name: Validate Terraform files
-          command: "./terraform validate bench/terraform"
+          command: "./terraform validate -check-variables=false bench/terraform"
+  bench-ansible:
+    working_directory: ~/merkle-db
+    docker:
+      - image: circleci/python:2.7
+    steps:
+      - checkout
       - run: pip install ansible-lint
       - run:
           name: Validate Ansible files
@@ -22,7 +28,7 @@ jobs:
     docker:
       - image: circleci/clojure:lein-2.9.1
     environment:
-      LEIN_JVM_OPTS: "-Djava.awt.headless=true"
+      JVM_OPTS: "-Djava.awt.headless=true"
       #LEIN_ROOT: nbd
     steps:
       - checkout
@@ -32,7 +38,7 @@ jobs:
     docker:
       - image: circleci/clojure:lein-2.9.1
     environment:
-      LEIN_JVM_OPTS: "-Xmx3200m -Djava.awt.headless=true"
+      JVM_OPTS: "-Xmx3200m -Djava.awt.headless=true"
       #LEIN_ROOT: nbd
     steps:
       - checkout
@@ -52,7 +58,7 @@ jobs:
     docker:
       - image: circleci/clojure:lein-2.9.1
     environment:
-      LEIN_JVM_OPTS: "-Xmx3200m -Djava.awt.headless=true"
+      JVM_OPTS: "-Xmx3200m -Djava.awt.headless=true"
       #LEIN_ROOT: nbd
     steps:
       - checkout

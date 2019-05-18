@@ -10,7 +10,7 @@
     state: present
 
 - name: Write Riemann configuration
-  template:
+  copy:
     src: riemann.config
     dest: /etc/riemann/riemann.config
     owner: root

@@ -65,10 +65,20 @@
   :profiles
   {:dev
    {:dependencies
-    [[org.clojure/data.csv "0.1.4"]
-     [org.clojure/test.check "0.9.0"]
+    [[org.clojure/data.csv "0.1.4"]]}
+
+   :repl
+   {:source-paths ["dev"]
+    :dependencies
+    [[clj-stacktrace "0.2.8"]
+     [org.clojure/tools.namespace "0.2.11"]]}
+
+   :combined
+   {:dependencies
+    [[org.clojure/test.check "0.9.0"]
      [com.gfredericks/test.chuck "0.2.8"]
      [com.thoughtworks.paranamer/paranamer "2.8"]
+     [commons-logging "1.2"]
      [mvxcvi/test.carly "0.4.1"]
      [org.apache.spark/spark-core_2.11 "2.4.3"
       :exclusions [commons-codec
@@ -80,17 +90,7 @@
      [org.apache.spark/spark-mllib_2.11 "2.4.3"
       :exclusions [commons-codec
                    log4j
-                   org.slf4j/slf4j-log4j12]]]}
-
-   :repl
-   {:source-paths ["dev"]
-    :dependencies
-    [[clj-stacktrace "0.2.8"]
-     [org.clojure/tools.namespace "0.2.11"]]}
-
-   :combined
-   {:dependencies
-    [[commons-logging "1.2"]]
+                   org.slf4j/slf4j-log4j12]]]
 
     :aot
     [merkle-db.spark.key-partitioner

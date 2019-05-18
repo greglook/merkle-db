@@ -29,6 +29,7 @@
     [merkle-db.patch :as patch]
     [merkle-db.record :as record]
     [merkle-db.spark.key-partitioner :as partitioner]
+    [merkle-db.spark.util :refer [with-op-scope]]
     [merkle-db.table :as table]
     [merkledag.core :as mdag]
     [merkledag.node :as node]
@@ -218,15 +219,6 @@
 
 
 ;; ## RDD Construction
-
-(defmacro with-op-scope
-  "Apply a Spark context operation scope around the statements in the body."
-  [spark-ctx scope-name & body]
-  `(.withScope org.apache.spark.rdd.RDDOperationScope$/MODULE$
-     ~spark-ctx ~scope-name true false
-     (proxy [scala.Function0] []
-       (apply [] ~@body))))
-
 
 (defn scan
   ([spark-ctx init-store table]

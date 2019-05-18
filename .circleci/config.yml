@@ -1,12 +1,43 @@
 version: 2
+
 jobs:
-  build:
+  terraform:
     working_directory: ~/merkle-db
     docker:
-      - image: circleci/clojure:lein-2.7.1
+      - image: alpine:3.7
+    steps:
+      - checkout
+      - run:
+          name: Install Terraform CLI
+          command: "wget https://releases.hashicorp.com/terraform/0.11.13/terraform_0.11.13_linux_amd64.zip && unzip terraform_0.11.13_linux_amd64.zip"
+      - run:
+          name: Validate Terraform files
+          command: "./terraform validate -check-variables=false bench/terraform"
+  ansible:
+    working_directory: ~/merkle-db
+    docker:
+      - image: circleci/python:2.7
+    steps:
+      - checkout
+      - run: sudo pip install ansible-lint
+      - run:
+          name: Validate Ansible files
+          command: ansible-lint bench/ansible/monitor.yml bench/ansible/init-tunnel.yml
+  style:
+    working_directory: ~/merkle-db
+    docker:
+      - image: circleci/clojure:lein-2.9.1
+    environment:
+      JVM_OPTS: "-Djava.awt.headless=true"
+    steps:
+      - checkout
+      - run: lein combined cljfmt check
+  unit:
+    working_directory: ~/merkle-db
+    docker:
+      - image: circleci/clojure:lein-2.9.1
     environment:
       JVM_OPTS: "-Xmx3200m -Djava.awt.headless=true"
-      LEIN_ROOT: nbd
     steps:
       - checkout
       - restore_cache:
@@ -20,14 +51,40 @@ jobs:
           key: v1-{{ checksum "project.clj" }}
       - run: lein monolith each test
       - run: lein test
+  coverage:
+    working_directory: ~/merkle-db
+    docker:
+      - image: circleci/clojure:lein-2.9.1
+    environment:
+      JVM_OPTS: "-Xmx3200m -Djava.awt.headless=true"
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - v1-{{ checksum "project.clj" }}-coverage
+            - v1-{{ checksum "project.clj" }}
+            - v1-
+      - run: lein monolith each install
       - run: lein combined cloverage --codecov
       - save_cache:
           paths:
             - ~/.m2
-          key: v1-{{ checksum "project.clj" }}
+          key: v1-{{ checksum "project.clj" }}-coverage
       - store_artifacts:
           path: target/coverage
           destination: coverage
       - run:
           name: Publish Coverage
           command: 'bash <(curl -s https://codecov.io/bash) -f target/coverage/codecov.json'
+
+workflows:
+  version: 2
+  test:
+    jobs:
+      - terraform
+      - ansible
+      - style
+      - unit
+      - coverage:
+          requires:
+            - unit

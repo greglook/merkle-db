@@ -7,12 +7,12 @@
     group: root
     mode: '0644'
   notify:
-    - Reload daemons
     - Restart tunnel
 
 - name: Start tunnel
-  service:
+  systemd:
     name: cluster-tunnel
+    daemon_reload: true
     state: started
 
 - name: Write site configuration

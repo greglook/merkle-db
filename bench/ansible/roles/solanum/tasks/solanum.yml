@@ -35,10 +35,10 @@
     group: root
     mode: '0644'
   notify:
-    - Reload daemons
     - Restart solanum
 
 - name: Start Solanum
-  service:
+  systemd:
     name: solanum
+    daemon_reload: true
     state: started

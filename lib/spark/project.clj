@@ -11,20 +11,17 @@
   :deploy-branches ["master"]
 
   :dependencies
-  [[org.clojure/clojure "1.9.0"]
+  [[org.clojure/clojure "1.10.0"]
    [org.clojure/tools.logging "0.4.0"]
    [mvxcvi/merkle-db-core "0.1.1-SNAPSHOT"]
-   [gorillalabs/sparkling "2.1.2"
+   [gorillalabs/sparkling "2.1.3"
     :exclusions [org.objenesis/objenesis]]
 
-   ; Version pinning
-   [clj-time "0.10.0"]
-   ;[com.fasterxml.jackson.core/jackson-databind "2.6.6"]
-   ;[com.fasterxml.jackson.core/jackson-annotations "2.6.5"]
-   ;[commons-codec "1.10"]
-   ;[joda-time "2.8.1"]
-   ;[org.apache.httpcomponents/httpclient "4.5.2"]
-   ]
+   ;; Version pinning
+   [com.fasterxml.jackson.core/jackson-core "2.7.9"]
+   [com.google.code.findbugs/jsr305 "3.0.2"]
+   [joda-time "2.9.9"]
+   [org.slf4j/slf4j-api "1.7.25"]]
 
   :codox
   {:metadata {:doc/format :markdown}
@@ -34,16 +31,18 @@
   :profiles
   {:provided
    {:dependencies
-    [[org.apache.spark/spark-core_2.11 "2.2.1"
+    [[org.apache.spark/spark-core_2.11 "2.4.3"
       :exclusions [commons-codec
                    commons-net
                    log4j
                    org.apache.commons/commons-compress
                    org.scala-lang/scala-reflect
                    org.slf4j/slf4j-log4j12]]
-     [org.apache.spark/spark-mllib_2.11 "2.2.1"
-      :exclusions [log4j org.slf4j/slf4j-log4j12]]
-     [com.thoughtworks.paranamer/paranamer "2.6"]]}
+     [org.apache.spark/spark-mllib_2.11 "2.4.3"
+      :exclusions [commons-codec
+                   log4j
+                   org.slf4j/slf4j-log4j12]]
+     [com.thoughtworks.paranamer/paranamer "2.8"]]}
 
    :dev
    {:aot

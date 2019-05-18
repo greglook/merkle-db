@@ -11,7 +11,7 @@
   :deploy-branches ["master"]
 
   :dependencies
-  [[org.clojure/clojure "1.9.0"]
+  [[org.clojure/clojure "1.10.0"]
    [org.clojure/tools.logging "0.4.0"]
    [bigml/sketchy "0.4.1"]
    [mvxcvi/multihash "2.0.3"]

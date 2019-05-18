@@ -11,7 +11,7 @@
   :deploy-branches ["master"]
 
   :dependencies
-  [[org.clojure/clojure "1.9.0"]
+  [[org.clojure/clojure "1.10.0"]
    [mvxcvi/merkle-db-core "0.1.1-SNAPSHOT"]
    [rhizome "0.2.9"]]
 

@@ -18,7 +18,7 @@
    [lein-monolith "1.0.1"]]
 
   :dependencies
-  [[org.clojure/clojure "1.9.0"]
+  [[org.clojure/clojure "1.10.0"]
    [mvxcvi/merkle-db-core "0.1.1-SNAPSHOT"]
    [mvxcvi/merkle-db-spark "0.1.1-SNAPSHOT"]
    [mvxcvi/merkle-db-tools "0.1.1-SNAPSHOT"]]

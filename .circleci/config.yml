@@ -84,7 +84,8 @@ workflows:
   version: 2
   build:
     jobs:
-      - lint-benchmark
+      - bench-terraform
+      - bench-ansible
       - style
       - test
       - coverage:

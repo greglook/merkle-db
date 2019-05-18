@@ -21,7 +21,8 @@
 
 
 (def table-parameters
-  {:merkle-db.table/primary-key [::user/id ::movie/id ::value]
+  {:merkle-db.table/name "tags"
+   :merkle-db.table/primary-key [::user/id ::movie/id ::value]
    :merkle-db.key/lexicoder [:tuple :integer :integer :string]
    :merkle-db.index/fan-out 256
    :merkle-db.partition/limit 10000})

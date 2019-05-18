@@ -125,10 +125,10 @@
 
   (valAt
     [this k not-found]
-    ; TODO: something different with ::data or ::patch?
+    ;; TODO: something different with ::data or ::patch?
     (if (contains? info-keys k)
       (get table-info k not-found)
-      ; TODO: link-expand value?
+      ;; TODO: link-expand value?
       (get root-data k not-found)))
 
 
@@ -154,18 +154,20 @@
     [this element]
     (cond
       (instance? java.util.Map$Entry element)
-        (let [^java.util.Map$Entry entry element]
-          (.assoc this (.getKey entry) (.getValue entry)))
+      (let [^java.util.Map$Entry entry element]
+        (.assoc this (.getKey entry) (.getValue entry)))
+
       (vector? element)
-        (.assoc this (first element) (second element))
+      (.assoc this (first element) (second element))
+
       :else
-        (loop [result this
-               entries element]
-          (if (seq entries)
-            (let [^java.util.Map$Entry entry (first entries)]
-              (recur (.assoc result (.getKey entry) (.getValue entry))
-                     (rest entries)))
-            result))))
+      (loop [result this
+             entries element]
+        (if (seq entries)
+          (let [^java.util.Map$Entry entry (first entries)]
+            (recur (.assoc result (.getKey entry) (.getValue entry))
+                   (rest entries)))
+          result))))
 
 
   (equiv
@@ -326,13 +328,15 @@
   (when (seq records)
     (cond->> records
       (:min-key opts)
-        (drop-while #(key/before? (first %) (:min-key opts)))
+      (drop-while #(key/before? (first %) (:min-key opts)))
+
       (:max-key opts)
-        (take-while #(not (key/after? (first %) (:max-key opts))))
+      (take-while #(not (key/after? (first %) (:max-key opts))))
+
       (:fields opts)
-        (map (fn select-fields
-               [[k r]]
-               [k (if (map? r) (select-keys r (:fields opts)) r)])))))
+      (map (fn select-fields
+             [[k r]]
+             [k (if (map? r) (select-keys r (:fields opts)) r)])))))
 
 
 (defn- read-batch
@@ -392,9 +396,9 @@
          opts (assoc opts :min-key min-k, :max-key max-k)]
      (->
        (patch/patch-seq
-         ; Merged patch data to apply to the records.
+         ;; Merged patch data to apply to the records.
          (filter-records opts (load-changes table))
-         ; Lazy sequence of matching records from the index tree.
+         ;; Lazy sequence of matching records from the index tree.
          (when-let [data-node (mdag/get-data
                                 (.store table)
                                 (::data (.root-data table)))]
@@ -411,12 +415,14 @@
                (:fields opts)))))
        (cond->>
          (seq (:fields opts))
-           (remove (comp empty? second))
-         ; OPTIMIZE: push down offset to skip subtrees
+         (remove (comp empty? second))
+
+         ;; OPTIMIZE: push down offset to skip subtrees
          (and (:offset opts) (pos? (:offset opts)))
-           (drop (:offset opts))
+         (drop (:offset opts))
+
          (and (:limit opts) (nat-int? (:limit opts)))
-           (take (:limit opts)))
+         (take (:limit opts)))
        (->>
          (map (partial record/decode-entry
                        lexicoder
@@ -446,7 +452,7 @@
   ([table]
    (keys table nil))
   ([table opts]
-   ; OPTIMIZE: push down key-only read to avoid loading non-base tablets
+   ;; OPTIMIZE: push down key-only read to avoid loading non-base tablets
    (map (comp ::record/id meta)
         (scan table opts))))
 
@@ -469,10 +475,10 @@
            id-keys (into (sorted-set) (map (partial key/encode lexicoder)) ids)]
        (->
          (read-batch table id-keys opts)
-         ; TODO: is this really the best place for this filtering?
+         ;; TODO: is this really the best place for this filtering?
          (cond->>
            (seq (:fields opts))
-             (remove (comp empty? second)))
+           (remove (comp empty? second)))
          (->>
            (map (partial record/decode-entry
                          lexicoder
@@ -506,29 +512,29 @@
   [{:keys [update-record update-field]}]
   (cond
     (and update-record update-field)
-      (throw (IllegalArgumentException.
-               "Record updates cannot make use of both :update-field and :update-record at the same time."))
+    (throw (IllegalArgumentException.
+             "Record updates cannot make use of both :update-field and :update-record at the same time."))
 
     (fn? update-record)
-      update-record
+    update-record
 
     update-record
-      (throw (IllegalArgumentException.
-               (str "Record update :update-record must be a function: "
-                    (pr-str update-record))))
+    (throw (IllegalArgumentException.
+             (str "Record update :update-record must be a function: "
+                  (pr-str update-record))))
 
     (or (map? update-field) (fn? update-field))
-      (record/field-merger update-field)
+    (record/field-merger update-field)
 
     update-field
-      (throw (IllegalArgumentException.
-               (str "Record update :update-field must be a function or map of field functions: "
-                    (pr-str update-field))))
+    (throw (IllegalArgumentException.
+             (str "Record update :update-field must be a function or map of field functions: "
+                  (pr-str update-field))))
 
     :else
-      (fn update-simple
-        [_ old-data new-data]
-        (merge old-data new-data))))
+    (fn update-simple
+      [_ old-data new-data]
+      (merge old-data new-data))))
 
 
 (defn insert
@@ -563,11 +569,11 @@
                          (assoc acc k (not-empty data))))
                      extant records)
            added (- (count records) (count extant))]
-       ; Add new data maps to pending changes.
+       ;; Add new data maps to pending changes.
        (-> table
            (update-pending into records)
            (update ::record/count + added)))
-     ; No records inserted, return table unchanged.
+     ;; No records inserted, return table unchanged.
      table)))
 
 
@@ -585,7 +591,7 @@
             (map #(vector % ::patch/tombstone))
             extant-keys)
           (update ::record/count - (count extant-keys))))
-    ; No records deleted, return table unchanged.
+    ;; No records deleted, return table unchanged.
     table))
 
 
@@ -603,21 +609,21 @@
   [^Table table full?]
   (let [changes (load-changes table)]
     (if (seq changes)
-      ; Check for force or limit overflow.
+      ;; Check for force or limit overflow.
       (if (or full? (< (::patch/limit table 0) (count changes)))
-        ; Combine pending changes and patch tablet and update data tree.
+        ;; Combine pending changes and patch tablet and update data tree.
         [nil (when-let [data (index/update-tree
                                (.store table)
                                table
                                (mdag/get-data (.store table) (::data table))
                                changes)]
                (mdag/link "data" data))]
-        ; Flush any pending changes to the patch tablet.
+        ;; Flush any pending changes to the patch tablet.
         [(->> (patch/from-changes changes)
               (mdag/store-node! (.store table) nil)
               (mdag/link "patch"))
          (::data table)])
-      ; No patch data or tablet.
+      ;; No patch data or tablet.
       [nil (::data table)])))
 
 
@@ -653,5 +659,5 @@
            (sorted-map)
            false
            table-meta)))
-     ; Table is clean, return directly.
+     ;; Table is clean, return directly.
      table)))

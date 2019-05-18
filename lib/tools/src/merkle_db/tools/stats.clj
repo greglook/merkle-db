@@ -3,7 +3,6 @@
   (:require
     [clojure.string :as str]
     [merkle-db.index :as index]
-    ;[merkle-db.key :as key]
     [merkle-db.partition :as part]
     [merkle-db.patch :as patch]
     [merkle-db.record :as record]
@@ -16,7 +15,7 @@
 (defn collect-table-stats
   "Calculate statistics about the structure of the given table."
   [^merkle_db.table.Table table]
-  ; TODO: pending/dirty info?
+  ;; TODO: pending/dirty info?
   (reduce
     (fn [stats data]
       (let [count-node (fn [s] (update s :count (fnil inc 0)))
@@ -31,27 +30,27 @@
                                  (update :sum (fnil + 0) v)))))]
         (case (:type data)
           :patch
-            (assoc stats :patch (select-keys data [:size :changes]))
+          (assoc stats :patch (select-keys data [:size :changes]))
 
           :index
-            (-> stats
-                (update (:type data) count-node)
-                (update (:type data) track :size data)
-                (update (:type data) track :children data)
-                (update-in [(:type data) :heights (:height data)] (fnil inc 0)))
+          (-> stats
+              (update (:type data) count-node)
+              (update (:type data) track :size data)
+              (update (:type data) track :children data)
+              (update-in [(:type data) :heights (:height data)] (fnil inc 0)))
 
           :partition
-            (-> stats
-                (update (:type data) count-node)
-                (update (:type data) track :size data)
-                (update (:type data) track :records data))
+          (-> stats
+              (update (:type data) count-node)
+              (update (:type data) track :size data)
+              (update (:type data) track :records data))
 
           :tablet
-            (-> stats
-                (update-in [(:type data) (:family data)] count-node)
-                (update-in [(:type data) (:family data)] track :size data))
+          (-> stats
+              (update-in [(:type data) (:family data)] count-node)
+              (update-in [(:type data) (:family data)] track :size data))
 
-          ; Unknown node type.
+          ;; Unknown node type.
           (-> stats
               (update :unknown count-node)
               (update :unknown track :size data)
@@ -67,37 +66,37 @@
         (let [data (::node/data node)]
           (case (:data/type data)
             :merkle-db/patch
-              [[{:type :patch
-                 :size (::node/size node)
-                 :changes (count (::patch/changes data))}]
-               nil]
+            [[{:type :patch
+               :size (::node/size node)
+               :changes (count (::patch/changes data))}]
+             nil]
 
             :merkle-db/index
-              [[{:type :index
-                 :size (::node/size node)
-                 :height (::index/height data)
-                 :children (count (::index/children data))}]
-               (::index/children data)]
+            [[{:type :index
+               :size (::node/size node)
+               :height (::index/height data)
+               :children (count (::index/children data))}]
+             (::index/children data)]
 
             :merkle-db/partition
-              [(cons
-                 {:type :partition
-                  :size (::node/size node)
-                  :records (::record/count data)}
-                 (mapv
-                   (fn [[family-key link]]
-                     {:type :tablet
-                      :size (::link/rsize link)
-                      :family family-key})
-                   (::part/tablets data)))
-               ; Don't visit tablets, we don't want to load the data.
-               nil]
+            [(cons
+               {:type :partition
+                :size (::node/size node)
+                :records (::record/count data)}
+               (mapv
+                 (fn [[family-key link]]
+                   {:type :tablet
+                    :size (::link/rsize link)
+                    :family family-key})
+                 (::part/tablets data)))
+             ;; Don't visit tablets, we don't want to load the data.
+             nil]
 
-            ; Some other node type.
+            ;; Some other node type.
             [[{:type (:data/type data)
                :size (node/reachable-size node)
                :external? true}]
-             ; Don't visit links from unknown node types.
+             ;; Don't visit links from unknown node types.
              nil]))))))
 
 

@@ -15,7 +15,7 @@
     :extends org.apache.spark.rdd.RDD
     :constructors {[org.apache.spark.SparkContext
                     clojure.lang.Fn
-                    java.lang.Object  ; merkle_db.table.Table ?
+                    java.lang.Object
                     java.lang.Object]
                    [org.apache.spark.SparkContext
                     scala.collection.Seq
@@ -179,11 +179,11 @@
 
 (defn ^:no-doc -getPartitions
   [this]
-  ; - if table has no pending changes, no patch tablet, and no data link,
-  ;   return an empty rdd
-  ; - if table has only pending changes and/or a patch link, emit an RDD with one
-  ;   partition to represent the merged patch data
-  ; - otherwise, determine which partitions must be loaded to satisfy the scan
+  ;; - if table has no pending changes, no patch tablet, and no data link,
+  ;;   return an empty rdd
+  ;; - if table has only pending changes and/or a patch link, emit an RDD with one
+  ;;   partition to represent the merged patch data
+  ;; - otherwise, determine which partitions must be loaded to satisfy the scan
   (->>
     (load-partitions this)
     (map-indexed #(->TablePartition %1 (::node/id (meta %2))))
@@ -193,7 +193,7 @@
 (defn ^:no-doc -compute
   [this ^TablePartition tpart ^TaskContext task-context]
   (let [{:keys [init-store lexicoder primary-key patch-link pending scan-opts]} (.state this)
-        lexicoder (key/lexicoder lexicoder) ; TODO: improve terms
+        lexicoder (key/lexicoder lexicoder)
         fields (:fields scan-opts)
         min-k (:min-key scan-opts)
         max-k (:max-key scan-opts)
@@ -201,9 +201,9 @@
         part (graph/get-link! store (::node/id tpart))]
     (->>
       (patch/patch-seq
-        (@#'table/filter-records
-          scan-opts
-          (load-part-changes store pending patch-link part))
+        (let [changes (load-part-changes store pending patch-link part)]
+          ;; FIXME: shouldn't need private var reference
+          (#'table/filter-records scan-opts changes))
         (when part
           (if (or min-k max-k)
             (part/read-range store part fields min-k max-k)
@@ -224,7 +224,8 @@
   ([spark-ctx init-store table]
    (scan spark-ctx init-store table nil))
   ([spark-ctx init-store table scan-opts]
-   (let [lexicoder (@#'table/table-lexicoder table)
+   ;; FIXME: private fn access
+   (let [lexicoder (#'table/table-lexicoder table)
          min-k (some->> (:min-key scan-opts) (key/encode lexicoder))
          max-k (some->> (:max-key scan-opts) (key/encode lexicoder))
          sc (.sc ^JavaSparkContext spark-ctx)]

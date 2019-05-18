@@ -42,40 +42,47 @@
   (let [data-type (get-in node [::node/data :data/type])]
     (case data-type
       :merkle-db/database
-        {:shape :house
-         :label (node-label node)}
+      {:shape :house
+       :label (node-label node)}
+
       :merkle-db/table
-        ; idea: show short record count
-        {:shape :ellipse
-         :label (str (node-label node)
-                     (when-let [rc (:merkle-db.record/count (::node/data node))]
-                       (format "\n%d records" rc)))}
+      ;; idea: show short record count
+      {:shape :ellipse
+       :label (str (node-label node)
+                   (when-let [rc (:merkle-db.record/count (::node/data node))]
+                     (format "\n%d records" rc)))}
+
       :merkle-db/patch
-        {:shape :hexagon
-         :label (str (node-label node)
-                     (when-let [changes (:merkle-db.patch/changes (::node/data node))]
-                       (format "\n%d changes" (count changes))))}
+      {:shape :hexagon
+       :label (str (node-label node)
+                   (when-let [changes (:merkle-db.patch/changes (::node/data node))]
+                     (format "\n%d changes" (count changes))))}
+
       :merkle-db/index
-        {:shape :trapezium
-         :label (str (node-label node)
-                     (when-let [rc (:merkle-db.record/count (::node/data node))]
-                       (format "\n%d records" rc))
-                     \newline (:merkle-db.record/first-key (::node/data node))
-                     \newline (:merkle-db.record/last-key (::node/data node)))}
+      {:shape :trapezium
+       :label (str (node-label node)
+                   (when-let [rc (:merkle-db.record/count (::node/data node))]
+                     (format "\n%d records" rc))
+                   \newline (:merkle-db.record/first-key (::node/data node))
+                   \newline (:merkle-db.record/last-key (::node/data node)))}
+
       :merkle-db/partition
-        {:shape :rect
-         :label (str (node-label node)
-                     (when-let [rc (:merkle-db.record/count (::node/data node))]
-                       (format "\n%d records" rc))
-                     \newline (:merkle-db.record/first-key (::node/data node))
-                     \newline (:merkle-db.record/last-key (::node/data node)))}
+      {:shape :rect
+       :label (str (node-label node)
+                   (when-let [rc (:merkle-db.record/count (::node/data node))]
+                     (format "\n%d records" rc))
+                   \newline (:merkle-db.record/first-key (::node/data node))
+                   \newline (:merkle-db.record/last-key (::node/data node)))}
+
       :merkle-db/tablet
-        {:shape :hexagon
-         :label (node-label node)}
+      {:shape :hexagon
+       :label (node-label node)}
+
       ::placeholder
-        {:shape :doublecircle
-         :label (node-label node)}
-      ; else
+      {:shape :doublecircle
+       :label (node-label node)}
+
+      ;; else
       {:shape :doubleoctagon
        :color :red
        :label (node-label node)})))
@@ -92,7 +99,7 @@
 
 (defn edge->descriptor
   [from to]
-  ; color links by something?
+  ;; color links by something?
   {:label (link-label from to)})
 
 
@@ -110,9 +117,9 @@
       :node->descriptor node->descriptor
       :edge->descriptor edge->descriptor
       :options {:dpi 64}
-      ; :node->cluster
-      ; :cluster->parent
-      ; :cluster->descriptor
+      ;; :node->cluster
+      ;; :cluster->parent
+      ;; :cluster->descriptor
       args)))
 
 

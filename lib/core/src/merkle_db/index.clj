@@ -85,7 +85,7 @@
   "Aggregates index node values from a sequence of child data. Returns the
   persisted node data map for the constructed index."
   [store height children]
-  ; OPTIMIZE: truncate separator keys to the shortest value that correctly splits the adjacent children
+  ;; OPTIMIZE: truncate separator keys to the shortest value that correctly splits the adjacent children
   (let [ckeys (into [] (map ::record/first-key) (rest children))
         links (numbered-child-links children)
         record-count (reduce + 0 (map ::record/count children))]
@@ -139,11 +139,11 @@
              layer children]
         (if (and (<= (min-branches params) (count layer))
                  (or (nil? ceiling) (< height ceiling)))
-          ; Build the next layer.
+          ;; Build the next layer.
           (let [groups (split-limited (max-branches params) layer)]
             (recur (inc height)
                    (mapv (partial store-index! store (inc height)) groups)))
-          ; Hit ceiling, or insufficient children.
+          ;; Hit ceiling, or insufficient children.
           [height layer])))))
 
 
@@ -187,16 +187,16 @@
          pending (sort-by first records)]
     (if (seq pending)
       (if (seq split-keys)
-        ; Take next batch of keys.
+        ;; Take next batch of keys.
         (let [split (first split-keys)
               [in after] (split-with #(key/before? (first %) split) pending)]
           (recur (conj assignments [(first children) (not-empty in)])
                  (next children)
                  (next split-keys)
                  after))
-        ; No more splits, emit one final group with remaining keys.
+        ;; No more splits, emit one final group with remaining keys.
         (conj assignments [(first children) pending]))
-      ; No more record keys to assign; add remaining children.
+      ;; No more record keys to assign; add remaining children.
       (into assignments (map #(vector % nil)) children))))
 
 
@@ -221,15 +221,17 @@
   [node min-k max-k]
   (cond->> (child-boundaries node)
     min-k
-      (drop-while #(if-let [last-key (nth % 2)]
-                     (key/before? last-key min-k)
-                     false))
+    (drop-while #(if-let [last-key (nth % 2)]
+                   (key/before? last-key min-k)
+                   false))
+
     max-k
-      (take-while #(if-let [first-key (nth % 1)]
-                     (not (key/after? first-key max-k))
-                     true))
+    (take-while #(if-let [first-key (nth % 1)]
+                   (not (key/after? first-key max-k))
+                   true))
+
     true
-      (mapv first)))
+    (mapv first)))
 
 
 (defn- find-partitions
@@ -239,19 +241,19 @@
   of tuples with the partitions in order, plus the final child context for each
   partition."
   [store f node ctx]
-  ; TODO: figure out how to make this reducible
+  ;; TODO: figure out how to make this reducible
   (when node
     (case (:data/type node)
       :merkle-db/index
-        (mapcat
-          (fn read-child
-            [[child-link child-ctx]]
-            (let [child (get-link! store node child-link)]
-              (find-partitions store f child child-ctx)))
-          (f node ctx))
+      (mapcat
+        (fn read-child
+          [[child-link child-ctx]]
+          (let [child (get-link! store node child-link)]
+            (find-partitions store f child child-ctx)))
+        (f node ctx))
 
       :merkle-db/partition
-        [[node ctx]]
+      [[node ctx]]
 
       (throw (ex-info (str "Unsupported index-tree node type: "
                            (pr-str (:data/type node)))
@@ -334,24 +336,24 @@
   [store params height nodes carry]
   {:pre [(number? height) (vector? nodes)]}
   (cond
-    ; No remaining nodes - return carry value.
+    ;; No remaining nodes - return carry value.
     (empty? nodes)
-      carry
+    carry
 
-    ; Carry matches node height, concat result.
+    ;; Carry matches node height, concat result.
     (= height (first carry))
-      [height (into nodes (second carry))]
+    [height (into nodes (second carry))]
 
-    ; Otherwise recursively fold last element.
+    ;; Otherwise recursively fold last element.
     :else
-      (let [nodes' (pop nodes)
-            children (mapv #(get-link! store (peek nodes) %)
-                           (::children (peek nodes)))
-            result (if (= 1 height)
-                     (part/carry-back store params children carry)
-                     (carry-back store params (dec height) children carry))
-            carry' (build-tree* store params height (second result))]
-        (recur store params height nodes' carry'))))
+    (let [nodes' (pop nodes)
+          children (mapv #(get-link! store (peek nodes) %)
+                         (::children (peek nodes)))
+          result (if (= 1 height)
+                   (part/carry-back store params children carry)
+                   (carry-back store params (dec height) children carry))
+          carry' (build-tree* store params height (second result))]
+      (recur store params height nodes' carry'))))
 
 
 (declare update-index-node!)
@@ -370,26 +372,28 @@
          carry carry
          inputs child-inputs]
     (if (seq inputs)
-      ; Process next input node
+      ;; Process next input node
       (let [[child changes] (first inputs)
             [rheight elements :as result] (update-index-node!
                                             store params carry child changes)]
         (cond
-          ; Result is empty.
+          ;; Result is empty.
           (nil? result)
-            (recur outputs nil (next inputs))
-          ; Result elements are output-level nodes.
+          (recur outputs nil (next inputs))
+
+          ;; Result elements are output-level nodes.
           (= rheight height)
-            (recur (into outputs elements) nil (next inputs))
-          ; Result elements are a carry.
+          (recur (into outputs elements) nil (next inputs))
+
+          ;; Result elements are a carry.
           :else
-            (recur outputs result (next inputs))))
-      ; No more input nodes.
+          (recur outputs result (next inputs))))
+      ;; No more input nodes.
       (if (seq outputs)
         (if carry
           (carry-back store params height outputs carry)
           [height outputs])
-        ; No outputs, so return nil or direct carry.
+        ;; No outputs, so return nil or direct carry.
         carry))))
 
 
@@ -399,10 +403,10 @@
   unpersisted) index nodes at that height."
   [store params carry index changes]
   (if (and (nil? carry) (empty? changes))
-    ; No carry or changes to apply, pass-through node.
+    ;; No carry or changes to apply, pass-through node.
     [(::height index) [index]]
 
-    ; Divide up changes and apply to children.
+    ;; Divide up changes and apply to children.
     (let [child-inputs (map (fn [[child child-changes]]
                               [(get-link! store index child)
                                child-changes])
@@ -410,31 +414,33 @@
           child-height (dec (::height index))]
       (->
         (cond
-          ; Update children as partitions.
+          ;; Update children as partitions.
           (zero? child-height)
-            (part/update-partitions! store params carry child-inputs)
-          ; Adopt carried subnodes.
+          (part/update-partitions! store params carry child-inputs)
+
+          ;; Adopt carried subnodes.
           (and carry (= (first carry) child-height))
-            (update-index-children!
-              store params child-height
-              nil (concat (map vector (second carry)) child-inputs))
-          ; Carry forward into child updates.
+          (update-index-children!
+            store params child-height
+            nil (concat (map vector (second carry)) child-inputs))
+
+          ;; Carry forward into child updates.
           :else
-            (update-index-children!
-              store params child-height
-              carry child-inputs))
+          (update-index-children!
+            store params child-height
+            carry child-inputs))
         (as-> result
           (when result
             (if (and (= child-height (first result))
                      (= (map first child-inputs) (second result)))
-              ; Children remained unchanged after updates, so return original
-              ; index node.
+              ;; Children remained unchanged after updates, so return original
+              ;; index node.
               [(::height index) [index]]
               (if (neg? (first result))
-                ; Negative height means directly-carried records
+                ;; Negative height means directly-carried records
                 result
-                ; Build until the layer is too small or we've reached the original
-                ; index node height.
+                ;; Build until the layer is too small or we've reached the
+                ;; original index node height.
                 (build-tree* store params (::height index) (second result))))))))))
 
 
@@ -446,26 +452,26 @@
   records remain in the tree."
   [store params root changes]
   (cond
-    ; No changes, return root as-is.
+    ;; No changes, return root as-is.
     (empty? changes)
-      root
+    root
 
-    ; Empty tree.
+    ;; Empty tree.
     (nil? root)
-      (->> changes
-           (part/partition-records store params)
-           (build-tree store params))
+    (->> changes
+         (part/partition-records store params)
+         (build-tree store params))
 
-    ; Root is an index or partition node.
+    ;; Root is an index or partition node.
     (contains? #{:merkle-db/index :merkle-db/partition} (:data/type root))
-      (let [[height nodes] (if (= :merkle-db/partition (:data/type root))
-                             (part/update-partitions! store params nil [[root changes]])
-                             (update-index-node! store params nil root changes))]
-        (if (and height (neg? height))
-          (part/from-records store params nodes)
-          (build-tree store params nodes)))
+    (let [[height nodes] (if (= :merkle-db/partition (:data/type root))
+                           (part/update-partitions! store params nil [[root changes]])
+                           (update-index-node! store params nil root changes))]
+      (if (and height (neg? height))
+        (part/from-records store params nodes)
+        (build-tree store params nodes)))
 
     :else
-      (throw (ex-info (str "Unsupported index-tree node type: "
-                           (pr-str (:data/type root)))
-                      {:data/type (:data/type root)}))))
+    (throw (ex-info (str "Unsupported index-tree node type: "
+                         (pr-str (:data/type root)))
+                    {:data/type (:data/type root)}))))

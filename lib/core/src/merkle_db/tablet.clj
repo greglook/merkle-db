@@ -95,7 +95,7 @@
   "Read a lazy sequence of key/map tuples which contain the field data for the
   records whose keys are in the given collection."
   [tablet record-keys]
-  ; OPTIMIZE: divide up the range by binary-searching for keys in the batch.
+  ;; OPTIMIZE: divide up the range by binary-searching for keys in the batch.
   (filter (comp (set record-keys) first) (::records tablet)))
 
 
@@ -104,9 +104,10 @@
   records whose keys lie in the given range, inclusive. A nil boundary includes
   all records in that range direction."
   [tablet min-key max-key]
-  ; OPTIMIZE: binary-search to the starting point and then iterate.
+  ;; OPTIMIZE: binary-search to the starting point and then iterate.
   (cond->> (::records tablet)
     min-key
-      (drop-while #(key/before? (first %) min-key))
+    (drop-while #(key/before? (first %) min-key))
+
     max-key
-      (take-while #(not (key/after? (first %) max-key)))))
+    (take-while #(not (key/after? (first %) max-key)))))

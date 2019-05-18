@@ -78,7 +78,7 @@
 
 ;; ## Connection Type
 
-; TODO: implement IRef
+;; TODO: implement IRef
 (deftype Connection
   [store tracker])
 
@@ -111,15 +111,18 @@
   ([^Connection conn opts]
    (cond->> (ref/list-refs (.tracker conn) opts)
      true
-       (map ref-version-info)
+     (map ref-version-info)
+
      (:named opts)
-       (filter #(if (string? (:named opts))
-                  (str/starts-with? (::db/name %) (:named opts))
-                  (re-seq (:named opts) (::db/name %))))
+     (filter #(if (string? (:named opts))
+                (str/starts-with? (::db/name %) (:named opts))
+                (re-seq (:named opts) (::db/name %))))
+
      (:offset opts)
-       (drop (:offset opts))
+     (drop (:offset opts))
+
      (:limit opts)
-       (take (:limit opts)))))
+     (take (:limit opts)))))
 
 
 (defn- -get-db-history
@@ -129,11 +132,13 @@
   ([^Connection conn db-name opts]
    (cond->> (ref/get-history (.tracker conn) db-name)
      true
-       (map ref-version-info)
+     (map ref-version-info)
+
      (:offset opts)
-       (drop (:offset opts))
+     (drop (:offset opts))
+
      (:limit opts)
-       (take (:limit opts)))))
+     (take (:limit opts)))))
 
 
 (defn- -create-db!
@@ -170,9 +175,9 @@
                                       (ref/get-history (.tracker conn) db-name)))
                    (ref/get-ref (.tracker conn) db-name))]
      (if (::ref/value version)
-       ; Load database.
+       ;; Load database.
        (db/load-database (.store conn) (ref-version-info version))
-       ; No version found.
+       ;; No version found.
        (throw (ex-info (str "No version found for database " db-name
                             " with options " (pr-str opts))
                        {:type ::no-database-version
@@ -193,16 +198,16 @@
                    (pr-str db-name)))))
    (when-not db
      (throw (IllegalArgumentException. "Cannot commit nil database.")))
-   ; TODO: validate spec
-   ; TODO: check if current version is the same as the version opened at?
+   ;; TODO: validate spec
+   ;; TODO: check if current version is the same as the version opened at?
    (let [db (db/flush! db)
          root-id (::node/id db)
          current-version (ref/get-ref (.tracker conn) db-name)]
      (if (and (= root-id (::node/id current-version))
               (= db-name (::db/name db)))
-       ; No data has changed, return current database.
+       ;; No data has changed, return current database.
        db
-       ; Otherwise, update version.
+       ;; Otherwise, update version.
        (let [version (ref/set-ref! (.tracker conn) db-name root-id)]
          (db/update-backing db (.store conn) (ref-version-info version)))))))
 

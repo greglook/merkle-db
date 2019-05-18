@@ -1,14 +1,14 @@
 (ns merkle-db.spark.util
   "Internal Spark utilities."
   (:import
-    org.apache.spark.SparkContext
-    org.apache.spark.api.java.JavaSparkContext))
+    org.apache.spark.SparkContext))
 
 
 (defmacro with-op-scope
   "Apply a Spark context operation scope around the statements in the body."
   [spark-ctx scope-name & body]
-  `(.withScope org.apache.spark.rdd.RDDOperationScope$/MODULE$
+  `(.withScope
+     org.apache.spark.rdd.RDDOperationScope$/MODULE$
      ~spark-ctx ~scope-name true false
      (proxy [scala.Function0] []
        (apply [] ~@body))))

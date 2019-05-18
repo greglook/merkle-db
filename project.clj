@@ -39,12 +39,18 @@
   :cljfmt
   {:padding-lines 2
    :max-consecutive-blank-lines 3
-   :single-import-break-width 30
+   :single-import-break-width 40
    :indents {checking [[:block 2]]
              check-system [[:block 2]]
              check [[:block 1]]
              valid? [[:block 1]]
-             invalid? [[:block 1]]}}
+             invalid? [[:block 1]]
+             ;; TODO: remove these once cljfmt is upgraded
+             case ^:replace [[:block 1]]
+             cond ^:replace [[:block 0]]
+             condp ^:replace [[:block 2]]
+             cond-> ^:replace [[:block 1]]
+             cond->> ^:replace [[:block 1]]}}
 
   :hiera
   {:cluster-depth 2

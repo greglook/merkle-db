@@ -37,13 +37,13 @@
   (let [prefix-len (clojure.core/min (count a) (count b))]
     (loop [i 0]
       (if (< i prefix-len)
-        ; Compare next byte in sequence
+        ;; Compare next byte in sequence
         (let [ai (bit-and (nth a i) 0xFF)
               bi (bit-and (nth b i) 0xFF)]
           (if (= ai bi)
             (recur (inc i))
             (- ai bi)))
-        ; Reached the end of the shorter key, compare lengths.
+        ;; Reached the end of the shorter key, compare lengths.
         (- (count a) (count b))))))
 
 
@@ -290,9 +290,9 @@
   [^bytes data]
   (let [escape-count (count (filter #(or (== 0x00 %) (== 0x01 %)) data))]
     (if (zero? escape-count)
-      ; Nothing to escape, return data unchanged.
+      ;; Nothing to escape, return data unchanged.
       data
-      ; Generate escaped bytes.
+      ;; Generate escaped bytes.
       (let [edata (byte-array (+ escape-count (alength data)))]
         (loop [i 0, o 0]
           (if (= (alength data) i)
@@ -300,14 +300,14 @@
             (let [b (byte (aget data i))]
               (condp == b
                 0x00
-                  (do (aset-byte edata o 0x01)
-                      (aset-byte edata (inc o) 0x01)
-                      (recur (inc i) (inc (inc o))))
+                (do (aset-byte edata o 0x01)
+                    (aset-byte edata (inc o) 0x01)
+                    (recur (inc i) (inc (inc o))))
 
                 0x01
-                  (do (aset-byte edata o 0x01)
-                      (aset-byte edata (inc o) 0x02)
-                      (recur (inc i) (inc (inc o))))
+                (do (aset-byte edata o 0x01)
+                    (aset-byte edata (inc o) 0x02)
+                    (recur (inc i) (inc (inc o))))
 
                 (do (aset-byte edata o b)
                     (recur (inc i) (inc o)))))))))))
@@ -326,9 +326,9 @@
                            (recur c erest))
                          c))]
     (if (zero? escape-count)
-      ; Nothing to unescape, return data unchanged.
+      ;; Nothing to unescape, return data unchanged.
       edata
-      ; Generate unescaped bytes.
+      ;; Generate unescaped bytes.
       (let [data (byte-array (- (alength edata) escape-count))]
         (loop [i 0, o 0]
           (if (= (alength edata) i)
@@ -369,17 +369,17 @@
            idx offset
            i offset]
       (if (< i (+ offset length))
-        ; Scan for next 0x00 separator.
+        ;; Scan for next 0x00 separator.
         (if (== 0x00 (aget data i))
-          ; Copy element into new array.
+          ;; Copy element into new array.
           (let [element (byte-array (- i idx))]
             (System/arraycopy data idx element 0 (alength element))
             (recur (conj byte-arrays element)
                    (inc i)
                    (inc i)))
-          ; Keep scanning.
+          ;; Keep scanning.
           (recur byte-arrays idx (inc i)))
-        ; Hit end of data, copy last element.
+        ;; Hit end of data, copy last element.
         (let [element (byte-array (- i idx))]
           (System/arraycopy data idx element 0 (alength element))
           (conj byte-arrays element))))))
@@ -718,7 +718,8 @@
   [config]
   (when (config-params config)
     (throw (ex-info
-             (str "Instant lexicoder config takes no parameters: " (pr-str config))
+             (str "Instant lexicoder config takes no parameters: "
+                  (pr-str config))
              {:config config})))
   instant-lexicoder)
 
@@ -856,7 +857,7 @@
                (format "TupleLexicoder cannot encode non-sequential value: %s (%s)"
                        (pr-str value)
                        (some-> (class value) (.getName))))))
-    ; TODO: actually, let this encode shorter keys for prefix searching
+    ;; TODO: actually, let this encode shorter keys for prefix searching
     (when (not= (count (.coders this)) (count value))
       (throw (IllegalArgumentException.
                (format "TupleLexicoder cannot encode tuple which does not match lexicoder count %d: %s"
@@ -903,7 +904,8 @@
   [config]
   (when (not= 1 (count (config-params config)))
     (throw (ex-info
-             (str "Reverse lexicoder config takes exactly one parameter: " (pr-str config))
+             (str "Reverse lexicoder config takes exactly one parameter: "
+                  (pr-str config))
              {:config config})))
   (reverse-lexicoder (lexicoder (second config))))
 

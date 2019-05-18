@@ -16,8 +16,8 @@
       StandardCharsets)
     java.time.Instant
     java.util.Arrays
-    (javax.xml.bind
-      DatatypeConverter)))
+    ;; FIXME: this breaks later versions of Java, switch to something hand-rolled
+    javax.xml.bind.DatatypeConverter))
 
 
 ;; ## Comparators

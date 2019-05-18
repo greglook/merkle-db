@@ -15,7 +15,7 @@
    [lein-cprint "1.3.1"]
    [lein-hiera "1.1.0"]
    [lein-monolith "1.2.1"]
-   [mvxcvi/lein-cljfmt "0.7.0-SNAPSHOT"]
+   [mvxcvi/lein-cljfmt "0.7.0"]
    [mvxcvi/puget "1.1.2"]]
 
   :dependencies
@@ -44,13 +44,7 @@
              check-system [[:block 2]]
              check [[:block 1]]
              valid? [[:block 1]]
-             invalid? [[:block 1]]
-             ;; TODO: remove these once cljfmt is upgraded
-             case ^:replace [[:block 1]]
-             cond ^:replace [[:block 0]]
-             condp ^:replace [[:block 2]]
-             cond-> ^:replace [[:block 1]]
-             cond->> ^:replace [[:block 1]]}}
+             invalid? [[:block 1]]}}
 
   :hiera
   {:cluster-depth 2

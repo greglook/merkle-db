@@ -6,7 +6,7 @@ against the MerkleDB code. This is accomplished by spinning up an Elastic Map
 Reduce (EMR) cluster in AWS along with some supporting infrastructure to capture
 metrics from the running jobs.
 
-![cluster archictecture](doc/cluster-diagram.png)
+![cluster archictecture](img/cluster-diagram.png)
 
 The diagram above shows the high-level architecture of the cluster. An EMR
 cluster with a single master and multiple worker nodes is paired with an EC2

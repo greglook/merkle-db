@@ -61,8 +61,8 @@
       (.store table)
       #{}
       (conj (clojure.lang.PersistentQueue/EMPTY)
-            (::data table)
-            (::patch table))
+            (::table/data table)
+            (::table/patch table))
       (fn [node]
         (let [data (::node/data node)]
           (case (:data/type data)
@@ -115,16 +115,19 @@
                                                  unknown-size
                                                  tablet-sizes))
         table-pct #(* (/ (double %) table-size) 100.0)
-        unit-str (fn [scale units n]
-                   (-> (->> (map vector (iterate #(/ (double %) scale) n) units)
-                            (drop-while #(< scale (first %)))
-                            (first))
-                       (as-> [n u]
-                         (if (integer? n)
-                           (format "%d%s" n (or u ""))
-                           (format "%.2f%s" (double n) (or u ""))))))
+        unit-str (fn unit-str
+                   [scale units n]
+                   (if (number? n)
+                     (-> (->> (map vector (iterate #(/ (double %) scale) n) units)
+                              (drop-while #(< scale (first %)))
+                              (first))
+                         (as-> [n u]
+                           (if (integer? n)
+                             (format "%d%s" n (or u ""))
+                             (format "%.2f%s" (double n) (or u "")))))
+                     (pr-str n)))
         byte-str (partial unit-str 1024 [" B" " KB" " MB" " GB" " TB" " PB"])
-        count-str (partial unit-str 1000 [nil " K" " M" " B" " T"])
+        count-str (partial unit-str 1000 ["" " K" " M" " B" " T"])
         stats-str (fn [data k f]
                     (format "min %s, mean %s, max %s"
                             (f (get-in data [k :min]))

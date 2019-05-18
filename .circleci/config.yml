@@ -1,7 +1,7 @@
 version: 2
 
 jobs:
-  bench-terraform:
+  terraform:
     working_directory: ~/merkle-db
     docker:
       - image: alpine:3.7
@@ -13,7 +13,7 @@ jobs:
       - run:
           name: Validate Terraform files
           command: "./terraform validate -check-variables=false bench/terraform"
-  bench-ansible:
+  ansible:
     working_directory: ~/merkle-db
     docker:
       - image: circleci/python:2.7
@@ -32,7 +32,7 @@ jobs:
     steps:
       - checkout
       - run: lein combined cljfmt check
-  test:
+  unit:
     working_directory: ~/merkle-db
     docker:
       - image: circleci/clojure:lein-2.9.1
@@ -79,12 +79,12 @@ jobs:
 
 workflows:
   version: 2
-  build:
+  test:
     jobs:
-      - bench-terraform
-      - bench-ansible
+      - terraform
+      - ansible
       - style
-      - test
+      - unit
       - coverage:
           requires:
-            - test
+            - unit

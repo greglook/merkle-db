@@ -47,20 +47,22 @@
         evt (case (:type event)
               :blocks.meter/method-time
               {:service "block store method time"
+               :label (:label event)
                :metric (:value event)
                :method (subs (str (:method event)) 1)
                :args (str/join " " (:args event))}
 
               (:blocks.meter/io-read :blocks.meter/io-write)
               {:service (str "block store " (name (:type event)))
+               :label (:label event)
                :metric (:value event)
-               :block (:block event)}
+               :block (str (:block-id event))}
 
               (log/warn "Unknown block meter event:" (pr-str event)))]
     (when (and client evt)
       (when-not (riemann/connected? client)
         (riemann/connect! client))
-      @(riemann/send-events client [event]))))
+      @(riemann/send-events client [evt]))))
 
 
 ; TODO: best way to pass around store connection parameters to the executors?

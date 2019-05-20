@@ -13,7 +13,7 @@ cluster with a single master and multiple worker nodes is paired with an EC2
 instance which serves as a gateway and a monitor for the task metrics.
 
 
-## Setup
+## Cluster Setup
 
 Follow these steps to prepare a cluster for testing.
 
@@ -123,70 +123,25 @@ $ ./run-task.sh tasks/load-db.json
 ```
 
 
+## Local Development
 
+For developing or running the benchmark locally, you can use
+[docker-compose](https://docs.docker.com/compose/) to manage a cluster of
+containers that provide the same monitoring functionality.
 
+```sh
+$ cd docker
+$ docker-compose up -d
+```
 
+This will provide you with services on the following ports:
+- InfluxDB (8086)
+- Riemann (5555)
+- [riemann-dash](http://localhost:4567) (4567)
+- [Grafana](http://localhost:3000/) (3000)
 
+If you're working on the Riemann rules streams, use this command to reload them:
 
-
-
-## TODO Notes
-
-Tune spark:
-- https://spark.apache.org/docs/latest/configuration.html
-- https://spark.apache.org/docs/latest/tuning.html
-
-Try optimizing kryo-registration for keys:
-- `spark.kryo.classesToRegister=merkle_db.key.Key`
-
-`spark.extraListeners` for metrics?
-
-### Saving Dashboard Changes
-
-Grafana dashboards are provisioned from a set of JSON files, so can use the
-"Save Dasboard JSON" button in the UI to capture updates. This is a manual
-process for now, but maybe can be scripted in the future.
-
-Riemann dasboards are also provisioned from a JSON file, which can be pulled
-from the monitor instance with `scp` after saving changes.
-
-- `/data/riemann/dashboards.json`
-
-### Data Collection
-
-There are three primary sources of metrics data we're interested in collecting:
-- Host-level metrics like executor cpu, memory, disk, and network utilization.
-- Application metrics about method calls, block IO, spark phases, etc.
-- JVM profiler metrics from the riemann agent.
-
-The first two are amenable to graphing in Grafana - the last one probably isn't,
-unless there's the right panel type for it. Can be exposed well in riemann-dash,
-but that's a realtime view. Ideally, the riemann rules should log profiler data
-to a file where it can be analyzed to generate a static flame graph for each
-spark task phase after the run completes.
-
-### Scripting
-
-- Script to manage submitting jobs to the EMR cluster and monitoring/recording
-  the results.
-- Better: unattended "build uberjar, publish, spin up cluster, run ten times, then shut down"
-- Save test results in a rich format, since different tasks have different
-  inputs/metrics.
-
-### Load Test
-
-- prepare fresh ref tracker and block store
-- inputs are dataset name and table params
-  - ! start time
-  - ! repository HEAD commit
-  - ! record dataset/table and table params
-- load table as fast as possible
-  - ! input data size
-  - ! input data rows
-  - ! load elapsed
-  - ! table stats
-  - during load(?) sample n records for later querying
-  - ! sampled record ids
-  - table/read the sampled records, check results
-  - table/read some nonexistent records, check results
-  - ! elapsed read times
+```sh
+$ docker-compose kill -s SIGHUP riemann
+```

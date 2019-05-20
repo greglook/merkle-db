@@ -42,7 +42,6 @@
 
 (defn- block-recorder
   [store event]
-  (log/info event)
   (let [client (:riemann/client store)
         evt (case (:type event)
               :blocks.meter/method-time
@@ -69,23 +68,25 @@
 (defn- store-constructor
   "Initialize a MerkleDAG graph store from the given config."
   [cfg]
-  (fn init
-    []
-    (require 'blocks.store.s3)
-    (require 'merkle-db.graph)
-    (require 'riemann.client)
-    (mdag/init-store
-      :encoding [:mdag :gzip :cbor]
-      :store (-> (block/->store (:blocks-url cfg))
-                 (assoc :riemann/client (when-let [host (:riemann-host cfg)]
-                                          (riemann/tcp-client
-                                            :host host
-                                            :port (:riemann-port cfg 5555)))
-                        :blocks.meter/recorder block-recorder
-                        :blocks.meter/label "s3")
-                 (component/start))
-      :cache {:total-size-limit (:cache-size cfg (* 32 1024 1024))}
-      :types merkle-db.graph/codec-types)))
+  (let [blocks-url (:blocks-url cfg)
+        label (first (str/split (:blocks-url cfg) #":" 2))]
+    (fn init
+      []
+      (require 'blocks.store.s3)
+      (require 'merkle-db.graph)
+      (require 'riemann.client)
+      (mdag/init-store
+        :encoding [:mdag :gzip :cbor]
+        :store (-> (block/->store blocks-url)
+                   (assoc :blocks.meter/label label
+                          :blocks.meter/recorder block-recorder
+                          :riemann/client (when-let [host (:riemann-host cfg)]
+                                            (riemann/tcp-client
+                                              :host host
+                                              :port (:riemann-port cfg 5555))))
+                   (component/start))
+        :cache {:total-size-limit (:cache-size cfg (* 32 1024 1024))}
+        :types merkle-db.graph/codec-types))))
 
 
 (defn- load-db
@@ -252,5 +253,4 @@
           (println "Press RETURN to exit")
           (flush)
           (read-line)))
-      (when-not @success?
-        (System/exit 1)))))
+      (System/exit (if @success? 0 1)))))

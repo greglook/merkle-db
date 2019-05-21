@@ -8,6 +8,7 @@
   [[org.clojure/clojure "1.10.0"]
    [org.clojure/data.csv "0.1.4"]
    [org.clojure/tools.cli "0.4.2"]
+   [mvxcvi/blocks "1.2.0"]
    [mvxcvi/blocks-s3 "0.4.0"
     :exclusions [net.jpountz.lz4/lz4]]
    [mvxcvi/merkle-db "0.1.1-SNAPSHOT"]

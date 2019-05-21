@@ -15,7 +15,7 @@
    [org.clojure/tools.logging "0.4.0"]
    [bigml/sketchy "0.4.1"]
    [mvxcvi/multihash "2.0.3"]
-   [mvxcvi/blocks "1.1.0"]
+   [mvxcvi/blocks "1.2.0"]
    [mvxcvi/merkledag-core "0.4.1"]
    [mvxcvi/merkledag-ref "0.2.0"]]
 

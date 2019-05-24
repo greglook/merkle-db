@@ -31,4 +31,9 @@
      [commons-logging "1.2"]
      [com.gfredericks/test.chuck "0.2.8"]
      [mvxcvi/test.carly "0.4.1"]
-     [riddley "0.1.14"]]}})
+     [riddley "0.1.14"]]}
+
+   :repl
+   {:source-paths ["dev"]
+    :dependencies
+    [[org.clojure/tools.namespace "0.2.11"]]}})

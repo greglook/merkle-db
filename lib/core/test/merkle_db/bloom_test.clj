@@ -1,14 +1,14 @@
 (ns merkle-db.bloom-test
   (:require
     [clojure.test :refer :all]
-    [clojure.test.check.generators :as gen]
-    [com.gfredericks.test.chuck.clojure-test :refer [checking]]
     [merkle-db.bloom :as bloom]))
 
 
 (deftest basic-ops
   (let [bf (bloom/create 1000)]
-    (pr-str bf)
+    (is (= bf bf))
+    (is (not= bf (bloom/create 1500)))
+    (is (string? (pr-str bf)))
     (is (bloom/filter? bf))
     (is (false? (bf :x)))
     (is (false? (bf :y)))

@@ -2,7 +2,7 @@
   "Bloom filters provide a probablistic way to test for membership in a set
   using a fixed amount of space. This is useful for reducing work when the test
   definitively rules out the existence of a record."
-  (:refer-clojure :exclude [merge])
+  (:refer-clojure :exclude [contains? merge])
   (:require
     [bigml.sketchy.bits :as bits]
     [bigml.sketchy.bloom :as bloom]
@@ -31,9 +31,9 @@
       (or (identical? this that)
           (when (identical? (class this) (class that))
             (let [that ^BloomFilter that]
-              (= bins (.bins that))
-              (= bits (.bits that))
-              (= k    (.k that)))))))
+              (and (= bins (.bins that))
+                   (= bits (.bits that))
+                   (= k    (.k that))))))))
 
   (hashCode
     [this]

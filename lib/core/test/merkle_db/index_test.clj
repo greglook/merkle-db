@@ -20,26 +20,25 @@
     [merkledag.node :as node]))
 
 
-#_
 (deftest index-limits
   (testing "limits"
-    (is (= index/default-fan-out (@#'index/max-branches {})))
-    (is (= 420 (@#'index/max-branches {::index/fan-out 420})))
-    (is (= 2 (@#'index/min-branches {::index/fan-out 4})))
-    (is (= 3 (@#'index/min-branches {::index/fan-out 5}))))
+    (is (= index/default-fan-out (#'index/max-branches {})))
+    (is (= 420 (#'index/max-branches {::index/fan-out 420})))
+    (is (= 2 (#'index/min-branches {::index/fan-out 4})))
+    (is (= 3 (#'index/min-branches {::index/fan-out 5}))))
   (testing "split-limited"
     (let [split-limited @#'index/split-limited]
-      (is (nil? (split-limited 3 [])))
+      (is (nil? (#'index/split-limited 3 [])))
       (is (= [[:a]]
-             (split-limited 3 [:a])))
+             (#'index/split-limited 3 [:a])))
       (is (= [[:a :b :c]]
-             (split-limited 3 [:a :b :c])))
+             (#'index/split-limited 3 [:a :b :c])))
       (is (= [[:a :b] [:c :d :e]]
-             (split-limited 3 [:a :b :c :d :e])))
+             (#'index/split-limited 3 [:a :b :c :d :e])))
       (is (= [100 100 101 100 101]
              (->>
                (range 502)
-               (split-limited 120)
+               (#'index/split-limited 120)
                (map count)))))))
 
 

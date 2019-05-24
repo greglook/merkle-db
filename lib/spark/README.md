@@ -14,4 +14,4 @@ existing tables, and scanning data out of a table as an RDD.
 Library releases are published on Clojars. To use the latest version with
 Leiningen, add the following dependency to your project definition:
 
-[![Clojars Project](http://clojars.org/mvxcvi/merkle-db-spark/latest-version.svg)](http://clojars.org/mvxcvi/merkle-db-spark)
+[![Clojars Project](http://clojars.org/merkle-db/spark/latest-version.svg)](http://clojars.org/merkle-db/spark)

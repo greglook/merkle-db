@@ -1,4 +1,4 @@
-(defproject mvxcvi/merkle-db-tools "0.1.1-SNAPSHOT"
+(defproject merkle-db/tools "0.1.1-SNAPSHOT"
   :description "MerkleDB utility tools."
   :url "https://github.com/greglook/merkle-db/blob/master/lib/tools"
   :license {:name "Public Domain"
@@ -12,7 +12,7 @@
 
   :dependencies
   [[org.clojure/clojure "1.10.0"]
-   [mvxcvi/merkle-db-core "0.1.1-SNAPSHOT"]
+   [mmerkle-db/core "0.1.1-SNAPSHOT"]
    [rhizome "0.2.9"]]
 
   :codox

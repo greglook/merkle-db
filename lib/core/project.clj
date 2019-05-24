@@ -1,4 +1,4 @@
-(defproject mvxcvi/merkle-db-core "0.1.1-SNAPSHOT"
+(defproject merkle-db/core "0.1.1-SNAPSHOT"
   :description "Hybrid data store built on merkle trees."
   :url "https://github.com/greglook/merkle-db/blob/master/lib/core"
   :license {:name "Public Domain"

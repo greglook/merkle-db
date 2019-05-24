@@ -2,7 +2,7 @@
   "Bloom filters provide a probablistic way to test for membership in a set
   using a fixed amount of space. This is useful for reducing work when the test
   definitively rules out the existence of a record."
-  (:refer-clojure :exclude [contains? merge])
+  (:refer-clojure :exclude [contains? into merge])
   (:require
     [bigml.sketchy.bits :as bits]
     [bigml.sketchy.bloom :as bloom]
@@ -12,8 +12,8 @@
 ;; The filter type wraps the bigml.sketchy bloom-filter implementation and
 ;; provides some extra features:
 ;;
-;; - Better printing than the basic map representation.
-;; - Collection semantics supporting `conj`, `into`, `empty`, `merge`, etc.
+;; - Strict typing to discriminate from regular maps.
+;; - Better printing than the map representation.
 ;; - Filters can be invoked on elements to test membership, similar to regular
 ;;   set types.
 (deftype BloomFilter
@@ -49,34 +49,6 @@
     (BloomFilter. bins bits k meta-map))
 
 
-  clojure.lang.IPersistentCollection
-
-  (seq
-    [this]
-    nil)
-
-  (count
-    [this]
-    (throw (RuntimeException.
-             "Bloom filters are not countable")))
-
-  (cons
-    [this x]
-    (BloomFilter.
-      (apply bits/set bins (take k (murmur/hash-seq x bits)))
-      bits k _meta))
-
-  (empty
-    [this]
-    (BloomFilter.
-      (bits/create (bit-shift-left 1 bits))
-      bits k _meta))
-
-  (equiv
-    [this that]
-    (.equals this that))
-
-
   clojure.lang.ILookup
 
   (valAt
@@ -103,11 +75,20 @@
 
 
 (defmethod print-method BloomFilter
-  [x w]
+  [bf w]
   (print-method
-    (tagged-literal 'merkle-db/bloom-filter [(:bits x) (:k x)])
+    (tagged-literal 'merkle-db/bloom-filter [(:bits bf) (:k bf)])
     w))
 
+
+(defn filter?
+  "Predicate which tests whether the value is a BloomFilter."
+  [x]
+  (instance? BloomFilter x))
+
+
+
+;; ## Constructors
 
 (defn create
   "Constructs a new bloom filter with the given expected population size and
@@ -121,8 +102,8 @@
 
 (defn filter->form
   "Build a serializable form for the bloom filter."
-  [^BloomFilter x]
-  (with-meta [(.k x) (.bits x) (.bins x)] (._meta x)))
+  [^BloomFilter bf]
+  (with-meta [(.k bf) (.bits bf) (.bins bf)] (._meta bf)))
 
 
 (defn form->filter
@@ -132,10 +113,36 @@
     (->BloomFilter bins bits k (meta form))))
 
 
-(defn filter?
-  "Predicate which tests whether the value is a BloomFilter."
-  [x]
-  (instance? BloomFilter x))
+
+;; ## Membership
+
+(defn- insert*
+  "Insert a single element into a bloom filter. Returns the updated filter."
+  [bf x]
+  (let [bits (:bits bf)
+        k (:k bf)]
+    (->BloomFilter
+      (apply bits/set (:bins bf) (take k (murmur/hash-seq x bits)))
+      bits k (meta bf))))
+
+
+(defn insert
+  "Insert the given elements into a bloom filter. Returns the updated filter."
+  [bf & xs]
+  (reduce insert* bf xs))
+
+
+(defn into
+  "Insert the collection of elements into a bloom filter. Returns the updated
+  filter."
+  [bf coll]
+  (reduce insert* bf coll))
+
+
+(defn contains?
+  "True if the filter probably contains the given value."
+  [bf x]
+  (bloom/contains? bf x))
 
 
 (defn mergeable?

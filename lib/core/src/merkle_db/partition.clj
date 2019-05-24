@@ -109,9 +109,7 @@
          ::tablets (into {}
                          (map #(store-tablet! store (key %) (tablet/from-records (val %))))
                          (record/split-data families records))
-         ::membership (into (bloom/create limit)
-                            (map first)
-                            records)
+         ::membership (bloom/into (bloom/create limit) (map first records))
          ::record/count (count records)
          ::record/families families
          ::record/first-key (first (first records))

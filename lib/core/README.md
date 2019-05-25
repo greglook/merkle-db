@@ -13,4 +13,4 @@ library necessary for simple high-level uses of the database.
 Library releases are published on Clojars. To use the latest version with
 Leiningen, add the following dependency to your project definition:
 
-[![Clojars Project](http://clojars.org/mvxcvi/merkle-db-core/latest-version.svg)](http://clojars.org/mvxcvi/merkle-db-core)
+[![Clojars Project](http://clojars.org/merkle-db/core/latest-version.svg)](http://clojars.org/merkle-db/core)

@@ -7,6 +7,7 @@
     [clojure.string :as str]
     [clojure.tools.cli :as cli]
     [clojure.tools.logging :as log]
+    [com.stuartsierra.component :as component]
     [merkle-db.database :as db]
     [merkle-db.spark.table-rdd :as table-rdd]
     [merkle-db.table :as table]
@@ -17,6 +18,7 @@
     [movie-lens.tag :as tag]
     [movie-lens.util :as u]
     [multihash.core :as multihash]
+    [riemann.client :as riemann]
     [sparkling.conf :as conf]
     [sparkling.core :as spark]
     [sparkling.destructuring :as sde]
@@ -24,12 +26,13 @@
 
 
 (def cli-options
-  [["-b" "--blocks URL" "Location of backing block storage"
+  [["-b" "--blocks-url URL" "Location of backing block storage"
     :default "file://data/db/blocks"]
-   ["-r" "--refs URL" "Location of backing ref tracker"
-    :default "file://data/db/refs.tsv"]
+   [nil  "--riemann-host HOST" "Host to send riemann metrics to"]
+   [nil  "--riemann-port PORT" "Port to send riemann metrics to"
+    :default 5555]
    ["-m" "--master URL" "Spark master connection URL"]
-   [nil  "--no-prompt" "Disable the prompt for user input before exiting"]
+   [nil  "--wait" "Prompt for user input before exiting to keep the Spark web server alive"]
    ["-h" "--help"]])
 
 
@@ -37,18 +40,53 @@
   ["load-db" "most-tagged" "best-rated"])
 
 
+(defn- block-recorder
+  [store event]
+  (let [client (:riemann/client store)
+        evt (case (:type event)
+              :blocks.meter/method-time
+              {:service "block store method time"
+               :label (:label event)
+               :metric (:value event)
+               :method (subs (str (:method event)) 1)
+               :args (str/join " " (:args event))}
+
+              (:blocks.meter/io-read :blocks.meter/io-write)
+              {:service (str "block store " (name (:type event)))
+               :label (:label event)
+               :metric (:value event)
+               :block (str (:block-id event))}
+
+              (log/warn "Unknown block meter event:" (pr-str event)))]
+    (when (and client evt)
+      (when-not (riemann/connected? client)
+        (riemann/connect! client))
+      @(riemann/send-events client [evt]))))
+
+
 ; TODO: best way to pass around store connection parameters to the executors?
 (defn- store-constructor
   "Initialize a MerkleDAG graph store from the given config."
   [cfg]
-  (fn init
-    []
-    (require 'blocks.store.s3)
-    (mdag/init-store
-      :encoding [:mdag :gzip :cbor]
-      :store (block/->store (:blocks-url cfg))
-      :cache {:total-size-limit (:cache-size cfg (* 32 1024 1024))}
-      :types merkle-db.graph/codec-types)))
+  (let [blocks-url (:blocks-url cfg)
+        label (first (str/split (:blocks-url cfg) #":" 2))]
+    (fn init
+      []
+      (require 'blocks.store.s3)
+      (require 'merkle-db.graph)
+      (require 'riemann.client)
+      (mdag/init-store
+        :encoding [:mdag :gzip :cbor]
+        :store (-> (block/->store blocks-url)
+                   (assoc :blocks.meter/label label
+                          :blocks.meter/recorder block-recorder
+                          :riemann/client (when-let [host (:riemann-host cfg)]
+                                            (riemann/tcp-client
+                                              :host host
+                                              :port (:riemann-port cfg 5555))))
+                   (component/start))
+        :cache {:total-size-limit (:cache-size cfg (* 32 1024 1024))}
+        :types merkle-db.graph/codec-types))))
 
 
 (defn- load-db
@@ -193,9 +231,11 @@
                          (println "The argument" (pr-str command)
                                   "is not a supported command")
                          (System/exit 2)))
-          options (assoc options :init-store (store-constructor {:blocks-url (:blocks options)}))
-          start (System/currentTimeMillis)
-          elapsed (delay (/ (- (System/currentTimeMillis) start) 1e3))]
+          options (assoc options :init-store (store-constructor
+                                               {:blocks-url (:blocks-url options)
+                                                :riemann-host (:riemann-host options)
+                                                :riemann-port (:riemann-port options)}))
+          elapsed (u/stopwatch)]
       (spark/with-context spark-ctx (-> (conf/spark-conf)
                                         (conf/app-name "movie-lens-recommender")
                                         (cond->
@@ -208,10 +248,9 @@
             (when-let [err (ex-data err)]
               (reset! success? false)
               (u/pprint err))))
-        (when-not (:no-prompt options)
-          (println "\nCommand finished in" (u/duration-str @elapsed))
+        (println "\nCommand finished in" (u/duration-str @elapsed))
+        (when (:wait options)
           (println "Press RETURN to exit")
           (flush)
           (read-line)))
-      (when-not @success?
-        (System/exit 1)))))
+      (System/exit (if @success? 0 1)))))

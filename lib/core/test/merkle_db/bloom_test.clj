@@ -1,25 +1,25 @@
 (ns merkle-db.bloom-test
   (:require
     [clojure.test :refer :all]
-    [clojure.test.check.generators :as gen]
-    [com.gfredericks.test.chuck.clojure-test :refer [checking]]
     [merkle-db.bloom :as bloom]))
 
 
 (deftest basic-ops
   (let [bf (bloom/create 1000)]
-    (pr-str bf)
+    (is (= bf bf))
+    (is (not= bf (bloom/create 1500)))
+    (is (string? (pr-str bf)))
     (is (bloom/filter? bf))
     (is (false? (bf :x)))
     (is (false? (bf :y)))
-    (is (true? ((conj bf :x) :x)))
-    (is (false? ((conj bf :x) :y)))
+    (is (true? ((bloom/insert bf :x) :x)))
+    (is (false? (bloom/contains? (bloom/insert bf :x) :y)))
     (is (false? (bf :x)))))
 
 
 (deftest merging
-  (let [a (into (bloom/create 1000) [:x :y])
-        b (into (bloom/create 1000) [1 2])
+  (let [a (bloom/insert (bloom/create 1000) :x :y)
+        b (bloom/insert (bloom/create 1000) 1 2)
         ab (bloom/merge a b)]
     (is (bloom/filter? ab))
     (is (true? (ab :x)))
@@ -33,7 +33,7 @@
 
 
 (deftest forming
-  (let [bf (into (bloom/create 1000) (range 100))
+  (let [bf (bloom/into (bloom/create 1000) (range 100))
         form (bloom/filter->form bf)]
     (is (vector? form))
     (is (= 3 (count form)))

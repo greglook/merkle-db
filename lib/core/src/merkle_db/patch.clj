@@ -67,18 +67,22 @@
               (if (tombstone? patch-val) tail (cons entry tail))))]
     (lazy-seq
       (cond
-        ; No more patch data, return records directly.
+        ;; No more patch data, return records directly.
         (empty? patch)
-          records
-        ; No more records, return remaining patch data.
+        records
+
+        ;; No more records, return remaining patch data.
         (empty? records)
-          (remove-tombstones patch)
-        ; Next key is in both patch and records.
+        (remove-tombstones patch)
+
+        ;; Next key is in both patch and records.
         (= (ffirst patch) (ffirst records))
-          (maybe-cons (first patch) (next records))
-        ; Next key is in patch, not in records.
+        (maybe-cons (first patch) (next records))
+
+        ;; Next key is in patch, not in records.
         (key/before? (ffirst patch) (ffirst records))
-          (maybe-cons (first patch) records)
-        ; Next key is in records, not in patch.
+        (maybe-cons (first patch) records)
+
+        ;; Next key is in records, not in patch.
         :else
-          (cons (first records) (patch-seq patch (next records)))))))
+        (cons (first records) (patch-seq patch (next records)))))))

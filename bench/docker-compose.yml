@@ -1,0 +1,54 @@
+version: "3"
+services:
+  riemann:
+    build:
+      context: docker/riemann
+    restart: on-failure
+    hostname: monitor
+    links:
+      - influx
+    volumes:
+      - ./ansible/roles/riemann/files/riemann.config:/riemann/etc/riemann.config:ro
+    environment:
+      - INFLUXDB_HOST=influx
+      - INFLUXDB_DB=merkledb
+    ports:
+      - "5555:5555/udp"
+      - "5555:5555"
+      - "5556:5556"
+
+  riemann-dash:
+    image: rlister/riemann-dash
+    restart: on-failure
+    depends_on:
+      - riemann
+    volumes:
+      - ./docker/data/riemann/config:/app/config
+    environment:
+      - WS_CONFIG=/app/config/dashboards.json
+    ports:
+      - "4567:4567"
+
+  influx:
+    image: influxdb:1.7-alpine
+    restart: on-failure
+    volumes:
+      - ./docker/data/influx:/var/lib/influxdb
+    environment:
+      - INFLUXDB_DB=merkledb
+    ports:
+      - "8086:8086"
+
+  grafana:
+    build:
+      context: docker/grafana
+    restart: on-failure
+    volumes:
+      - ./ansible/roles/grafana/files/dashboards:/etc/grafana/dashboards
+      - ./docker/data/grafana:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=secret
+    links:
+      - influx
+    ports:
+      - "3000:3000"

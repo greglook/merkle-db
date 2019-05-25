@@ -1,27 +1,28 @@
-(defproject mvxcvi/merkle-db "0.1.0"
+(defproject merkle-db "0.2.0"
   :description "Hybrid data store built on merkle trees."
   :url "https://github.com/greglook/merkle-db"
   :license {:name "Public Domain"
             :url "http://unlicense.org/"}
 
   :aliases
-  {"coverage" ["with-profile" "+coverage" "monolith" "with-all" "cloverage"]}
+  {"combined" ["monolith" "with-all" "with-profile" "+combined"]}
 
   :min-lein-version "2.7.0"
   :pedantic? :abort
 
   :plugins
-  [[mvxcvi/lein-cljfmt "0.7.0-SNAPSHOT"]
-   [lein-cloverage "1.0.10"]
-   [lein-cprint "1.3.0"]
-   [lein-hiera "1.0.0"]
-   [lein-monolith "1.0.1"]]
+  [[lein-cloverage "1.1.1"]
+   [lein-cprint "1.3.1"]
+   [lein-hiera "1.1.0"]
+   [lein-monolith "1.2.1"]
+   [mvxcvi/lein-cljfmt "0.7.0"]
+   [mvxcvi/puget "1.1.2"]]
 
   :dependencies
-  [[org.clojure/clojure "1.9.0"]
-   [mvxcvi/merkle-db-core "0.1.0"]
-   [mvxcvi/merkle-db-spark "0.1.0"]
-   [mvxcvi/merkle-db-tools "0.1.0"]]
+  [[org.clojure/clojure "1.10.0"]
+   [merkle-db/core "0.2.0"]
+   [merkle-db/spark "0.2.0"]
+   [merkle-db/tools "0.2.0"]]
 
   :monolith
   {:project-dirs ["lib/*"]
@@ -38,7 +39,7 @@
   :cljfmt
   {:padding-lines 2
    :max-consecutive-blank-lines 3
-   :single-import-break-width 30
+   :single-import-break-width 40
    :indents {checking [[:block 2]]
              check-system [[:block 2]]
              check [[:block 1]]
@@ -49,7 +50,7 @@
   {:cluster-depth 2
    :vertical false
    :show-external false
-   :ignore-ns #{clojure bigml merkle-db.validate}}
+   :ignore-ns #{clojure bigml merkle-db.tools.validate}}
 
   :whidbey
   {:tag-types
@@ -64,23 +65,7 @@
   :profiles
   {:dev
    {:dependencies
-    [[org.clojure/data.csv "0.1.4"]
-     [org.clojure/test.check "0.9.0"]
-     [org.clojure/tools.logging "0.4.0"]
-     [com.gfredericks/test.chuck "0.2.8"]
-     [commons-logging "1.2"]
-     [mvxcvi/test.carly "0.4.1"]
-     [riddley "0.1.14"]
-     [org.apache.spark/spark-core_2.11 "2.2.1"
-      :exclusions [commons-codec
-                   commons-net
-                   log4j
-                   org.apache.commons/commons-compress
-                   org.scala-lang/scala-reflect
-                   org.slf4j/slf4j-log4j12]]
-     [org.apache.spark/spark-mllib_2.11 "2.2.1"
-      :exclusions [log4j org.slf4j/slf4j-log4j12]]
-     [com.thoughtworks.paranamer/paranamer "2.6"]]}
+    [[org.clojure/data.csv "0.1.4"]]}
 
    :repl
    {:source-paths ["dev"]
@@ -88,9 +73,24 @@
     [[clj-stacktrace "0.2.8"]
      [org.clojure/tools.namespace "0.2.11"]]}
 
-   :coverage
+   :combined
    {:dependencies
-    [[commons-logging "1.2"]]
+    [[org.clojure/test.check "0.9.0"]
+     [com.gfredericks/test.chuck "0.2.8"]
+     [com.thoughtworks.paranamer/paranamer "2.8"]
+     [commons-logging "1.2"]
+     [mvxcvi/test.carly "0.4.1"]
+     [org.apache.spark/spark-core_2.11 "2.4.3"
+      :exclusions [commons-codec
+                   commons-net
+                   log4j
+                   org.apache.commons/commons-compress
+                   org.scala-lang/scala-reflect
+                   org.slf4j/slf4j-log4j12]]
+     [org.apache.spark/spark-mllib_2.11 "2.4.3"
+      :exclusions [commons-codec
+                   log4j
+                   org.slf4j/slf4j-log4j12]]]
 
     :aot
     [merkle-db.spark.key-partitioner

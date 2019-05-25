@@ -100,10 +100,10 @@
   (when (get-table db table-name)
     (throw (ex-info
              (str "Cannot create table: database already has a table named "
-                  table-name)
+                  (pr-str table-name))
              {:type ::table-conflict
               :table-name table-name})))
-  (set-table db table-name (table/bare-table nil table-name attrs)))
+  (set-table db table-name (table/new-table nil table-name attrs)))
 
 
 (defn update-table
@@ -118,8 +118,8 @@
                     table-name)
                {:type ::no-table
                 :table-name table-name})))
-    ; TODO: validate table spec?
-    ; TODO: set updated-at time?
+    ;; TODO: validate table spec?
+    ;; TODO: set updated-at time?
     (set-table db table-name (apply f table args))))
 
 
@@ -151,7 +151,7 @@
 
 ;; ## Database Type
 
-;; Databases are implementad as a custom type so they can behave similarly to
+;; Databases are implemented as a custom type so they can behave similarly to
 ;; natural Clojure values.
 ;;
 ;; - `store` reference to the merkledag node store backing the database.
@@ -211,10 +211,16 @@
   (valAt
     [this k not-found]
     (cond
-      (= ::tables k) tables ; TODO: better return val
-      (contains? info-keys k) (get db-info k not-found)
-      ; TODO: link-expand value
-      :else (get root-data k not-found)))
+      (= ::tables k)
+      ;; TODO: better return val
+      tables
+
+      (contains? info-keys k)
+      (get db-info k not-found)
+
+      :else
+      ;; TODO: link-expand value
+      (get root-data k not-found)))
 
 
   clojure.lang.IPersistentMap
@@ -233,18 +239,20 @@
     [this element]
     (cond
       (instance? java.util.Map$Entry element)
-        (let [^java.util.Map$Entry entry element]
-          (.assoc this (.getKey entry) (.getValue entry)))
+      (let [^java.util.Map$Entry entry element]
+        (.assoc this (.getKey entry) (.getValue entry)))
+
       (vector? element)
-        (.assoc this (first element) (second element))
+      (.assoc this (first element) (second element))
+
       :else
-        (loop [result this
-               entries element]
-          (if (seq entries)
-            (let [^java.util.Map$Entry entry (first entries)]
-              (recur (.assoc result (.getKey entry) (.getValue entry))
-                     (rest entries)))
-            result))))
+      (loop [result this
+             entries element]
+        (if (seq entries)
+          (let [^java.util.Map$Entry entry (first entries)]
+            (recur (.assoc result (.getKey entry) (.getValue entry))
+                   (rest entries)))
+          result))))
 
 
   (equiv
@@ -282,38 +290,44 @@
     [this k v]
     (cond
       (= k :data/type)
-        (throw (IllegalArgumentException.
-                 (str "Cannot change database :data/type from "
-                      :merkle-db/database)))
+      (throw (IllegalArgumentException.
+               (str "Cannot change database :data/type from "
+                    :merkle-db/database)))
+
       (= k ::tables)
-        (throw (IllegalArgumentException.
-                 (str "Cannot directly set database tables field " k)))
+      (throw (IllegalArgumentException.
+               (str "Cannot directly set database tables field " k)))
+
       (contains? info-keys k)
-        (throw (IllegalArgumentException.
-                 (str "Cannot change database info field " k)))
+      (throw (IllegalArgumentException.
+               (str "Cannot change database info field " k)))
+
       :else
-        (Database. store db-info (assoc root-data k v) tables _meta)))
+      (Database. store db-info (assoc root-data k v) tables _meta)))
 
 
   (without
     [this k]
     (cond
       (= k :data/type)
-        (throw (IllegalArgumentException.
-                 "Cannot remove database :data/type"))
+      (throw (IllegalArgumentException.
+               "Cannot remove database :data/type"))
+
       (= k ::tables)
-        (throw (IllegalArgumentException.
-                 (str "Cannot remove database tables field " k)))
+      (throw (IllegalArgumentException.
+               (str "Cannot remove database tables field " k)))
+
       (contains? info-keys k)
-        (throw (IllegalArgumentException.
-                 (str "Cannot remove database info field " k)))
+      (throw (IllegalArgumentException.
+               (str "Cannot remove database info field " k)))
+
       :else
-        (Database.
-          store
-          db-info
-          (not-empty (dissoc root-data k))
-          tables
-          _meta))))
+      (Database.
+        store
+        db-info
+        (not-empty (dissoc root-data k))
+        tables
+        _meta))))
 
 
 (alter-meta! #'->Database assoc :private true)
@@ -325,7 +339,7 @@
   (let [data (merge {::tables {}}
                     attrs
                     {:data/type :merkle-db/database})]
-    ; TODO: validate schema
+    ;; TODO: validate schema
     (->Database
       store
       {}
@@ -340,7 +354,7 @@
   (let [data (merge {::tables {}}
                     attrs
                     {:data/type :merkle-db/database})
-        ; TODO: validate schema
+        ;; TODO: validate schema
         node (mdag/store-node! store nil data)]
     (->Database
       store
@@ -406,13 +420,15 @@
   ([^Database db opts]
    (cond->> (map link-or-table->info (.tables db))
      (:named opts)
-       (filter #(if (string? (:named opts))
-                  (str/starts-with? (::table/name %) (:named opts))
-                  (re-seq (:named opts) (::table/name %))))
+     (filter #(if (string? (:named opts))
+                (str/starts-with? (::table/name %) (:named opts))
+                (re-seq (:named opts) (::table/name %))))
+
      (:offset opts)
-       (drop (:offset opts))
+     (drop (:offset opts))
+
      (:limit opts)
-       (take (:limit opts)))))
+     (take (:limit opts)))))
 
 
 (defn- -get-table
@@ -420,9 +436,9 @@
   [^Database db table-name]
   (when-let [value (get (.tables db) table-name)]
     (if (mdag/link? value)
-      ; Resolve link to stored table root.
+      ;; Resolve link to stored table root.
       (table/load-table (.store db) table-name value)
-      ; Loaded table value.
+      ;; Loaded table value.
       value)))
 
 

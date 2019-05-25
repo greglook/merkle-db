@@ -19,7 +19,7 @@
     [merkle-db.bloom :as bloom]
     [merkle-db.connection :as conn]
     [merkle-db.database :as db]
-    [merkle-db.generators :as mdgen]
+    ;[merkle-db.generators :as mdgen]
     [merkle-db.graph :as graph]
     [merkle-db.index :as index]
     [merkle-db.key :as key]
@@ -28,7 +28,7 @@
     [merkle-db.record :as record]
     [merkle-db.table :as table]
     [merkle-db.tablet :as tablet]
-    [merkle-db.viz :as viz]
+    [merkle-db.tools.viz :as viz]
     [multihash.core :as multihash]
     [multihash.digest :as digest]
     [rhizome.viz :as rhizome]))
@@ -209,25 +209,3 @@
                     :records records
                     :changes changes}]
     (viz-update update-map)))
-
-
-; TODO: load testing framework
-; - prepare fresh ref tracker and block store
-; - inputs are dataset name and table params
-;   - ! start time
-;   - ! repository HEAD commit
-;   - ! record dataset/table and table params
-; - load table as fast as possible
-;   - data must already be sorted?
-;     - or: take part-limit records, sort them, write out somewhere temporary
-;     - merge-combine k sorted parts together, writing out to new temp files
-;     - when there are fewer than k parts left, load the merged stream from all of them
-;   - ! input data size
-;   - ! input data rows
-;   - ! load elapsed
-;   - ! table stats
-;   - during load(?) sample n records for later querying
-;   - ! sampled record ids
-;   - table/read the sampled records, check results
-;   - table/read some nonexistent records, check results
-;   - ! elapsed read times

@@ -86,11 +86,13 @@
            kb (key/encode coder b)]
        (cond
          (zero? rrank)
-           (is (zero? (compare ka kb)))
+         (is (zero? (compare ka kb)))
+
          (pos? rrank)
-           (is (pos? (compare ka kb)))
+         (is (pos? (compare ka kb)))
+
          :else
-           (is (neg? (compare ka kb))))))))
+         (is (neg? (compare ka kb))))))))
 
 
 (defn- lexi-comparator

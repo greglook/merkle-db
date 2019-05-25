@@ -132,7 +132,7 @@
       :fields (gen-fields ctx)
       :min-key (gen/large-integer* {:min -10, :max n+})
       :max-key (gen/large-integer* {:min -10, :max n+})
-      ; TODO: :reverse gen/boolean
+      ;; TODO: :reverse gen/boolean
       :offset (gen/large-integer* {:min 0, :max n+})
       :limit (gen/large-integer* {:min 1, :max n+}))))
 
@@ -141,22 +141,28 @@
   [model query]
   (cond->> (seq model)
     (seq (:fields query))
-      (keep (fn [[k r]]
-              (let [r' (select-keys r (:fields query))]
-                (when (seq r')
-                  [k r']))))
+    (keep (fn [[k r]]
+            (let [r' (select-keys r (:fields query))]
+              (when (seq r')
+                [k r']))))
+
     (:min-key query)
-      (drop-while #(< (first %) (:min-key query)))
+    (drop-while #(< (first %) (:min-key query)))
+
     (:max-key query)
-      (take-while #(<= (first %) (:max-key query)))
+    (take-while #(<= (first %) (:max-key query)))
+
     (:reverse query)
-      (reverse)
+    (reverse)
+
     (:offset query)
-      (drop (:offset query))
+    (drop (:offset query))
+
     (:limit query)
-      (take (:limit query))
+    (take (:limit query))
+
     true
-      (map (fn [[k r]] (assoc r :id k)))))
+    (map (fn [[k r]] (assoc r :id k)))))
 
 
 (defop Keys
@@ -368,7 +374,7 @@
       (fn init-system
         [ctx]
         (->
-          (table/bare-table
+          (table/new-table
             store "test-data"
             {:merkle-db.index/fan-out 5
              :merkle-db.partition/limit 5

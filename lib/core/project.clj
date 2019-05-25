@@ -1,25 +1,28 @@
-(defproject mvxcvi/merkle-db-core "0.1.0"
+(defproject merkle-db/core "0.2.0"
   :description "Hybrid data store built on merkle trees."
-  :url "https://github.com/greglook/merkle-db"
+  :url "https://github.com/greglook/merkle-db/blob/master/lib/core"
   :license {:name "Public Domain"
             :url "http://unlicense.org/"}
+
+  :aliases
+  {"doc" ["do" ["codox"] ["marg" "--dir" "target/doc/marginalia" "--multi"]]}
 
   :monolith/inherit true
   :deploy-branches ["master"]
 
   :dependencies
-  [[org.clojure/clojure "1.9.0"]
+  [[org.clojure/clojure "1.10.0"]
    [org.clojure/tools.logging "0.4.0"]
    [bigml/sketchy "0.4.1"]
    [mvxcvi/multihash "2.0.3"]
-   [mvxcvi/blocks "1.1.0"]
+   [mvxcvi/blocks "1.2.0"]
    [mvxcvi/merkledag-core "0.4.1"]
    [mvxcvi/merkledag-ref "0.2.0"]]
 
   :codox
   {:metadata {:doc/format :markdown}
    :source-uri "https://github.com/greglook/merkle-db/blob/master/lib/core/{filepath}#L{line}"
-   :output-path "../../target/doc/codox/core"}
+   :output-path "target/doc/codox"}
 
   :profiles
   {:dev
@@ -28,4 +31,9 @@
      [commons-logging "1.2"]
      [com.gfredericks/test.chuck "0.2.8"]
      [mvxcvi/test.carly "0.4.1"]
-     [riddley "0.1.14"]]}})
+     [riddley "0.1.14"]]}
+
+   :repl
+   {:source-paths ["dev"]
+    :dependencies
+    [[org.clojure/tools.namespace "0.2.11"]]}})

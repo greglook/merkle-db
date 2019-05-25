@@ -7,6 +7,7 @@
     [merkle-db.key :as key]
     [merkle-db.partition :as part]
     [merkle-db.record :as record]
+    [merkle-db.spark.util :refer [with-job-group]]
     [merkle-db.table :as table]
     [merkledag.core :as mdag]
     [merkledag.node :as node]
@@ -50,23 +51,36 @@
   "Constructs a sequence of partitions from the RDD of data maps. This causes
   Spark execution."
   [init-store table-params data]
-  (->>
-    data
-    (spark/map-to-pair
-      (fn encode-record
-        [data]
-        (let [[k r] (record/encode-entry
-                      (key/lexicoder (::key/lexicoder table-params))
-                      (::table/primary-key table-params)
-                      data)]
-          (spark/tuple k r))))
-    (spark/sort-by-key)
-    (spark/map-partition
-      (fn write-table-parts
-        [record-iter]
-        (write-partitions init-store table-params (iterator-seq record-iter))))
-    (spark/collect)
-    (mapv extract-meta)))
+  (let [context (.context data) ; TODO: type-hint or pass explicitly
+        table-name (or (:merkle-db.table/name table-params)
+                       (str (gensym "unknown-")))
+        records (->>
+                  data
+                  (spark/map-to-pair
+                    (fn encode-record
+                      [data]
+                      (let [[k r] (record/encode-entry
+                                    (key/lexicoder (::key/lexicoder table-params))
+                                    (::table/primary-key table-params)
+                                    data)]
+                        (spark/tuple k r))))
+                  (spark/sort-by-key)
+                  (with-job-group
+                    context
+                    (str "sort:" table-name)
+                    (str "Sorting " table-name " records")))]
+    (->>
+      records
+      (spark/map-partition
+        (fn write-table-parts
+          [record-iter]
+          (write-partitions init-store table-params (iterator-seq record-iter))))
+      (spark/collect)
+      (with-job-group
+        context
+        (str "write:" table-name)
+        (str "Writing " table-name " partitions"))
+      (mapv extract-meta))))
 
 
 (defn build-table!
@@ -80,7 +94,7 @@
                ::record/count (::record/count data-root 0))
         (cond->
           data-root
-            (assoc ::table/data (mdag/link "data" data-root)))
+          (assoc ::table/data (mdag/link "data" data-root)))
         (dissoc ::node/id
                 ::table/name
                 ::table/patch)

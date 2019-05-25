@@ -30,6 +30,14 @@
   (puget/render-out pprinter x))
 
 
+(defn stopwatch
+  "Construct a delay which yields the duration between now and when it is
+  realized in fractional seconds."
+  []
+  (let [now (System/nanoTime)]
+    (delay (/ (- (System/nanoTime) now) 1e9))))
+
+
 (defn duration-str
   "Convert a duration in seconds into a human-readable duration string."
   [elapsed]

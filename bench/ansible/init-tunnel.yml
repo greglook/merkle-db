@@ -1,0 +1,40 @@
+# Initialize an SSH tunnel service between the monitor instance and the cluster
+# master to forward local web-service ports.
+
+- hosts: monitor
+  remote_user: ubuntu
+  become: true
+  tasks:
+    - name: Generate tunnel keypair
+      # TODO: use openssh_keypair when the module is available
+      #openssh_keypair:
+      #  path: "{{ tunnel_key_path }}"
+      #  size: 2048
+      command: "ssh-keygen -t rsa -b 2048 -C 'cluster-tunnel@merkle-db-bench' -N '' -f {{ tunnel_key_path }}"
+      args:
+        creates: "{{ tunnel_key_path }}"
+    - name: Fetch tunnel public key
+      fetch:
+        src: "{{ tunnel_key_path }}.pub"
+        dest: tunnel-key.pub
+        flat: true
+  vars:
+    tunnel_key_path: /etc/ssl/private/cluster-tunnel-key
+
+- hosts: "{{ cluster_master_host }}"
+  remote_user: hadoop
+  become: false
+  tasks:
+    - name: Authorize tunnel public key
+      authorized_key:
+        user: hadoop
+        key: "{{ lookup('file', 'tunnel-key.pub') }}"
+        manage_dir: False
+  vars:
+    ansible_ssh_common_args: "-o ProxyCommand='ssh -W %h:%p ubuntu@{{ hostvars['monitor']['ansible_host'] }}'"
+
+- hosts: monitor
+  remote_user: ubuntu
+  become: true
+  roles:
+    - tunnel

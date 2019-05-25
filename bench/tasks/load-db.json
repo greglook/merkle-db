@@ -1,0 +1,21 @@
+[
+  {
+    "Type": "CUSTOM_JAR",
+    "Name": "MerkleDB Benchmark",
+    "ActionOnFailure": "CONTINUE",
+    "Jar": "command-runner.jar",
+    "Args": [
+      "spark-submit",
+      "--deploy-mode", "cluster",
+      "--class", "movie_lens.main",
+      "--driver-java-options", "-javaagent:/var/lib/riemann-jvm-profiler.jar=prefix=driver,host={{monitor_host}}",
+      "--conf", "spark.executor.extraJavaOptions=-javaagent:/var/lib/riemann-jvm-profiler.jar=prefix=worker,host={{monitor_host}},localhost-pid?=true",
+      "s3://{{s3_data_bucket}}/jars/movie-lens-0.1.1.jar",
+      "--blocks-url", "s3://{{s3_data_bucket}}/blocks",
+      "--riemann-host", "{{monitor_host}}",
+      "load-db",
+      "s3://{{s3_data_bucket}}/datasets/ml-latest/"
+    ],
+    "Properties": ""
+  }
+]

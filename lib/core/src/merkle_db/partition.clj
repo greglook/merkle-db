@@ -64,7 +64,7 @@
   [store family-key tablet]
   (let [tablet (cond-> tablet
                  (not= family-key :base)
-                   (tablet/prune))]
+                 (tablet/prune))]
     (when (seq (tablet/read-all tablet))
       [family-key
        (mdag/link (name family-key) (mdag/store-node! store nil tablet))])))
@@ -109,9 +109,7 @@
          ::tablets (into {}
                          (map #(store-tablet! store (key %) (tablet/from-records (val %))))
                          (record/split-data families records))
-         ::membership (into (bloom/create limit)
-                            (map first)
-                            records)
+         ::membership (bloom/into (bloom/create limit) (map first records))
          ::record/count (count records)
          ::record/families families
          ::record/first-key (first (first records))
@@ -128,7 +126,7 @@
         threshold (+ part-size (min-limit params))
         save-part! (fn save-part!
                      [rs]
-                     ; TODO: callback on partition creation?
+                     ;; TODO: callback on partition creation?
                      (let [start (System/nanoTime)
                            part (from-records store params rs)
                            elapsed (/ (- (System/nanoTime) start) 1e6)]
@@ -141,23 +139,26 @@
            pending []
            records (patch/remove-tombstones records)]
       (cond
-        ; Enough pending records to serialize a full partition.
+        ;; Enough pending records to serialize a full partition.
         (<= threshold (count pending))
-          (let [[output remnant] (split-at part-size pending)
-                part (save-part! output)]
-            (recur (conj partitions part) (vec remnant) records))
-        ; Pull next record into pending.
+        (let [[output remnant] (split-at part-size pending)
+              part (save-part! output)]
+          (recur (conj partitions part) (vec remnant) records))
+
+        ;; Pull next record into pending.
         (seq records)
-          (recur partitions (conj pending (first records)) (next records))
-        ; No more records, but too many pending to fit in one partition.
+        (recur partitions (conj pending (first records)) (next records))
+
+        ;; No more records, but too many pending to fit in one partition.
         (< part-size (count pending))
-          (let [[output remnant] (split-at (int (Math/ceil (/ (count pending) 2))) pending)
-                part (save-part! output)]
-            (recur (conj partitions part) (vec remnant) nil))
-        ; Emit one final partition.
+        (let [[output remnant] (split-at (int (Math/ceil (/ (count pending) 2))) pending)
+              part (save-part! output)]
+          (recur (conj partitions part) (vec remnant) nil))
+
+        ;; Emit one final partition.
         :else
-          (let [part (save-part! pending)]
-            (conj partitions part))))))
+        (let [part (save-part! pending)]
+          (conj partitions part))))))
 
 
 
@@ -169,12 +170,12 @@
   (let [tablet-link (get (::tablets part) family-key)
         part-id (::node/id (meta part))
         tablet (mdag/get-data store tablet-link nil ::not-found)]
-     (when (identical? ::not-found tablet)
-       (throw (ex-info (format "Broken tablet link from %s to: %s"
-                               part-id tablet-link)
-                       {:parent part-id
-                        :child tablet-link})))
-     tablet))
+    (when (identical? ::not-found tablet)
+      (throw (ex-info (format "Broken tablet link from %s to: %s"
+                              part-id tablet-link)
+                      {:parent part-id
+                       :child tablet-link})))
+    tablet))
 
 
 (defn- choose-tablets
@@ -183,7 +184,7 @@
   selected-fields is empty, returns all tablets."
   [tablet-fields selected]
   (if (seq selected)
-    ; Use field selection to filter tablets to load.
+    ;; Use field selection to filter tablets to load.
     (-> (dissoc tablet-fields :base)
         (->> (keep #(when (some selected (val %)) (key %))))
         (set)
@@ -191,7 +192,7 @@
           (if (seq (apply disj selected (mapcat tablet-fields chosen)))
             (conj chosen :base)
             chosen)))
-    ; No selection provided, return all field data.
+    ;; No selection provided, return all field data.
     (-> tablet-fields keys set (conj :base))))
 
 
@@ -218,7 +219,7 @@
   along with any extra args, producing a collection of lazy record sequences
   which are combined into a single sequence of key/record pairs."
   [store part fields read-fn & args]
-  ; OPTIMIZE: use transducer instead of intermediate sequences.
+  ;; OPTIMIZE: use transducer instead of intermediate sequences.
   (let [tablets (choose-tablets (::record/families part) (set fields))
         field-seqs (map #(apply read-fn (get-tablet store part %) args) tablets)
         records (record-seq field-seqs)]
@@ -241,7 +242,7 @@
   "Read a lazy sequence of key/map tuples which contain the requested field
   data for the records whose keys are in the given collection."
   [store part fields record-keys]
-  ; OPTIMIZE: use the membership filter to weed out keys which are definitely not present.
+  ;; OPTIMIZE: use the membership filter to weed out keys which are definitely not present.
   (read-tablets store part fields tablet/read-batch record-keys))
 
 
@@ -266,11 +267,11 @@
     (loop [result []
            records pending]
       (if (<= threshold (count records))
-        ; Serialize a full partition using the pending records.
+        ;; Serialize a full partition using the pending records.
         (let [[output remnant] (split-at part-size records)
               part (from-records store params output)]
           (recur (conj result part) remnant))
-        ; Not enough to guarantee validity, so continue.
+        ;; Not enough to guarantee validity, so continue.
         [result records]))))
 
 
@@ -281,15 +282,17 @@
   (let [records (read-all store part nil)
         records' (concat pending (patch/patch-seq changes records))]
     (cond
-      ; All data was removed from the partition.
+      ;; All data was removed from the partition.
       (empty? records')
-        nil
-      ; Original partition data was unchanged by updates.
+      nil
+
+      ;; Original partition data was unchanged by updates.
       (= records records')
-        [[part] nil]
-      ; Output partitions if we've accumulated enough records.
+      [[part] nil]
+
+      ;; Output partitions if we've accumulated enough records.
       :else
-        (emit-parts store params records'))))
+      (emit-parts store params records'))))
 
 
 (defn- merge-into
@@ -300,13 +303,13 @@
   (loop [parts (vec parts)
          pending pending]
     (if (<= (min-limit params) (count pending))
-      ; Enough records to make at least one valid partition.
+      ;; Enough records to make at least one valid partition.
       [0 (into parts (partition-records store params pending))]
-      ; Need more records to form a partition.
+      ;; Need more records to form a partition.
       (if (seq parts)
-        ; Join records from the last partition into pending.
+        ;; Join records from the last partition into pending.
         (recur (pop parts) (concat (read-all store (peek parts) nil) pending))
-        ; No more partitions to join, return records result.
+        ;; No more partitions to join, return records result.
         [-1 pending]))))
 
 
@@ -333,25 +336,25 @@
                    (vec (second carry)))
          inputs inputs]
     (if (seq inputs)
-      ; Process next partition in the sequence.
+      ;; Process next partition in the sequence.
       (let [[part changes] (first inputs)]
         (if (and (nil? pending) (empty? changes))
-          ; No pending records or changes, so use "pass through" logic.
+          ;; No pending records or changes, so use "pass through" logic.
           (recur (conj outputs part) nil (next inputs))
-          ; Load partition data or use pending records.
+          ;; Load partition data or use pending records.
           (if (and (empty? changes) (<= (min-limit params) (count pending)))
-            ; Avoid changing an existing partition.
+            ;; Avoid changing an existing partition.
             (let [parts (partition-records store params pending)]
               (recur (conj (into outputs parts) part) nil (next inputs)))
-            ; Load updated partition records into pending.
+            ;; Load updated partition records into pending.
             (let [[parts pending] (patch-records store params pending part changes)]
               (recur (into outputs parts) pending (next inputs))))))
-      ; No more partitions to process.
+      ;; No more partitions to process.
       (if (empty? pending)
-        ; No pending data to handle, we're done.
+        ;; No pending data to handle, we're done.
         (when (seq outputs)
           [0 outputs])
-        ; Merge loose records backward into partitions.
+        ;; Merge loose records backward into partitions.
         (merge-into store params outputs pending)))))
 
 

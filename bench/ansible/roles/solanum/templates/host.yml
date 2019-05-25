@@ -1,0 +1,18 @@
+defaults:
+  period: 30
+  ttl: 180
+  tags:
+    - solanum
+
+sources:
+  - type: cpu
+  - type: load
+  - type: memory
+  - type: network
+  - type: disk-space
+  - type: disk-stats
+
+outputs:
+  - type: riemann
+    host: localhost
+    port: 5555

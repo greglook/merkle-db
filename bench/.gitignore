@@ -1,0 +1,8 @@
+/ansible/inventory.ini
+/ansible/tunnel-key.pub
+/ansible/*.retry
+/bench/*.jar
+/terraform/.terraform
+/terraform/*.tfvars
+/terraform/*.tfstate*
+*.env

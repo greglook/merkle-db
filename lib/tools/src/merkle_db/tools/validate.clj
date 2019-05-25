@@ -86,50 +86,50 @@
   ([type-key test-form message bad-state]
    `(try
       ~(cond
-         ; Equality test.
+         ;; Equality test.
          (and (list? test-form)
               (= '= (first test-form))
               (= 3 (count test-form)))
-           `(let [expected# ~(nth test-form 1)
-                  actual# ~(nth test-form 2)
-                  condition# (= expected# actual#)
-                  state# (if condition# :pass ~bad-state)]
-              (report! ~type-key state# ~message expected# actual#)
-              condition#)
+         `(let [expected# ~(nth test-form 1)
+                actual# ~(nth test-form 2)
+                condition# (= expected# actual#)
+                state# (if condition# :pass ~bad-state)]
+            (report! ~type-key state# ~message expected# actual#)
+            condition#)
 
-         ; Comparison test.
+         ;; Comparison test.
          (and (list? test-form)
               (contains? #{'< '> '<= '>=} (first test-form))
               (= 3 (count test-form)))
-           `(let [v0# ~(nth test-form 1)
-                  v1# ~(nth test-form 2)
-                  condition# (~(first test-form) v0# v1#)
-                  state# (if condition# :pass ~bad-state)]
-              (report! ~type-key state# ~message
-                       '~test-form
-                       (if condition#
-                         condition#
-                         (list '~'not (list '~(first test-form) v0# v1#))))
-              condition#)
+         `(let [v0# ~(nth test-form 1)
+                v1# ~(nth test-form 2)
+                condition# (~(first test-form) v0# v1#)
+                state# (if condition# :pass ~bad-state)]
+            (report! ~type-key state# ~message
+                     '~test-form
+                     (if condition#
+                       condition#
+                       (list '~'not (list '~(first test-form) v0# v1#))))
+            condition#)
 
-         ; Predicate test.
+         ;; Predicate test.
          (and (list? test-form)
               (= 2 (count test-form)))
-           `(let [actual# ~(second test-form)
-                  condition# (~(first test-form) actual#)
-                  state# (if condition# :pass ~bad-state)]
-              (report! ~type-key state# ~message
-                       '~test-form
-                       (if condition#
-                         condition#
-                         (list '~'not (list '~(first test-form) actual#))))
-              condition#)
+         `(let [actual# ~(second test-form)
+                condition# (~(first test-form) actual#)
+                state# (if condition# :pass ~bad-state)]
+            (report! ~type-key state# ~message
+                     '~test-form
+                     (if condition#
+                       condition#
+                       (list '~'not (list '~(first test-form) actual#))))
+            condition#)
 
          :else
-           `(let [condition# ~test-form
-                  state# (if condition# :pass ~bad-state)]
-              (report! ~type-key state# ~message '~test-form condition#)
-              condition#))
+         `(let [condition# ~test-form
+                state# (if condition# :pass ~bad-state)]
+            (report! ~type-key state# ~message '~test-form condition#)
+            condition#))
       (catch Throwable t#
         (report! ~type-key :error
                  (str "Error checking assertion "
@@ -152,17 +152,17 @@
                        ::params params})
          results {}]
     (if-let [next-check (peek checks)]
-      ; Process next check task.
+      ;; Process next check task.
       (let [node-id (::node/id next-check)
             path (::path next-check)
             data (mdag/get-data store node-id nil ::missing-node)]
         (if (identical? ::missing-node data)
-          ; Node not found, add error result.
+          ;; Node not found, add error result.
           (recur (pop checks)
                  (assoc results node-id
                         {::paths #{path}
                          ::results [{::type ::missing-node, ::status :error}]}))
-          ; Run check function on node data.
+          ;; Run check function on node data.
           (let [check (::check next-check)
                 ;_ (prn ::run-check check data (::params next-check))
                 output (collect-results (check data (::params next-check)))]
@@ -174,7 +174,7 @@
                    (-> results
                        (update-in [node-id ::paths] (fnil conj #{}) path)
                        (update-in [node-id ::results] (fnil into []) (:results output)))))))
-      ; No more checks, return result aggregate.
+      ;; No more checks, return result aggregate.
       results)))
 
 
@@ -229,8 +229,8 @@
       (check ::record/last-key
         (not (key/after? (tablet/last-key tablet) boundary))
         "Last key in partition is within the subtree boundary"))
-    ; TODO: records are sorted by key
-    ))
+    ;; TODO: records are sorted by key
+    nil))
 
 
 (defn validate-partition
@@ -241,7 +241,7 @@
     (check ::spec
       (s/valid? ::part/node-data part)
       (s/explain-str ::part/node-data part))
-    ; TODO: warn when partition limit or families don't match params
+    ;; TODO: warn when partition limit or families don't match params
     (when (and (::part/limit params)
                (::record/count params)
                (<= (::part/limit params) (::record/count params)))
@@ -262,10 +262,10 @@
     (check ::base-tablet
       (:base (::part/tablets part))
       "Partition contains a base tablet")
-    ; TODO: partition first-key matches actual first record key in base tablet
-    ; TODO: partition last-key matches actual last record key in base tablet
-    ; TODO: record/count is accurate
-    ; TODO: every key present tests true against membership filter
+    ;; TODO: partition first-key matches actual first record key in base tablet
+    ;; TODO: partition last-key matches actual last record key in base tablet
+    ;; TODO: record/count is accurate
+    ;; TODO: every key present tests true against membership filter
     (doseq [[tablet-family link] (::part/tablets part)]
       (check-next!
         validate-tablet link
@@ -322,16 +322,18 @@
   [root params]
   (cond
     (zero? (::record/count params))
-      (check ::index/empty
-        (nil? root)
-        "Empty tree has nil root")
+    (check ::index/empty
+      (nil? root)
+      "Empty tree has nil root")
+
     (or (< (::record/count params) (::part/limit params))
         (and (= (::record/count params) (::part/limit params))
              (= :merkle-db/partition (:data/type root))))
-      (validate-partition root params)
+    (validate-partition root params)
+
     :else
-      (validate-index
-        root
-        (assoc params
-               ::index/root? true
-               ::index/height (::index/height root)))))
+    (validate-index
+      root
+      (assoc params
+             ::index/root? true
+             ::index/height (::index/height root)))))

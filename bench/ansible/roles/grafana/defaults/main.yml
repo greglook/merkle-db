@@ -1,0 +1,4 @@
+---
+grafana_data_dir: /data/grafana
+grafana_address: 127.0.0.1
+grafana_port: 3000

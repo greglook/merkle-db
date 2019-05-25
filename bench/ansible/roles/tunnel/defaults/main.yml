@@ -1,0 +1,8 @@
+---
+server_name: monitor
+tunnel_key_path: /etc/ssl/private/cluster-tunnel-key
+
+# Spark History Server
+tunnel_spark_nginx_port: 8080
+tunnel_spark_local_port: 18080
+tunnel_spark_remote_port: 18080

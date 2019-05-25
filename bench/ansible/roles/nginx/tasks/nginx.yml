@@ -1,0 +1,41 @@
+---
+- name: Install nginx
+  apt:
+    name: nginx
+    state: present
+
+- name: Clear default site
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+
+- name: Create site directory
+  file:
+    path: /var/www/monitor/static
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Write index page
+  template:
+    src: index.html
+    dest: /var/www/monitor/static/index.html
+    owner: www-data
+    group: www-data
+    mode: '0644'
+
+- name: Write site configuration
+  template:
+    src: nginx-site.conf
+    dest: /etc/nginx/sites-enabled/monitor
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - Restart nginx
+
+- name: Start nginx
+  service:
+    name: nginx
+    state: started

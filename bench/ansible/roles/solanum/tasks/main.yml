@@ -1,0 +1,8 @@
+---
+- name: Set hostname
+  hostname:
+    name: "{{ hostname }}"
+
+- include: solanum.yml
+  tags:
+    - solanum

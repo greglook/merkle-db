@@ -1,4 +1,4 @@
-(defproject mvxcvi/movie-lens "0.1.1-SNAPSHOT"
+(defproject mvxcvi/movie-lens "0.2.0"
   :description "Example project demonstrating working with the MovieLens dataset."
   :url "https://github.com/greglook/merkle-db"
   :license {:name "Public Domain"
@@ -11,7 +11,7 @@
    [mvxcvi/blocks "1.2.0"]
    [mvxcvi/blocks-s3 "0.4.0"
     :exclusions [net.jpountz.lz4/lz4]]
-   [merkle-db "0.1.1-SNAPSHOT"]
+   [merkle-db "0.2.0"]
    [gorillalabs/sparkling "2.1.3"
     :exclusions [org.objenesis/objenesis]]
    [org.slf4j/log4j-over-slf4j "1.7.26"]
